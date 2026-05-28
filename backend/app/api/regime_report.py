@@ -17,12 +17,37 @@ from app.providers import MockMarketProvider
 from app.providers import SourceRegistryBoundProviderAdapter
 from app.providers import build_provider_source_bindings
 from app.providers.news_provider import NewsProvider
+from app.providers.real_market_provider import RealMarketProvider
 from app.services import MarketSnapshotService
 from app.services import ProviderIngestionService
 from app.services.regime_report_service import RegimeReportService
 
 router = APIRouter(prefix="/regime-report", tags=["regime-report"])
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# ---------------------------------------------------------------------------
+# Provider önbelleği — 300 saniye (5 dk) geçerli, ardından yeniden çekilir
+# ---------------------------------------------------------------------------
+import time as _time
+_PROVIDER_CACHE_TTL = 300   # saniye
+_cached_provider: "RealMarketProvider | None" = None
+_cached_provider_ts: float = 0.0
+
+
+def _get_provider() -> "RealMarketProvider | MockMarketProvider":
+    global _cached_provider, _cached_provider_ts
+    now = _time.monotonic()
+    if _cached_provider is None or (now - _cached_provider_ts) > _PROVIDER_CACHE_TTL:
+        try:
+            _cached_provider = RealMarketProvider()
+            _cached_provider_ts = now
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "RealMarketProvider önbelleklenemedi, mock kullanılıyor: %s", exc
+            )
+            return MockMarketProvider()
+    return _cached_provider
 
 
 def _ensure_repo_root_on_path() -> None:
@@ -68,8 +93,11 @@ def get_current_regime_report(
     source_registry = load_source_registry()
     source_registry_entries = build_source_registry_entries(source_registry)
 
+    base_provider = _get_provider()
+    data_mode = "live" if isinstance(base_provider, RealMarketProvider) else "simulation"
+
     provider = SourceRegistryBoundProviderAdapter(
-        MockMarketProvider(),
+        base_provider,
         build_provider_source_bindings(source_registry_entries),
     )
     ingestion_result = ProviderIngestionService(
@@ -93,7 +121,7 @@ def get_current_regime_report(
 
     return JSONResponse(content={
         "status": "ok",
-        "data_mode": "simulation",
+        "data_mode": data_mode,
         "execution_mode": "OFF / NO_EXECUTION",
         "report": serialized,
         "meta": {
