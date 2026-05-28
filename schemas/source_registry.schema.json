@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Source Registry",
+  "type": "object",
+  "required": ["version", "freshness_policy", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "freshness_policy": {
+      "type": "object",
+      "required": ["realtime", "daily", "weekly", "monthly"],
+      "additionalProperties": false,
+      "properties": {
+        "realtime": {
+          "$ref": "#/$defs/freshnessRule"
+        },
+        "daily": {
+          "$ref": "#/$defs/freshnessRule"
+        },
+        "weekly": {
+          "$ref": "#/$defs/freshnessRule"
+        },
+        "monthly": {
+          "$ref": "#/$defs/freshnessRule"
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "source_id",
+          "asset_code",
+          "asset_category",
+          "provider",
+          "source_type",
+          "cadence",
+          "verified",
+          "decision_usage",
+          "active"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "asset_code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "asset_category": {
+            "type": "string",
+            "enum": [
+              "crypto",
+              "crypto_structure",
+              "energy",
+              "precious_metals",
+              "relative_ratios",
+              "credit",
+              "dollar_fx",
+              "equities_us",
+              "equities_china",
+              "rates",
+              "inflation_liquidity",
+              "industrial_metals",
+              "local_reference"
+            ]
+          },
+          "provider": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cadence": {
+            "type": "string",
+            "enum": ["realtime", "daily", "weekly", "monthly"]
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "decision_usage": {
+            "type": "string",
+            "enum": ["verified_required", "simulation_only"]
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "freshnessRule": {
+      "type": "object",
+      "required": ["max_age_minutes"],
+      "additionalProperties": false,
+      "properties": {
+        "max_age_minutes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

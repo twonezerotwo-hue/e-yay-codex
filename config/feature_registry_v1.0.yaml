@@ -1,0 +1,49 @@
+version: "1.0"
+score_groups:
+  macro_regime:
+    description: "Macro regime inputs for the deterministic daily report."
+    features:
+      liquidity_trend:
+        min: -5.0
+        max: 5.0
+        higher_is_better: true
+        critical: true
+        source_requirements:
+          required_assets:
+            - "M2SL"
+            - "US10Y"
+            - "DXY"
+          minimum_decision_usage: "verified_required"
+      inflation_stability:
+        min: 0.0
+        max: 10.0
+        higher_is_better: true
+        critical: false
+        source_requirements:
+          required_assets:
+            - "USCPI"
+            - "USPPI"
+          minimum_decision_usage: "verified_required"
+  market_risk:
+    description: "Cross-asset risk inputs."
+    features:
+      credit_spread_stress:
+        min: 0.0
+        max: 400.0
+        higher_is_better: false
+        critical: true
+        source_requirements:
+          required_assets:
+            - "HYG"
+            - "JNK"
+          minimum_decision_usage: "verified_required"
+      volatility_pressure:
+        min: 10.0
+        max: 60.0
+        higher_is_better: false
+        critical: false
+        source_requirements:
+          required_assets:
+            - "QQQ"
+            - "SP500"
+          minimum_decision_usage: "verified_required"

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Thresholds",
+  "type": "object",
+  "required": ["version", "regime", "risk", "report"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "regime": {
+      "type": "object",
+      "required": ["bull_enter", "bull_exit", "bear_enter", "bear_exit"],
+      "additionalProperties": false,
+      "properties": {
+        "bull_enter": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0
+        },
+        "bull_exit": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0
+        },
+        "bear_enter": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0
+        },
+        "bear_exit": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "required": [
+        "no_trade_data_quality_score",
+        "no_trade_action",
+        "no_position_increase_action",
+        "simulation_only_action",
+        "default_action",
+        "no_position_increase_on_critical_missing_data",
+        "simulation_only_when_verified_data_unavailable",
+        "execution_mode",
+        "auto_full_enabled"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "no_trade_data_quality_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 100.0
+        },
+        "no_trade_action": {
+          "type": "string"
+        },
+        "no_position_increase_action": {
+          "type": "string"
+        },
+        "simulation_only_action": {
+          "type": "string"
+        },
+        "default_action": {
+          "type": "string"
+        },
+        "no_position_increase_on_critical_missing_data": {
+          "type": "boolean"
+        },
+        "simulation_only_when_verified_data_unavailable": {
+          "type": "boolean"
+        },
+        "execution_mode": {
+          "type": "string"
+        },
+        "auto_full_enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": ["required_sections"],
+      "additionalProperties": false,
+      "properties": {
+        "required_sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+version: "1.0"
+regime:
+  bull_enter: 70.0
+  bull_exit: 55.0
+  bear_enter: 30.0
+  bear_exit: 45.0
+risk:
+  no_trade_data_quality_score: 50.0
+  no_trade_action: "NO_TRADE"
+  no_position_increase_action: "NO_POSITION_INCREASE"
+  simulation_only_action: "SIMULATION_ONLY"
+  default_action: "OBSERVE"
+  no_position_increase_on_critical_missing_data: true
+  simulation_only_when_verified_data_unavailable: true
+  execution_mode: "NO_EXECUTION"
+  auto_full_enabled: false
+report:
+  required_sections:
+    - normalized_features
+    - scores
+    - regime
+    - risk
+    - data_quality_score
+    - source_binding
+    - source_diagnostics
+    - source_freshness

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ruff check *)",
+      "Bash(pytest -p no:cacheprovider --basetemp=\".pytest_tmp\\\\basetemp\")",
+      "PowerShell(cd \"C:\\\\Users\\\\twone\\\\Desktop\\\\E_YAY CODEX\"; @\\(\"AI_RULES.md\",\"AI_CONTEXT.md\",\"AI_TASK_LOG.md\"\\) | ForEach-Object { if \\(Test-Path $_\\) { \"EXISTS: $_\" } else { \"MISSING: $_\" } })"
+    ]
+  }
+}

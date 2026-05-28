@@ -1,0 +1,254 @@
+version: "1.0"
+freshness_policy:
+  realtime:
+    max_age_minutes: 15
+  daily:
+    max_age_minutes: 1440
+  weekly:
+    max_age_minutes: 10080
+  monthly:
+    max_age_minutes: 44640
+sources:
+  - source_id: "approved_btcusd_feed"
+    asset_code: "BTCUSD"
+    asset_category: "crypto"
+    provider: "approved_crypto_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_brent_feed"
+    asset_code: "BRENT"
+    asset_category: "energy"
+    provider: "approved_energy_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_xauusd_feed"
+    asset_code: "XAUUSD"
+    asset_category: "precious_metals"
+    provider: "approved_metals_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_xagusd_feed"
+    asset_code: "XAGUSD"
+    asset_category: "precious_metals"
+    provider: "approved_metals_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_dxy_feed"
+    asset_code: "DXY"
+    asset_category: "dollar_fx"
+    provider: "approved_macro_market_feed"
+    source_type: "macro_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_hyg_feed"
+    asset_code: "HYG"
+    asset_category: "credit"
+    provider: "approved_credit_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_jnk_feed"
+    asset_code: "JNK"
+    asset_category: "credit"
+    provider: "approved_credit_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_nasdaq_feed"
+    asset_code: "NASDAQ"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_qqq_feed"
+    asset_code: "QQQ"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_sp500_feed"
+    asset_code: "SP500"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_btc_dominance_feed"
+    asset_code: "BTC.D"
+    asset_category: "crypto_structure"
+    provider: "approved_crypto_aggregate_feed"
+    source_type: "derived_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_usdt_dominance_feed"
+    asset_code: "USDT.D"
+    asset_category: "crypto_structure"
+    provider: "approved_crypto_aggregate_feed"
+    source_type: "derived_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_total_feed"
+    asset_code: "TOTAL"
+    asset_category: "crypto_structure"
+    provider: "approved_crypto_aggregate_feed"
+    source_type: "derived_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_total2_feed"
+    asset_code: "TOTAL2"
+    asset_category: "crypto_structure"
+    provider: "approved_crypto_aggregate_feed"
+    source_type: "derived_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_us02y_feed"
+    asset_code: "US02Y"
+    asset_category: "rates"
+    provider: "approved_rates_feed"
+    source_type: "macro_market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_us10y_feed"
+    asset_code: "US10Y"
+    asset_category: "rates"
+    provider: "approved_rates_feed"
+    source_type: "macro_market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_us20y_feed"
+    asset_code: "US20Y"
+    asset_category: "rates"
+    provider: "approved_rates_feed"
+    source_type: "macro_market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_uscpi_feed"
+    asset_code: "USCPI"
+    asset_category: "inflation_liquidity"
+    provider: "approved_macro_feed"
+    source_type: "official_release"
+    cadence: "monthly"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_usppi_feed"
+    asset_code: "USPPI"
+    asset_category: "inflation_liquidity"
+    provider: "approved_macro_feed"
+    source_type: "official_release"
+    cadence: "monthly"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_m2sl_feed"
+    asset_code: "M2SL"
+    asset_category: "inflation_liquidity"
+    provider: "approved_macro_feed"
+    source_type: "official_release"
+    cadence: "monthly"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_fxi_feed"
+    asset_code: "FXI"
+    asset_category: "equities_china"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_shanghai_composite_feed"
+    asset_code: "SHANGHAI_COMPOSITE"
+    asset_category: "equities_china"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_xcuusd_feed"
+    asset_code: "XCUUSD"
+    asset_category: "industrial_metals"
+    provider: "approved_metals_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_xauxag_feed"
+    asset_code: "XAUXAG"
+    asset_category: "relative_ratios"
+    provider: "approved_metals_feed"
+    source_type: "derived_market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_btcxauk_reference_feed"
+    asset_code: "BTCXAUK"
+    asset_category: "local_reference"
+    provider: "approved_reference_conversion_feed"
+    source_type: "reference_conversion"
+    cadence: "daily"
+    verified: false
+    decision_usage: "simulation_only"
+    active: true
+  - source_id: "approved_xauusdk_reference_feed"
+    asset_code: "XAUUSDK"
+    asset_category: "local_reference"
+    provider: "approved_reference_conversion_feed"
+    source_type: "reference_conversion"
+    cadence: "daily"
+    verified: false
+    decision_usage: "simulation_only"
+    active: true
+  - source_id: "approved_xagusdk_reference_feed"
+    asset_code: "XAGUSDK"
+    asset_category: "local_reference"
+    provider: "approved_reference_conversion_feed"
+    source_type: "reference_conversion"
+    cadence: "daily"
+    verified: false
+    decision_usage: "simulation_only"
+    active: true

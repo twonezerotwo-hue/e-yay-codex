@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "e-yay-brainchain-backend"
+version = "0.1.0"
+description = "Backend starter for the E-yAy BrainChain system."
+requires-python = ">=3.12"
+dependencies = [
+    "alembic",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "sqlalchemy",
+    "psycopg[binary]",
+    "redis",
+    "pytest",
+    "httpx",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

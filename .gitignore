@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest / coverage
+.pytest_cache/
+.pytest_tmp/
+.coverage
+htmlcov/
+.snapshot_tmp/
+
+# Clean backups (large zip files — don't commit)
+clean_backups/
+
+# Local snapshot data (paper snapshots — local only)
+*.jsonl
+
+# Environment files
+.env
+.env.*
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Docker volumes
+docker/data/
+
+# Node (future frontend)
+node_modules/
+.next/
+dist/
+.nuxt/
+
+# Logs
+*.log
+logs/

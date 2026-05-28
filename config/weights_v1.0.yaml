@@ -1,0 +1,8 @@
+version: "1.0"
+score_groups:
+  macro_regime:
+    liquidity_trend: 0.6
+    inflation_stability: 0.4
+  market_risk:
+    credit_spread_stress: 0.55
+    volatility_pressure: 0.45
