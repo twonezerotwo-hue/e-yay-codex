@@ -62,3 +62,13 @@ dist/
 # Logs
 *.log
 logs/
+
+# Internal tooling (Claude Code, Codex tmp)
+.claude/
+.codex_tmp/
+
+# Alembic generated versions (keep only the base)
+# backend/alembic/versions/
+
+# pyc cache in root
+*.pyc
