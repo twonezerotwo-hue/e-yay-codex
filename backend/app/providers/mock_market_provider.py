@@ -35,7 +35,7 @@ MOCK_ASSET_VALUES: dict[AssetCode, float] = {
     AssetCode.M2SL: 20950.0,
     AssetCode.FXI: 24.3,
     AssetCode.SHANGHAI_COMPOSITE: 3112.0,
-    AssetCode.XCUUSD: 4.68,
+    AssetCode.XCUUSD: 10_318.0,   # $/ton (4.68 $/pound × 2204.62)
     AssetCode.XAUXAG: 77.5,
     AssetCode.BTCXAUK: 43.4,
     AssetCode.XAUUSDK: 1.02,

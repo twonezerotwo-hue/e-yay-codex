@@ -300,12 +300,19 @@ class RealMarketProvider(MarketProvider):
     # Değer çözümleme
     # ------------------------------------------------------------------
 
+    # Birim dönüşüm sabiti: HG=F $/pound → $/ton
+    _LBS_PER_TON = 2_204.623
+
     def _resolve(self, code: AssetCode, fallback: float) -> tuple[float, bool]:
         # 1. yfinance doğrudan (yield asset'ler için FRED fallback zincirlenir)
         if code in _YFINANCE_MAP:
             ticker = _YFINANCE_MAP[code]
             val = self._yf.get(ticker)
             if val and val == val:   # None ve NaN kontrolü
+                # Bakır: HG=F $/pound → $/ton dönüşümü
+                # Rejim servisi eşiği 9,000 $/ton kullanıyor
+                if code == AssetCode.XCUUSD:
+                    val = val * self._LBS_PER_TON
                 return val, False
             # yfinance başarısız — FRED'e düş (yalnızca yield asset'ler için)
             if code in _FRED_MAP:
