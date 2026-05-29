@@ -97,39 +97,39 @@ class RegimeReport:
 
 
 # ---------------------------------------------------------------------------
-# Thresholds
+# Thresholds — Mayıs 2026 piyasa gerçeklerine göre kalibrate edildi
 # ---------------------------------------------------------------------------
 
-_DXY_STRONG = 104.0       # above = tight global liquidity
-_DXY_WEAK   = 100.0       # below = loose liquidity
+_DXY_STRONG = 104.0       # above = dolar sıkılaşması, risk-off baskısı
+_DXY_WEAK   = 100.0       # below = dolar zayıf, likidite açılıyor   [anlık: ~99]
 
-_BRENT_HIGH  = 88.0       # above = geopolitical premium active
-_BRENT_WARN  = 80.0       # 80–88 = watch zone
+_BRENT_HIGH  = 95.0       # above = enerji baskısı kritik seviye      [anlık: ~93]
+_BRENT_WARN  = 85.0       # 85–95 = izleme bölgesi
 
-_YIELD_INVERSION  = 0.0   # 10Y - 2Y < 0 = recession signal
-_YIELD_FLAT       = 0.3   # < 0.3 = flattening
+_YIELD_INVERSION  = 0.0   # 10Y - 2Y < 0 = resesyon sinyali
+_YIELD_FLAT       = 0.3   # < 0.3 = eğri düzleşiyor                   [anlık: +0.87]
 
-_M2_EXPANDING = 21_000.0  # > 21T = money supply expanding
-_M2_SHRINKING = 20_000.0  # < 20T = tightening
+_M2_EXPANDING = 21_500.0  # > 21.5T = para arzı genişliyor
+_M2_SHRINKING = 20_500.0  # < 20.5T = sıkılaşma devam ediyor
 
-_HYG_HEALTHY  = 77.0      # above = credit market intact
-_HYG_BREAKING = 73.0      # below = credit stress
+_HYG_HEALTHY  = 78.0      # above = kredi piyasası sağlıklı            [anlık: ~80]
+_HYG_BREAKING = 74.0      # below = kredi stresi
 
-_BTCD_DOMINANT   = 52.0   # BTC.D above = BTC leading
-_BTCD_PANIC      = 40.0   # BTC.D below = market panic or altseason
+_BTCD_DOMINANT   = 52.0   # BTC.D above = BTC lider                   [anlık: ~54]
+_BTCD_PANIC      = 40.0   # BTC.D below = piyasa paniği veya altseason
 
-_USDTD_SAFE   = 5.0       # USDT.D below = money in crypto
-_USDTD_FLIGHT = 7.5       # USDT.D above = flight to stablecoins
+_USDTD_SAFE   = 5.0       # USDT.D below = para kripto içinde
+_USDTD_FLIGHT = 7.5       # USDT.D above = stablecoin'e kaçış
 
-_BTC_STRONG = 70_000.0
-_BTC_WATCH  = 60_000.0
-_BTC_WEAK   = 55_000.0
+_BTC_STRONG = 80_000.0    # above = güçlü momentum                    [anlık: ~73K]
+_BTC_WATCH  = 70_000.0    # below = dikkat bölgesi
+_BTC_WEAK   = 65_000.0    # below = zayıflama sinyali
 
-_XAUUSD_BREAKOUT = 2_400.0
-_XAGUSD_CONFIRM  = 30.0
-_XAUXAG_HIGH     = 85.0    # gold/silver ratio > 85 = silver cheap
+_XAUUSD_BREAKOUT = 3_800.0  # below = altın güç kaybediyor            [anlık: ~4,542]
+_XAGUSD_CONFIRM  = 60.0     # below = gümüş momentumu kırılıyor       [anlık: ~75]
+_XAUXAG_HIGH     = 75.0     # ratio > 75 = gümüş ucuz, altına göre    [anlık: ~60]
 
-_XCUUSD_HEALTHY  = 9_000.0  # copper above = industrial demand ok
+_XCUUSD_HEALTHY  = 10_000.0  # above = endüstriyel talep sağlıklı     [anlık: ~14K]
 
 
 # ---------------------------------------------------------------------------
@@ -564,47 +564,47 @@ def _build_confirmation_checklist(
 
     items: list[ConfirmationItem] = []
 
-    # 1. Brent < 85 kalıcı
+    # 1. Brent baskı altında mı?
     brent_met = brent is not None and brent < _BRENT_HIGH
     items.append(ConfirmationItem(
-        signal="Brent 88$ altına kalıcı iner",
+        signal=f"Brent enerji baskısı yok (${int(_BRENT_HIGH)} altında)",
         met=brent_met,
         current_value=f"${_fmt(brent)}" if brent else "N/A",
-        threshold="< $88",
+        threshold=f"< ${int(_BRENT_HIGH)}",
     ))
 
-    # 2. DXY zayıflıyor
+    # 2. DXY sıkılaşma yok
     dxy_met = dxy is not None and dxy < _DXY_STRONG
     items.append(ConfirmationItem(
-        signal="DXY 104 altında kalır",
+        signal=f"DXY dolar sıkılaşması yok ({int(_DXY_STRONG)} altında)",
         met=dxy_met,
         current_value=_fmt(dxy) if dxy else "N/A",
-        threshold="< 104",
+        threshold=f"< {int(_DXY_STRONG)}",
     ))
 
-    # 3. BTC 73K altında kapanış yok (3 gün)
+    # 3. BTC risk iştahı pozitif
     btc_met = btc is not None and btc > _BTC_WATCH
     items.append(ConfirmationItem(
-        signal="BTC 60K üzerinde tutunuyor",
+        signal=f"BTC risk iştahı pozitif (${int(_BTC_WATCH/1000)}K üzerinde)",
         met=btc_met,
         current_value=f"${_fmt(btc, 0)}" if btc else "N/A",
         threshold=f"> ${int(_BTC_WATCH):,}",
     ))
 
-    # 4. Gümüş Gold'dan ayrışıp yükseliyor
+    # 4. Gümüş momentumu koruyor
     xauxag = (gold / silver) if (gold and silver and silver > 0) else None
     silver_met = silver is not None and silver > _XAGUSD_CONFIRM
     items.append(ConfirmationItem(
-        signal="Silver 30$ üzerine çıkar ve gold'dan ayrışır",
+        signal=f"Gümüş momentumu koruyor (${int(_XAGUSD_CONFIRM)} üzerinde)",
         met=silver_met,
         current_value=f"${_fmt(silver)} (Au/Ag={_fmt(xauxag, 0)})" if silver else "N/A",
-        threshold=f"> ${_XAGUSD_CONFIRM}",
+        threshold=f"> ${int(_XAGUSD_CONFIRM)}",
     ))
 
-    # 5. Bakır toparlanıyor (AI/endüstriyel sinyal)
+    # 5. Bakır endüstriyel talep sağlıklı
     copper_met = copper is not None and copper > _XCUUSD_HEALTHY
     items.append(ConfirmationItem(
-        signal="Bakır 9,000$/ton üzerinde toparlanır",
+        signal=f"Bakır endüstriyel talep sağlıklı (${int(_XCUUSD_HEALTHY):,}/ton üzerinde)",
         met=copper_met,
         current_value=f"${_fmt(copper, 0)}" if copper else "N/A",
         threshold=f"> ${int(_XCUUSD_HEALTHY):,}",
@@ -646,6 +646,7 @@ def _make_decision(
     total_checks = len(checklist)
 
     # --- KAPAT ---
+    # Kriz modu: makro kriz VEYA iştah tamamen çökmüş VEYA 3+ bloklama
     if macro.regime == "CRISIS" or appetite.status == "CRISIS" or blocking >= 3:
         decision: Decision = "KAPAT"
         owner = "Pozisyonları kapat veya hedge'i maksimuma çek. Sistem kriz modunda."
@@ -653,13 +654,20 @@ def _make_decision(
         return decision, owner, verdict
 
     # --- KÜÇÜLT ---
-    if macro.regime == "DEFENSIVE" or appetite.status == "WEAK" or blocking >= 2:
+    # Sert savunmacı: Defensive makro VEYA 2+ bloklama
+    # VEYA: iştah zayıf VE bloklayan sinyal var
+    if (
+        macro.regime == "DEFENSIVE"
+        or blocking >= 2
+        or (appetite.status == "WEAK" and blocking >= 1)
+    ):
         decision = "KÜÇÜLT"
         owner = "Mevcut pozisyonları küçült. Yeni giriş yapma. Teyit için bekle."
         verdict = "Makro baskı veya risk iştahı zayıflığı mevcut — defansif kalın."
         return decision, owner, verdict
 
     # --- AÇIL ---
+    # Tam uyum: RISK_ON makro, güçlü/orta iştah, 4+ teyit, 5/6+ checklist, 0 bloklama
     if (
         macro.regime == "RISK_ON"
         and appetite.status in ("STRONG", "MODERATE")
@@ -669,24 +677,28 @@ def _make_decision(
     ):
         decision = "AÇIL"
         owner = "Teyit koşulları karşılandı. Kademeli giriş planlanabilir. Execution hâlâ OFF."
-        verdict = "Tüm katmanlar aynı yönde — fırsat penceresi açılıyor ancak execution kararı insana ait."
+        verdict = "Tüm katmanlar aynı yönde — fırsat penceresi açılıyor, execution kararı insana ait."
         return decision, owner, verdict
 
     # --- BEKLE (default) ---
+    # TRANSITIONING makro veya WEAK iştah ama bloklama yok → bekle, teyit topla
     unmet = [c.signal for c in checklist if not c.met]
     decision = "BEKLE"
     if unmet:
-        missing_str = " ve ".join(unmet[:2])
-        owner = f"Teyit eksik: {missing_str}. Bu sinyalleri bekle."
+        missing_str = " · ".join(unmet[:2])
+        owner = f"Eksik teyit: {missing_str}. Bu sinyalleri bekle."
+    elif appetite.status == "WEAK":
+        owner = "Checklist tamam ama risk iştahı zayıf — altın ve USDT.D sinyallerini izle."
     else:
-        owner = "Sinyaller henüz hizalı değil. Bir sonraki güncellemede tekrar değerlendir."
+        owner = "Sinyaller henüz tam hizalı değil. Bir sonraki güncellemede tekrar değerlendir."
 
-    # Verdict cümlesi
-    if macro.regime == "TRANSITIONING" and blocking == 1:
+    if blocking == 1:
         blocking_asset = next((s.asset_name for s in signals if s.status == "BLOCKING"), "bilinmeyen")
-        verdict = f"Sistem geçiş rejimiyle çalışıyor — {blocking_asset} teyit vermeden pozisyon açma."
+        verdict = f"Geçiş rejimi — {blocking_asset} çözüme kavuşmadan pozisyon açma."
+    elif macro.regime == "TRANSITIONING" and checklist_met >= total_checks - 1:
+        verdict = "Koşullar olgunlaşıyor — makro yön netleşene kadar bekle."
     elif confirmed >= 3:
-        verdict = "Çoğu sinyal olumlu ama son teyitler eksik — acele etme."
+        verdict = "Çoğu sinyal olumlu, makro tam netleşmedi — acele etme."
     else:
         verdict = "Rejim belirsizliğini koruyor — bekle, teyit topla, sonra karar ver."
 
