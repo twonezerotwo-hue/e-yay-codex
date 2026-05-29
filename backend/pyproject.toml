@@ -8,16 +8,36 @@ version = "0.1.0"
 description = "Backend starter for the E-yAy BrainChain system."
 requires-python = ">=3.12"
 dependencies = [
-    "alembic",
+    # Web framework
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
+    # Database
+    "alembic",
     "sqlalchemy",
     "psycopg[binary]",
     "redis",
-    "pytest",
+    # Market data
+    "yfinance>=1.4.0",
+    "pandas",
+    # News / RSS
+    "feedparser",
+    # Utilities
     "httpx",
+    "structlog",
+    "jsonschema",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = [
+    ".",            # backend/
+    "..",           # repo root (registry modülü için)
+]
