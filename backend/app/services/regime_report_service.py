@@ -159,54 +159,55 @@ class RegimeReport:
 # Thresholds — Mayıs 2026 piyasa gerçeklerine göre kalibrate edildi
 # ---------------------------------------------------------------------------
 
-_DXY_STRONG = 104.0       # above = dolar sıkılaşması, risk-off baskısı
-_DXY_WEAK   = 100.0       # below = dolar zayıf, likidite açılıyor   [anlık: ~99]
+# ── Kalibre: Haziran 2026 ─────────────────────────────────────────────────
+_DXY_STRONG = 104.0       # above = dolar sıkılaşması, risk-off baskısı  [anlık: ~100]
+_DXY_WEAK   =  99.0       # below = dolar zayıf, likidite açılıyor
 
-_BRENT_HIGH  = 95.0       # above = enerji baskısı kritik seviye      [anlık: ~93]
-_BRENT_WARN  = 85.0       # 85–95 = izleme bölgesi
+_BRENT_HIGH  = 100.0      # above = enerji baskısı kritik seviye          [anlık: ~93]
+_BRENT_WARN  =  85.0      # 85–100 = izleme bölgesi
 
 _YIELD_INVERSION  = 0.0   # 10Y - 2Y < 0 = resesyon sinyali
-_YIELD_FLAT       = 0.3   # < 0.3 = eğri düzleşiyor                   [anlık: +0.87]
+_YIELD_FLAT       = 0.3   # < 0.3 = eğri düzleşiyor                       [anlık: +0.91]
 
-_M2_EXPANDING = 21_500.0  # > 21.5T = para arzı genişliyor
+_M2_EXPANDING = 21_500.0  # > 21.5T = para arzı genişliyor                [anlık: ~21.5T]
 _M2_SHRINKING = 20_500.0  # < 20.5T = sıkılaşma devam ediyor
 
-_HYG_HEALTHY  = 78.0      # above = kredi piyasası sağlıklı            [anlık: ~80]
+_HYG_HEALTHY  = 78.0      # above = kredi piyasası sağlıklı               [anlık: ~79.4]
 _HYG_BREAKING = 74.0      # below = kredi stresi
 
-_BTCD_DOMINANT   = 52.0   # BTC.D above = BTC lider                   [anlık: ~54]
+_BTCD_DOMINANT   = 52.0   # BTC.D above = BTC lider                       [anlık: ~56%]
 _BTCD_PANIC      = 40.0   # BTC.D below = piyasa paniği veya altseason
 
 _USDTD_SAFE   = 5.0       # USDT.D below = para kripto içinde
-_USDTD_FLIGHT = 7.5       # USDT.D above = stablecoin'e kaçış
+_USDTD_FLIGHT = 7.5       # USDT.D above = stablecoin'e kaçış             [anlık: ~8.6%]
 
-_BTC_STRONG = 80_000.0    # above = güçlü momentum                    [anlık: ~73K]
-_BTC_WATCH  = 70_000.0    # below = dikkat bölgesi
-_BTC_WEAK   = 65_000.0    # below = zayıflama sinyali
+_BTC_STRONG = 70_000.0    # above = güçlü momentum                        [anlık: ~60.9K]
+_BTC_WATCH  = 58_000.0    # below = dikkat bölgesi
+_BTC_WEAK   = 48_000.0    # below = zayıflama sinyali
 
-_XAUUSD_BREAKOUT = 3_800.0  # below = altın güç kaybediyor            [anlık: ~4,542]
-_XAGUSD_CONFIRM  = 60.0     # below = gümüş momentumu kırılıyor       [anlık: ~75]
-_XAUXAG_HIGH     = 75.0     # ratio > 75 = gümüş ucuz, altına göre    [anlık: ~60]
+_XAUUSD_BREAKOUT = 3_800.0  # below = altın güç kaybediyor                [anlık: ~4,337]
+_XAGUSD_CONFIRM  =  62.0    # below = gümüş momentumu kırılıyor           [anlık: ~68.9]
+_XAUXAG_HIGH     =  68.0    # ratio > 68 = gümüş ucuz, altına göre        [anlık: ~62.9]
 
-_XCUUSD_HEALTHY  = 10_000.0  # above = endüstriyel talep sağlıklı     [anlık: ~14K]
+_XCUUSD_HEALTHY  = 12_000.0  # above = endüstriyel talep sağlıklı         [anlık: ~13.8K]
 
-_SP500_STRONG  = 5_500.0   # above = bull market aktif              [anlık: ~5,750]
-_SP500_WARN    = 5_000.0   # below = zayıflama izleme bölgesi
-_SP500_BLOCK   = 4_500.0   # below = bear piyasası BLOCKING
+_SP500_STRONG  = 6_800.0   # above = bull market aktif                    [anlık: ~7,384]
+_SP500_WARN    = 6_000.0   # below = zayıflama izleme bölgesi
+_SP500_BLOCK   = 5_200.0   # below = bear piyasası BLOCKING
 
-_TOTAL_BULL    = 2_500.0   # above = kripto sistemi genişliyor (B$) [anlık: ~3,300]
+_TOTAL_BULL    = 2_200.0   # above = kripto sistemi genişliyor (B$)       [anlık: ~2,177]
 _TOTAL_WARN    = 1_800.0   # below = daralma uyarısı
 
-_TOTAL2_BULL   = 1_200.0   # above = altcoin season potansiyeli     [anlık: ~1,500]
-_TOTAL2_WARN   = 800.0     # below = sermaye BTC/stable'a çekildi
+_TOTAL2_BULL   = 1_000.0   # above = altcoin season potansiyeli (B$)      [anlık: ~955]
+_TOTAL2_WARN   =   750.0   # below = sermaye BTC/stable'a çekildi
 
-_FXI_STRONG    = 36.0      # above = Çin sermaye girişi güçlü       [anlık: ~36]
-_FXI_WEAK      = 30.0      # below = Çin yavaşlama endişesi
+_FXI_STRONG    = 35.0      # above = Çin sermaye girişi güçlü             [anlık: ~34.75]
+_FXI_WEAK      = 29.0      # below = Çin yavaşlama endişesi
 
 _XAUXAG_CRISIS = 90.0      # above = deflasyon/kriz seviyesi (2020 zirvesi 125)
 
 # VIX — hisse piyasası korku endeksi
-_VIX_CALM     = 20.0   # below = piyasa sakin, risk-on          [anlık: ~19]
+_VIX_CALM     = 20.0   # below = piyasa sakin, risk-on                    [anlık: ~21.5]
 _VIX_ELEVATED = 25.0   # 20-25 = dikkat bölgesi
 _VIX_FEAR     = 30.0   # above = korku aktif
 _VIX_PANIC    = 40.0   # above = panik, kriz seviyesi
@@ -214,38 +215,38 @@ _VIX_PANIC    = 40.0   # above = panik, kriz seviyesi
 # Real yield (10Y TIPS — DFII10)
 _REAL_YIELD_DOVISH  = 0.5   # below = ucuz para, risk varlıkları pozitif
 _REAL_YIELD_NEUTRAL = 1.5   # 0.5-1.5 = nötr bölge
-_REAL_YIELD_HAWKISH = 2.5   # above = reel faiz yüksek, büyüme varlıkları baskıda [anlık: ~2.2]
+_REAL_YIELD_HAWKISH = 2.5   # above = reel faiz yüksek, büyüme baskıda   [anlık: ~2.3]
 
 # HY Credit Spread (ICE BofA — BAMLH0A0HYM2)
-_HY_SPREAD_HEALTHY = 4.0   # below = kredi sağlıklı              [anlık: ~3.2]
+_HY_SPREAD_HEALTHY = 4.0   # below = kredi sağlıklı                       [anlık: ~3.5]
 _HY_SPREAD_WARN    = 5.5   # 4-5.5 = dikkat bölgesi
 _HY_SPREAD_STRESS  = 7.5   # above = kredi stresi ciddi
 _HY_SPREAD_CRISIS  = 10.0  # above = kriz (2020=10%, 2008=20%)
 
 # ETH
-_ETH_STRONG = 3_500.0   # above = ETH güçlü momentum             [anlık: ~2,600]
-_ETH_WATCH  = 2_500.0   # below = dikkat
-_ETH_WEAK   = 2_000.0   # below = zayıf, risk-off
+_ETH_STRONG = 2_500.0   # above = ETH güçlü momentum                      [anlık: ~1,567]
+_ETH_WATCH  = 1_800.0   # below = dikkat
+_ETH_WEAK   = 1_200.0   # below = zayıf, risk-off
 
 # IWM (Russell 2000 — piyasa genişliği)
-_IWM_HEALTHY  = 215.0   # above = geniş katılım sağlıklı         [anlık: ~215]
-_IWM_NARROW   = 195.0   # below = rally daraldı, mega-cap sığınması
-_IWM_BLOCKING = 180.0   # below = breadth tamamen bozuldu
+_IWM_HEALTHY  = 265.0   # above = geniş katılım sağlıklı                  [anlık: ~281.6]
+_IWM_NARROW   = 240.0   # below = rally daraldı, mega-cap sığınması
+_IWM_BLOCKING = 210.0   # below = breadth tamamen bozuldu
 
 # LQD (Investment Grade tahvil ETF)
-_LQD_HEALTHY = 110.0   # above = IG kredi sağlıklı               [anlık: ~113]
-_LQD_STRESS  = 105.0   # below = IG baskı altında
-_LQD_CRISIS  = 100.0   # below = sistemik kredi korkusu
+_LQD_HEALTHY = 108.0   # above = IG kredi sağlıklı                        [anlık: ~108.2]
+_LQD_STRESS  = 103.0   # below = IG baskı altında
+_LQD_CRISIS  =  97.0   # below = sistemik kredi korkusu
 
 # SMH (Yarı iletkenler — tech cycle leading indicator)
-_SMH_STRONG = 230.0   # above = tech cycle güçlü                 [anlık: ~245]
-_SMH_WARN   = 195.0   # below = chip talebi zayıflayor
-_SMH_WEAK   = 165.0   # below = tech resesyon bölgesi
+_SMH_STRONG = 520.0   # above = tech cycle güçlü                          [anlık: ~569.7]
+_SMH_WARN   = 430.0   # below = chip talebi zayıflayor
+_SMH_WEAK   = 350.0   # below = tech resesyon bölgesi
 
 # XLF (Finansallar)
-_XLF_HEALTHY  = 43.0   # above = bankacılık sağlıklı             [anlık: ~43]
-_XLF_STRESS   = 38.0   # below = banka stresi başlıyor
-_XLF_BLOCKING = 34.0   # below = finansal sistem baskıda
+_XLF_HEALTHY  = 50.0   # above = bankacılık sağlıklı                      [anlık: ~52.3]
+_XLF_STRESS   = 44.0   # below = banka stresi başlıyor
+_XLF_BLOCKING = 38.0   # below = finansal sistem baskıda
 
 
 # ---------------------------------------------------------------------------

@@ -10,45 +10,46 @@ from app.providers.base import MarketProvider
 from app.providers.base import MarketProviderPayload
 
 
-BASE_OBSERVED_AT = datetime(2026, 5, 19, 9, 0, 0, tzinfo=UTC)
+BASE_OBSERVED_AT = datetime(2026, 6, 6, 9, 0, 0, tzinfo=UTC)
 
+# Haziran 2026 piyasa fiyatları (yfinance + CoinGecko + FRED)
 MOCK_ASSET_VALUES: dict[AssetCode, float] = {
-    AssetCode.BTCUSD: 105000.5,
-    AssetCode.BRENT: 82.35,
-    AssetCode.XAUUSD: 2418.4,
-    AssetCode.XAGUSD: 31.2,
-    AssetCode.DXY: 104.8,
-    AssetCode.HYG: 77.4,
-    AssetCode.JNK: 95.1,
-    AssetCode.NASDAQ: 18640.0,
-    AssetCode.QQQ: 492.7,
-    AssetCode.SP500: 5285.5,
-    AssetCode.BTC_DOMINANCE: 54.1,
-    AssetCode.USDT_DOMINANCE: 6.2,
-    AssetCode.TOTAL: 2680.0,
-    AssetCode.TOTAL2: 1210.0,
-    AssetCode.US02Y: 4.81,
-    AssetCode.US10Y: 4.42,
-    AssetCode.US20Y: 4.67,
-    AssetCode.USCPI: 3.1,
-    AssetCode.USPPI: 2.4,
-    AssetCode.M2SL: 20950.0,
-    AssetCode.FXI: 24.3,
-    AssetCode.SHANGHAI_COMPOSITE: 3112.0,
-    AssetCode.XCUUSD: 10_318.0,   # $/ton (4.68 $/pound × 2204.62)
-    AssetCode.XAUXAG: 77.5,
-    AssetCode.BTCXAUK: 43.4,
-    AssetCode.XAUUSDK: 1.02,
-    AssetCode.XAGUSDK: 0.97,
-    # Yeni göstergeler
-    AssetCode.VIX:        19.5,    # sakin piyasa
-    AssetCode.REAL_YIELD:  2.2,    # TIPS 10Y — elevated real rates
-    AssetCode.HY_SPREAD:   3.8,    # ICE BofA HY OAS — sağlıklı
-    AssetCode.ETHUSD:   2600.0,
-    AssetCode.IWM:       215.0,    # Russell 2000
-    AssetCode.LQD:       113.0,    # iBoxx IG
-    AssetCode.SMH:       245.0,    # Yarı iletkenler
-    AssetCode.XLF:        43.5,    # Finansallar
+    AssetCode.BTCUSD:            60_915.0,   # BTC-USD
+    AssetCode.BRENT:                 93.09,  # BZ=F
+    AssetCode.XAUUSD:             4_337.1,   # GC=F
+    AssetCode.XAGUSD:                68.94,  # SI=F
+    AssetCode.DXY:                  100.07,  # DX-Y.NYB
+    AssetCode.HYG:                   79.43,  # HYG ETF
+    AssetCode.JNK:                   95.73,  # JNK ETF
+    AssetCode.NASDAQ:            25_709.0,   # ^IXIC
+    AssetCode.QQQ:                  705.06,  # QQQ ETF
+    AssetCode.SP500:              7_383.7,   # ^GSPC
+    AssetCode.BTC_DOMINANCE:         56.15,  # CoinGecko BTC.D %
+    AssetCode.USDT_DOMINANCE:         8.59,  # CoinGecko USDT.D %
+    AssetCode.TOTAL:              2_177.0,   # CoinGecko global market cap (B$)
+    AssetCode.TOTAL2:               955.0,   # CoinGecko ex-BTC (B$)
+    AssetCode.US02Y:                  3.63,  # ^IRX proxy
+    AssetCode.US10Y:                  4.54,  # ^TNX
+    AssetCode.US20Y:                  5.00,  # ^TYX (30Y proxy)
+    AssetCode.USCPI:                  2.4,   # yoy%
+    AssetCode.USPPI:                  2.1,   # yoy%
+    AssetCode.M2SL:              21_500.0,   # B$
+    AssetCode.FXI:                   34.75,  # FXI ETF
+    AssetCode.SHANGHAI_COMPOSITE: 4_027.7,  # 000001.SS
+    AssetCode.XCUUSD:            13_805.0,   # HG=F $6.26/lb × 2204.62
+    AssetCode.XAUXAG:                62.9,   # 4337 / 68.94
+    AssetCode.BTCXAUK:               14.0,   # 60915 / 4337
+    AssetCode.XAUUSDK:                2.17,  # 4337 / 2000
+    AssetCode.XAGUSDK:                2.76,  # 68.94 / 25
+    # Göstergeler
+    AssetCode.VIX:                   21.5,   # ^VIX
+    AssetCode.REAL_YIELD:             2.3,   # DFII10 (TIPS 10Y)
+    AssetCode.HY_SPREAD:              3.5,   # ICE BofA HY OAS
+    AssetCode.ETHUSD:             1_567.0,   # ETH-USD
+    AssetCode.IWM:                  281.6,   # IWM ETF
+    AssetCode.LQD:                  108.2,   # LQD ETF
+    AssetCode.SMH:                  569.7,   # SMH ETF
+    AssetCode.XLF:                   52.3,   # XLF ETF
 }
 
 SOURCE_NAME_BY_CATEGORY: dict[AssetCategory, str] = {
