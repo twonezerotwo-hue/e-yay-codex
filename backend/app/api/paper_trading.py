@@ -26,6 +26,11 @@ _RESPONSE_CACHE: tuple[float, dict] | None = None
 _CACHE_TTL = 30
 
 
+def _invalidate_response_cache() -> None:
+    global _RESPONSE_CACHE
+    _RESPONSE_CACHE = None
+
+
 def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=None) -> tuple[dict, dict]:
     """4 parite için consensus sinyali + fiyat dict üret.
 
@@ -172,10 +177,19 @@ def manual_close(pair: str) -> dict:
 
 @router.post("/reset")
 def reset() -> dict:
-    global _RESPONSE_CACHE
     pts.reset_state()
-    _RESPONSE_CACHE = None
+    _invalidate_response_cache()
     return {"status": "reset"}
+
+
+@router.post("/pending/{pair}/reject")
+def reject_pending_trade(pair: str) -> dict:
+    rejected = pts.reject_pending_open(pair.upper())
+    _invalidate_response_cache()
+    return {
+        "status": "rejected" if rejected else "not_found",
+        "pair": pair.upper(),
+    }
 
 
 @router.post("/train")

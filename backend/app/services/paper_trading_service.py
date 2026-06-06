@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -29,6 +29,10 @@ TradeEvent   = Literal["OPEN", "CLOSE"]
 STARTING_BALANCE = 100_000.0
 POSITION_SIZE    = 25_000.0   # baz pozisyon büyüklüğü (consensus güveni ile ×0.6 .. ×1.5)
 TRADED_PAIRS     = ("BTCUSD", "XAUUSD", "XAGUSD", "BRENT")
+MARKET_HOURS_GATED_PAIRS = frozenset({"XAUUSD", "XAGUSD", "BRENT", "XCUUSD"})
+MARKET_CLOSE_FRIDAY_UTC_HOUR = 21
+MARKET_OPEN_SUNDAY_UTC_HOUR = 22
+OPEN_CONFIRMATION_WINDOW_SECONDS = 60
 
 # Consensus-driven karar eşikleri
 STRONG_LONG_THR   = 70.0   # consensus + confluence aligned ile → 1.5× pos
@@ -103,6 +107,27 @@ _STATE_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_trading_stat
 _LOCK = threading.Lock()
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _is_market_open(pair: str, as_of: datetime | None = None) -> bool:
+    if pair not in MARKET_HOURS_GATED_PAIRS:
+        return True
+
+    now = as_of or _utc_now()
+    weekday = now.weekday()
+    hour = now.hour
+
+    if weekday == 5:
+        return False
+    if weekday == 4 and hour >= MARKET_CLOSE_FRIDAY_UTC_HOUR:
+        return False
+    if weekday == 6 and hour < MARKET_OPEN_SUNDAY_UTC_HOUR:
+        return False
+    return True
+
+
 # ── Veri modelleri ────────────────────────────────────────────────────────────
 
 # ── SL/TP sabit yüzdeleri (ATR yoksa) ────────────────────────────────────────
@@ -150,6 +175,27 @@ class Position:
 
 
 @dataclass
+class PendingOpenOrder:
+    pair: str
+    side: PositionSide
+    requested_at: str
+    execute_at: str
+    requested_price: float
+    size_usd: float
+    last_signal: str
+    open_signal: dict[str, Any] = field(default_factory=dict)
+    fingerprint: str = ""
+
+
+@dataclass
+class RejectedOpenSignal:
+    pair: str
+    side: PositionSide
+    fingerprint: str
+    rejected_at: str
+
+
+@dataclass
 class Trade:
     id:           int
     pair:         str
@@ -175,6 +221,8 @@ class TradingState:
     starting_balance: float = STARTING_BALANCE
     realized_pnl_usd: float = 0.0
     positions:        dict[str, Position]   = field(default_factory=dict)
+    pending_orders:   dict[str, PendingOpenOrder] = field(default_factory=dict)
+    rejected_signals: dict[str, RejectedOpenSignal] = field(default_factory=dict)
     trades:           list[Trade]           = field(default_factory=list)
     last_event:       dict[str, Any] | None = None
     last_event_at:    str | None            = None
@@ -202,6 +250,16 @@ def _load_state() -> TradingState:
             v.setdefault("take_profit", 0.0)
             positions[k] = Position(**v)
 
+        pending_orders = {}
+        for k, v in raw.get("pending_orders", {}).items():
+            v.setdefault("open_signal", {})
+            v.setdefault("fingerprint", "")
+            pending_orders[k] = PendingOpenOrder(**v)
+
+        rejected_signals = {}
+        for k, v in raw.get("rejected_signals", {}).items():
+            rejected_signals[k] = RejectedOpenSignal(**v)
+
         # Trade — eski format
         trades = []
         for t in raw.get("trades", []):
@@ -215,6 +273,8 @@ def _load_state() -> TradingState:
             starting_balance=raw.get("starting_balance", STARTING_BALANCE),
             realized_pnl_usd=raw.get("realized_pnl_usd", 0.0),
             positions=positions,
+            pending_orders=pending_orders,
+            rejected_signals=rejected_signals,
             trades=trades,
             last_event=raw.get("last_event"),
             last_event_at=raw.get("last_event_at"),
@@ -233,6 +293,8 @@ def _save_state(st: TradingState) -> None:
         "starting_balance": st.starting_balance,
         "realized_pnl_usd": st.realized_pnl_usd,
         "positions": {k: asdict(v) for k, v in st.positions.items()},
+        "pending_orders": {k: asdict(v) for k, v in st.pending_orders.items()},
+        "rejected_signals": {k: asdict(v) for k, v in st.rejected_signals.items()},
         "trades":    [asdict(t) for t in st.trades],
         "last_event": st.last_event,
         "last_event_at": st.last_event_at,
@@ -256,9 +318,80 @@ def _unrealized_pnl(p: Position, current_price: float) -> tuple[float, float]:
     return pct * p.size_usd, pct * 100.0
 
 
+def _clear_rejected_signal_if_changed(
+    st: TradingState,
+    pair: str,
+    target: PositionSide | Literal["CLOSE"] | None,
+    fingerprint: str,
+) -> bool:
+    rejected = st.rejected_signals.get(pair)
+    if rejected is None:
+        return False
+
+    if target in ("LONG", "SHORT") and rejected.side == target and rejected.fingerprint == fingerprint:
+        return True
+
+    del st.rejected_signals[pair]
+    return False
+
+
+def _queue_pending_open(
+    st: TradingState,
+    pair: str,
+    side: PositionSide,
+    price: float,
+    size_usd: float,
+    last_signal: str,
+    signal_snapshot: dict[str, Any],
+    fingerprint: str,
+    now_dt: datetime,
+) -> None:
+    requested_at = now_dt.isoformat()
+    execute_at = (now_dt + timedelta(seconds=OPEN_CONFIRMATION_WINDOW_SECONDS)).isoformat()
+    st.pending_orders[pair] = PendingOpenOrder(
+        pair=pair,
+        side=side,
+        requested_at=requested_at,
+        execute_at=execute_at,
+        requested_price=price,
+        size_usd=size_usd,
+        last_signal=last_signal,
+        open_signal=signal_snapshot,
+        fingerprint=fingerprint,
+    )
+
+
+def _open_position_from_pending(
+    st: TradingState,
+    pending: PendingOpenOrder,
+    current_price: float,
+    opened_at: str,
+) -> None:
+    st.positions[pending.pair] = Position(
+        pair=pending.pair,
+        side=pending.side,
+        entry_price=current_price,
+        entry_at=opened_at,
+        size_usd=pending.size_usd,
+        last_signal=pending.last_signal,
+        open_signal=pending.open_signal,
+        fingerprint=pending.fingerprint,
+    )
+    st.last_event = {
+        "type": "OPEN",
+        "pair": pending.pair,
+        "side": pending.side,
+        "price": current_price,
+        "size_usd": pending.size_usd,
+        "fingerprint": pending.fingerprint,
+    }
+    st.last_event_at = opened_at
+    st.pending_orders.pop(pending.pair, None)
+
+
 # ── Tick (ana mekanizma) ─────────────────────────────────────────────────────
 
-def tick_consensus(
+def _tick_consensus_legacy(
     consensus_signals: dict[str, dict[str, Any]],
     current_prices: dict[str, float],
 ) -> TradingState:
@@ -446,6 +579,166 @@ def tick_consensus(
         return st
 
 
+def tick_consensus(
+    consensus_signals: dict[str, dict[str, Any]],
+    current_prices: dict[str, float],
+) -> TradingState:
+    """
+    Multi-TF consensus skoruna göre pozisyon aç/kapat.
+
+    Yeni açılışlar 60 saniyelik bekleyen onay penceresine girer.
+    Kullanıcı reddederse aynı fingerprint tekrar açılmaz; sinyal değişince engel kalkar.
+    """
+    from app.services.learning_engine import (
+        build_signal_fingerprint, should_avoid_or_boost,
+    )
+
+    with _LOCK:
+        st = _load_state()
+        now_dt = _utc_now()
+        now_iso = now_dt.isoformat()
+
+        for pair in TRADED_PAIRS:
+            sig = consensus_signals.get(pair) or {}
+            final_score = sig.get("final_score")
+            final_direction = sig.get("final_direction")
+            confluence = sig.get("confluence") or {}
+            confluence_status = confluence.get("status") if isinstance(confluence, dict) else None
+
+            target, base_mult = _consensus_to_action(final_score, final_direction, confluence_status)
+            price = current_prices.get(pair, 0.0)
+            if price <= 0:
+                continue
+
+            learning_meta: dict[str, Any] = {}
+            final_size_mult = base_mult
+            signal_fingerprint = ""
+            if target in ("LONG", "SHORT"):
+                learning_meta = should_avoid_or_boost(sig, st.trades)
+                if learning_meta["action"] == "AVOID":
+                    target = None
+                elif learning_meta["action"] == "BOOST":
+                    final_size_mult *= learning_meta["size_multiplier"]
+                signal_fingerprint = build_signal_fingerprint(sig)
+
+            if _clear_rejected_signal_if_changed(st, pair, target, signal_fingerprint):
+                target = None
+
+            new_size = round(POSITION_SIZE * final_size_mult, 2)
+            cur = st.positions.get(pair)
+            pending = st.pending_orders.get(pair)
+
+            if pending is not None:
+                if cur is not None or target != pending.side or pending.fingerprint != signal_fingerprint:
+                    st.pending_orders.pop(pair, None)
+                    pending = None
+                else:
+                    execute_at = datetime.fromisoformat(pending.execute_at)
+                    if now_dt >= execute_at:
+                        if _is_market_open(pair, now_dt):
+                            _open_position_from_pending(st, pending, price, now_iso)
+                            cur = st.positions.get(pair)
+                        else:
+                            st.pending_orders.pop(pair, None)
+                        pending = None
+
+            if cur is not None:
+                if target == cur.side:
+                    cur.last_signal = f"{final_direction}@{final_score:.1f}" if final_score is not None else "noop"
+                    st.pending_orders.pop(pair, None)
+                    continue
+
+                should_close = (
+                    target in ("LONG", "SHORT") and target != cur.side
+                ) or target == "CLOSE"
+
+                if should_close:
+                    pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+                    duration_min = int(
+                        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+                    )
+                    if pnl_usd > 5.0:
+                        verdict = "WIN"
+                    elif pnl_usd < -5.0:
+                        verdict = "LOSS"
+                    else:
+                        verdict = "BREAK_EVEN"
+
+                    trade_id = len(st.trades) + 1
+                    trade = Trade(
+                        id=trade_id,
+                        pair=pair,
+                        side=cur.side,
+                        entry_price=cur.entry_price,
+                        exit_price=price,
+                        entry_at=cur.entry_at,
+                        exit_at=now_iso,
+                        size_usd=cur.size_usd,
+                        pnl_usd=round(pnl_usd, 2),
+                        pnl_pct=round(pnl_pct, 2),
+                        duration_min=duration_min,
+                        reason=(
+                            f"consensus={final_direction}@{final_score:.1f}"
+                            if final_score is not None else "consensus=unknown"
+                        ),
+                        open_signal=cur.open_signal,
+                        exit_signal={
+                            "final_score": final_score,
+                            "final_direction": final_direction,
+                            "confluence_status": confluence_status,
+                            "regime": sig.get("raw_regime"),
+                            "primary_tf": sig.get("primary_tf"),
+                        },
+                        verdict=verdict,
+                        fingerprint=cur.fingerprint,
+                    )
+                    st.trades.append(trade)
+                    st.realized_pnl_usd += pnl_usd
+                    st.last_event = {
+                        "type": "CLOSE",
+                        "pair": pair,
+                        "side": cur.side,
+                        "pnl_usd": round(pnl_usd, 2),
+                        "pnl_pct": round(pnl_pct, 2),
+                        "price": price,
+                        "verdict": verdict,
+                    }
+                    st.last_event_at = now_iso
+                    del st.positions[pair]
+
+                    if target in ("LONG", "SHORT") and _is_market_open(pair, now_dt):
+                        _queue_pending_open(
+                            st=st,
+                            pair=pair,
+                            side=target,
+                            price=price,
+                            size_usd=new_size,
+                            last_signal=f"{final_direction}@{final_score:.1f}" if final_score is not None else "pending",
+                            signal_snapshot=sig,
+                            fingerprint=signal_fingerprint,
+                            now_dt=now_dt,
+                        )
+                    else:
+                        st.pending_orders.pop(pair, None)
+                continue
+
+            if target in ("LONG", "SHORT") and pending is None and _is_market_open(pair, now_dt):
+                _queue_pending_open(
+                    st=st,
+                    pair=pair,
+                    side=target,
+                    price=price,
+                    size_usd=new_size,
+                    last_signal=f"{final_direction}@{final_score:.1f}" if final_score is not None else "pending",
+                    signal_snapshot=sig,
+                    fingerprint=signal_fingerprint,
+                    now_dt=now_dt,
+                )
+
+        _save_state(st)
+        return st
+
+
 def tick(
     agent_signals: dict[str, dict[str, Any]],
     current_prices: dict[str, float],
@@ -558,6 +851,23 @@ def tick(
 
 # ── Public read API ────────────────────────────────────────────────────────────
 
+def reject_pending_open(pair: str) -> bool:
+    with _LOCK:
+        st = _load_state()
+        pending = st.pending_orders.pop(pair, None)
+        if pending is None:
+            return False
+
+        st.rejected_signals[pair] = RejectedOpenSignal(
+            pair=pair,
+            side=pending.side,
+            fingerprint=pending.fingerprint,
+            rejected_at=_utc_now().isoformat(),
+        )
+        _save_state(st)
+        return True
+
+
 def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
     """Frontend için tek seferlik durum görüntüsü."""
     st = _load_state()
@@ -583,7 +893,8 @@ def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
     equity = st.starting_balance + st.realized_pnl_usd + unrealized_total
 
     # Günlük PnL — bugün kapatılan trade'lerin sum'ı + bugün açılmış pozisyonların unreal'i
-    today = datetime.now(UTC).date().isoformat()
+    now_dt = _utc_now()
+    today = now_dt.date().isoformat()
     today_realized = sum(
         t.pnl_usd for t in st.trades if t.exit_at.startswith(today)
     )
@@ -593,6 +904,15 @@ def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
         if p.entry_at.startswith(today)
     )
     daily_pnl = today_realized + today_unreal
+    pending_orders = []
+    for pending in st.pending_orders.values():
+        execute_at = datetime.fromisoformat(pending.execute_at)
+        pending_orders.append({
+            **asdict(pending),
+            "seconds_remaining": max(0, int((execute_at - now_dt).total_seconds())),
+            "market_open": _is_market_open(pending.pair, now_dt),
+        })
+    pending_orders.sort(key=lambda item: (item["execute_at"], item["pair"]))
 
     return {
         "starting_balance": st.starting_balance,
@@ -601,6 +921,7 @@ def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
         "equity":           round(equity, 2),
         "daily_pnl_usd":    round(daily_pnl, 2),
         "open_positions":   open_positions,
+        "pending_orders":   pending_orders,
         "trades":           [asdict(t) for t in st.trades[-20:]],  # son 20 trade
         "trade_count":      len(st.trades),
         "last_event":       st.last_event,
@@ -667,6 +988,8 @@ def force_close_position(pair: str, current_price: float, reason: str = "MANUEL"
 
 
 __all__ = [
-    "tick", "tick_consensus", "get_snapshot", "reset_state", "force_close_position",
+    "tick", "tick_consensus", "get_snapshot", "reject_pending_open", "reset_state",
+    "force_close_position",
+    "OPEN_CONFIRMATION_WINDOW_SECONDS", "_is_market_open",
     "TRADED_PAIRS", "STARTING_BALANCE", "POSITION_SIZE",
 ]
