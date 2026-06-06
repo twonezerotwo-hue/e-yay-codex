@@ -26,6 +26,7 @@ from app.providers.capital_rotation_provider import CapitalRotationProvider
 from app.providers.news_provider import NewsProvider
 from app.providers.real_market_provider import RealMarketProvider
 from app.providers.technical_provider import TechnicalProvider
+from app.services.agent_output_guard import guard_response
 from app.services.market_snapshot_service import MarketSnapshotService
 from app.services.provider_ingestion_service import ProviderIngestionService
 from app.services.regime_report_service import RegimeReportService
@@ -104,6 +105,7 @@ def get_agent_insight() -> dict:
         "decision": report.decision,
         "insights": [dataclasses.asdict(i) for i in insights],
     }
+    response = guard_response(response, source="agent.insight")
     _INSIGHT_RESPONSE_CACHE = (now, response)
     return response
 

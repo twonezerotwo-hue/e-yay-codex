@@ -245,6 +245,10 @@ class TradingState:
     # ↑ {regime_key: {module: delta}} — baseline YAML'a eklenen düzeltmeler
     last_trained_at_trade_count: int = 0
     training_history: list[dict[str, Any]] = field(default_factory=list)
+    # ── Tick'in son ürettiği fiyat snapshot'ı — read-only GET için ──
+    last_tick_prices: dict[str, float] = field(default_factory=dict)
+    last_tick_at:     str | None       = None
+    last_tick_signals: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 # ── State persist ─────────────────────────────────────────────────────────────
@@ -295,6 +299,9 @@ def _load_state() -> TradingState:
             weight_adjustments=raw.get("weight_adjustments", {}),
             last_trained_at_trade_count=raw.get("last_trained_at_trade_count", 0),
             training_history=raw.get("training_history", []),
+            last_tick_prices=raw.get("last_tick_prices", {}),
+            last_tick_at=raw.get("last_tick_at"),
+            last_tick_signals=raw.get("last_tick_signals", {}),
         )
         return st
     except Exception:
@@ -315,6 +322,9 @@ def _save_state(st: TradingState) -> None:
         "weight_adjustments": st.weight_adjustments,
         "last_trained_at_trade_count": st.last_trained_at_trade_count,
         "training_history": st.training_history,
+        "last_tick_prices": st.last_tick_prices,
+        "last_tick_at":     st.last_tick_at,
+        "last_tick_signals": st.last_tick_signals,
     }
     _STATE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -811,6 +821,10 @@ def tick_consensus(
                     )
 
         _maybe_warn_daily_loss(st, now_dt)
+        # ── Read-only GET için tick snapshot'ı kaydet ──
+        st.last_tick_prices = dict(current_prices)
+        st.last_tick_at = now_iso
+        st.last_tick_signals = consensus_signals
         _save_state(st)
         return st
 
@@ -952,9 +966,15 @@ def reject_pending_open(pair: str) -> bool:
     return True
 
 
-def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
-    """Frontend için tek seferlik durum görüntüsü."""
+def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, Any]:
+    """Frontend için tek seferlik durum görüntüsü.
+
+    current_prices boş veya None ise state'in last_tick_prices'ından düşülür —
+    böylece GET tick yapmadan da geçerli unrealized PnL döner.
+    """
     st = _load_state()
+    if not current_prices:
+        current_prices = dict(st.last_tick_prices)
 
     # Açık pozisyonların unrealized PnL'i + her birinin fingerprint geçmişi
     open_positions = []
@@ -998,6 +1018,14 @@ def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
         })
     pending_orders.sort(key=lambda item: (item["execute_at"], item["pair"]))
 
+    # Stale ölçümü — son tick'ten bu yana kaç saniye geçti?
+    tick_age_s: float | None = None
+    if st.last_tick_at:
+        try:
+            tick_age_s = (now_dt - datetime.fromisoformat(st.last_tick_at)).total_seconds()
+        except Exception:
+            tick_age_s = None
+
     return {
         "starting_balance": st.starting_balance,
         "realized_pnl_usd": round(st.realized_pnl_usd, 2),
@@ -1010,6 +1038,8 @@ def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
         "trade_count":      len(st.trades),
         "last_event":       st.last_event,
         "last_event_at":    st.last_event_at,
+        "last_tick_at":     st.last_tick_at,
+        "tick_age_seconds": round(tick_age_s, 1) if tick_age_s is not None else None,
         "traded_pairs":     list(TRADED_PAIRS),
     }
 

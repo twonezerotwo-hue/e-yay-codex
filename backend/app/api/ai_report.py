@@ -14,6 +14,8 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from app.services.agent_output_guard import guard_response
+
 router = APIRouter(prefix="/ai-report", tags=["ai-report"])
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -143,14 +145,15 @@ def get_ai_report(
         force_refresh=force_refresh,
     )
 
-    return JSONResponse(content={
+    payload = guard_response({
         "status": "ok",
         "data_mode": data_mode,
         "execution_mode": "OFF / NO_EXECUTION",
         "ai_report": _to_dict(ai_report),
         "geo_news_count": len(geo_news),
         "capital_rotation": _to_dict(rotation) if rotation else None,
-    })
+    }, source="ai_report.current")
+    return JSONResponse(content=payload)
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]

@@ -1,41 +1,57 @@
 """
-GET  /api/v1/trading/state  → Bakiye + açık pozisyonlar + son trade + son event
-POST /api/v1/trading/reset  → Tüm state'i sıfırla (debug)
+Paper Trading API — Sprint 1 sonrası temiz ayrım.
 
-Her GET çağrısında:
-  1. Mevcut regime report pipeline'ını çalıştırır (kendi cache'i 3 dk)
-  2. asset_signals'tan LONG/SHORT/AVOID kararları alır
-  3. paper_trading.tick() ile pozisyon aç/kapat
-  4. Snapshot döndürür
+Endpoint semantiği:
+  GET  /trading/state             → SADECE okur (state diskten + last_tick snapshot)
+  POST /trading/tick               → pipeline + consensus tick + (gerekirse) eğitim
+  POST /trading/close/{pair}       → manuel kapat (PAPER_SAFE guard)
+  POST /trading/reset              → state sıfırla
+  POST /trading/pending/{pair}/reject → bekleyen emri reddet
+  POST /trading/train              → manuel auto_weight_trainer
+  GET  /trading/training           → eğitim raporu (read-only)
+  GET  /trading/learning           → öğrenme raporu (read-only)
 
-PAPER_SAFE / NO_EXECUTION — simülasyon, gerçek emir YOK.
+Background scheduler (main.py) her ~30 sn'de bir POST /tick çağırır; GET artık
+state mutasyonu YAPMAZ.
+
+PAPER_SAFE / NO_EXECUTION — gerçek emir YOK.
 """
 from __future__ import annotations
 
+import logging
 import time
-from fastapi import APIRouter
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.consensus import _build_full_signal, _build_pipeline
+from app.core.execution_boundary import boundary_status, require_paper_safe
 from app.providers.multi_tf_technical_provider import MTF_ASSETS
 from app.services import paper_trading_service as pts
 
+_log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/trading", tags=["trading"])
 
-# 30 sn'lik mini cache — frontend her sayfa yenilemede çağırsa bile pipeline tekrar koşmasın
-_RESPONSE_CACHE: tuple[float, dict] | None = None
-_CACHE_TTL = 30
+# State response cache (pure read) — 15s.
+_STATE_CACHE: tuple[float, dict] | None = None
+_STATE_CACHE_TTL = 15
+
+# Tick response cache — son tick sonucu (POST /tick re-entry korumalı).
+_TICK_CACHE: tuple[float, dict] | None = None
+_TICK_CACHE_TTL = 25
 
 
-def _invalidate_response_cache() -> None:
-    global _RESPONSE_CACHE
-    _RESPONSE_CACHE = None
+def _invalidate_caches() -> None:
+    global _STATE_CACHE, _TICK_CACHE
+    _STATE_CACHE = None
+    _TICK_CACHE = None
 
+
+# ── Pipeline helpers ────────────────────────────────────────────────────────
 
 def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=None) -> tuple[dict, dict]:
-    """4 parite için consensus sinyali + fiyat dict üret.
-
-    trained_adjustments verilirse agent'ın eğitilmiş ağırlıkları kullanılır.
-    """
+    """4 parite için consensus sinyali + fiyat dict üret."""
     sigs: dict = {}
     prices: dict = {}
 
@@ -45,7 +61,6 @@ def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=Non
         full = _build_full_signal(asset, report, rotation, mtf,
                                    trained_adjustments=trained_adjustments)
 
-        # Full snapshot — fingerprint + learning için tüm bilgi
         sigs[asset] = {
             "symbol":          asset,
             "final_score":     full.get("final_score"),
@@ -53,18 +68,16 @@ def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=Non
             "confluence":      full.get("confluence"),
             "raw_regime":      full.get("raw_regime"),
             "primary_tf":      full.get("primary_tf"),
-            "base":            full.get("base"),          # consensus contributions burada
-            "tf_signals":      full.get("tf_signals"),    # her TF'in skoru
+            "base":            full.get("base"),
+            "tf_signals":      full.get("tf_signals"),
             "other_tf_scores": full.get("other_tf_scores"),
         }
 
-        # Fiyat + ATR — base TF technical provider'dan
         base_tf = full.get("primary_tf", "1h")
         try:
             ti = (mtf.get(asset) or {}).get(base_tf)
             if ti is not None and getattr(ti, "current_price", 0) > 0:
                 prices[asset] = float(ti.current_price)
-            # ATR — SL/TP otomatik hesabı için
             if ti is not None and hasattr(ti, "levels") and ti.levels is not None:
                 atr_val = getattr(ti.levels, "atr", None)
                 if atr_val and float(atr_val) > 0:
@@ -72,7 +85,6 @@ def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=Non
         except Exception:
             pass
 
-        # Yedek: report asset_signals'tan fiyat çek
         if asset not in prices:
             for s in report.asset_signals:
                 if s.asset_code == asset and s.value and s.value > 0:
@@ -82,28 +94,24 @@ def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=Non
     return sigs, prices
 
 
-@router.get("/state")
-def get_state() -> dict:
-    global _RESPONSE_CACHE
-    now = time.monotonic()
-    if _RESPONSE_CACHE and (now - _RESPONSE_CACHE[0]) < _CACHE_TTL:
-        return _RESPONSE_CACHE[1]
+def _run_tick_pipeline() -> dict[str, Any]:
+    """Heavy pipeline + consensus tick + training. State MUTATE eder.
 
+    Sadece POST /trading/tick veya background scheduler tarafından çağrılır.
+    """
     try:
-        # ── 1) Mevcut state'ten EĞİTİLMİŞ ağırlıkları oku ─
         state = pts._load_state()
         trained_adjustments = state.weight_adjustments
 
-        # ── 2) Multi-TF consensus pipeline'ı (eğitilmiş ağırlıklarla) ─
         report, rotation, mtf, raw_snapshots = _build_pipeline()
         sigs, prices = _consensus_signals_and_prices(
             report, rotation, mtf, trained_adjustments=trained_adjustments,
         )
 
-        # ── 3) Tick: pozisyon aç/kapat ─
+        # Consensus tick — pozisyon aç/kapat + last_tick_prices'ı state'e yazar
         pts.tick_consensus(sigs, prices)
 
-        # ── 4) Otomatik eğitim — her 5 yeni kapanışta tetiklenir ─
+        # Auto-weight training (her 5 yeni kapanışta)
         from app.services.auto_weight_trainer import maybe_retrain
         with pts._LOCK:
             state = pts._load_state()
@@ -111,7 +119,7 @@ def get_state() -> dict:
             if training_result["status"] == "trained":
                 pts._save_state(state)
 
-        # ── 5) Veri kalite özeti — raw_snapshots üzerinden fallback uyarısı ─
+        # Veri kalite
         from app.services.data_quality_service import get_data_quality_summary
         try:
             asset_snapshots = {
@@ -123,76 +131,121 @@ def get_state() -> dict:
         except Exception:
             data_quality = {"quality_score": None, "decision": "UNKNOWN"}
 
-        snap = pts.get_snapshot(prices)
-        snap["status"] = "ok"
+        return {
+            "status": "ok",
+            "tick_at": state.last_tick_at if hasattr(state, "last_tick_at") else None,
+            "signals_count": len(sigs),
+            "prices_count":  len(prices),
+            "training":      training_result,
+            "data_quality":  data_quality,
+        }
+    except Exception as exc:
+        _log.exception("tick pipeline failed")
+        return {
+            "status": "error",
+            "error":  str(exc)[:200],
+        }
+
+
+# ── Endpoints ───────────────────────────────────────────────────────────────
+
+@router.get("/state")
+def get_state() -> dict:
+    """SADECE OKUR. State'i diskten yükler, son tick fiyatlarını kullanır.
+
+    Pipeline çalıştırmaz, tick yapmaz, training tetiklemez.
+    Background scheduler tick'i tutarken bu endpoint stale değildir.
+    """
+    global _STATE_CACHE
+    now = time.monotonic()
+    if _STATE_CACHE and (now - _STATE_CACHE[0]) < _STATE_CACHE_TTL:
+        return _STATE_CACHE[1]
+
+    try:
+        # last_tick_prices'ı kullan — get_snapshot None geçince state'ten çeker
+        state = pts._load_state()
+        snap = pts.get_snapshot()  # prices=None → state.last_tick_prices fallback
+        snap["status"]         = "ok"
         snap["execution_mode"] = "PAPER_SAFE / NO_EXECUTION"
-        snap["driver"] = "consensus_multi_tf_self_learning"
-        snap["last_signals"] = sigs
-        snap["data_quality"] = data_quality
+        snap["read_only"]      = True
+        snap["driver"]         = "consensus_multi_tf_self_learning"
+        snap["boundary"]       = boundary_status()
+        snap["last_signals"]   = state.last_tick_signals
         snap["training"] = {
-            "last_result":       training_result.get("status"),
-            "trained_at_count":  state.last_trained_at_trade_count,
-            "training_runs":     len(state.training_history),
+            "trained_at_count":   state.last_trained_at_trade_count,
+            "training_runs":      len(state.training_history),
             "active_adjustments": state.weight_adjustments,
         }
     except Exception as exc:
-        snap = pts.get_snapshot({})
+        _log.exception("state read failed")
+        snap = pts.get_snapshot()
         snap["status"] = "stale"
-        snap["error"] = str(exc)[:200]
+        snap["error"]  = str(exc)[:200]
 
-    _RESPONSE_CACHE = (now, snap)
+    _STATE_CACHE = (now, snap)
     return snap
 
 
-@router.post("/close/{pair}")
+@router.post("/tick", dependencies=[Depends(require_paper_safe)])
+def run_tick() -> dict:
+    """Pipeline + consensus tick'i ŞIMDI çalıştır. State MUTATE eder."""
+    global _TICK_CACHE
+    now = time.monotonic()
+    if _TICK_CACHE and (now - _TICK_CACHE[0]) < _TICK_CACHE_TTL:
+        cached = dict(_TICK_CACHE[1])
+        cached["from_cache"] = True
+        return cached
+
+    result = _run_tick_pipeline()
+    result["boundary"] = boundary_status()
+    _TICK_CACHE = (now, result)
+    _STATE_CACHE = None  # state'i bayatlatma
+    globals()["_STATE_CACHE"] = None
+    return result
+
+
+@router.post("/close/{pair}", dependencies=[Depends(require_paper_safe)])
 def manual_close(pair: str) -> dict:
-    """Manuel kapat — kullanıcı talebiyle anlık fiyattan pozisyonu kapat. PAPER_SAFE."""
-    global _RESPONSE_CACHE
-    from fastapi import HTTPException
+    """Manuel kapat — kullanıcı talebiyle anlık fiyattan pozisyonu kapat."""
     pair_upper = pair.upper()
     if pair_upper not in pts.TRADED_PAIRS:
         raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
 
-    # Güncel fiyatı pipeline'dan al
-    price = 0.0
-    try:
-        report, rotation, mtf, raw_snapshots = _build_pipeline()
-        _, prices = _consensus_signals_and_prices(report, rotation, mtf)
-        price = prices.get(pair_upper, 0.0)
-    except Exception:
-        pass
+    # Önce state'in son bilinen fiyatına bak (read-only, pipeline yok)
+    state = pts._load_state()
+    price = float(state.last_tick_prices.get(pair_upper, 0.0))
 
-    # Pipeline başarısız olduysa snapshot'taki son bilinen fiyatı kullan
+    # Yoksa pozisyondaki entry_price/current'tan düş
     if price <= 0:
-        snap = pts.get_snapshot({})
+        snap = pts.get_snapshot()
         for pos in snap.get("open_positions", []):
             if pos.get("pair") == pair_upper:
                 price = float(pos.get("current_price") or pos.get("entry_price") or 0.0)
                 break
 
     result = pts.force_close_position(pair_upper, price, reason="MANUEL")
-    _RESPONSE_CACHE = None  # cache'i temizle — bir sonraki GET güncel durumu döndürsün
+    _invalidate_caches()
     return result
 
 
-@router.post("/reset")
+@router.post("/reset", dependencies=[Depends(require_paper_safe)])
 def reset() -> dict:
     pts.reset_state()
-    _invalidate_response_cache()
+    _invalidate_caches()
     return {"status": "reset"}
 
 
-@router.post("/pending/{pair}/reject")
+@router.post("/pending/{pair}/reject", dependencies=[Depends(require_paper_safe)])
 def reject_pending_trade(pair: str) -> dict:
     rejected = pts.reject_pending_open(pair.upper())
-    _invalidate_response_cache()
+    _invalidate_caches()
     return {
         "status": "rejected" if rejected else "not_found",
-        "pair": pair.upper(),
+        "pair":   pair.upper(),
     }
 
 
-@router.post("/train")
+@router.post("/train", dependencies=[Depends(require_paper_safe)])
 def force_retrain() -> dict:
     """Manuel olarak otomatik eğitim tetikle (debug için)."""
     from app.services.auto_weight_trainer import maybe_retrain
@@ -201,22 +254,23 @@ def force_retrain() -> dict:
         result = maybe_retrain(state, force=True)
         if result["status"] == "trained":
             pts._save_state(state)
+    _invalidate_caches()
     return result
 
 
 @router.get("/training")
 def get_training_status() -> dict:
-    """Mevcut eğitim durumu — ağırlık adjustments + son eğitim event'leri."""
+    """Mevcut eğitim durumu — READ-ONLY."""
     state = pts._load_state()
     return {
         "status": "ok",
         "last_trained_at_trade_count": state.last_trained_at_trade_count,
-        "active_adjustments": state.weight_adjustments,
-        "training_history": state.training_history[-10:],  # son 10 event
+        "active_adjustments":          state.weight_adjustments,
+        "training_history":            state.training_history[-10:],
         "thresholds": {
-            "min_total_trades":   10,
-            "min_regime_trades":  5,
-            "training_interval":  5,
+            "min_total_trades":        10,
+            "min_regime_trades":       5,
+            "training_interval":       5,
             "max_adjustment_per_run":  0.03,
             "max_total_adjustment":    0.10,
             "min_module_weight":       0.02,
@@ -226,23 +280,21 @@ def get_training_status() -> dict:
 
 @router.get("/learning")
 def get_learning_report() -> dict:
-    """
-    Öğrenme motoru raporu:
-      • Her fingerprint'in win rate'i
-      • AVOID listesi (öğrenilmiş hatalar)
-      • BOOST listesi (güçlü sinyaller)
-      • Modül performansları (kazandıran vs kaybettiren skew)
-      • Ağırlık revizyon önerileri
-    """
+    """Öğrenme motoru raporu — READ-ONLY."""
     from app.services.learning_engine import build_learning_report
-    snap = pts.get_snapshot({})
     state = pts._load_state()
     report = build_learning_report(state.trades)
     return {
-        "status": "ok",
+        "status":      "ok",
         "trade_count": len(state.trades),
-        "report": report,
+        "report":      report,
     }
+
+
+@router.get("/boundary")
+def get_boundary() -> dict:
+    """Execution boundary durumu — READ-ONLY."""
+    return {"status": "ok", **boundary_status()}
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]
