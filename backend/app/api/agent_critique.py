@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.agent_insight import get_agent_insight
-from app.services import agent_audit_log, multi_agent_critique
+from app.services import agent_audit_log, core_snapshot_cache, multi_agent_critique
 from app.services.agent_output_guard import guard_response
 
 router = APIRouter(prefix="/agent", tags=["agent-critique"])
@@ -102,10 +102,14 @@ def get_insight_critiqued() -> dict:
         market_clock=evidence["market_clock"],
     )
 
+    # Orijinal cevabın snapshot_id'sini critique'e bağla — re-replay için
+    original_snapshot_id = agent_response.get("snapshot_id")
     result = {
         "status":         "ok",
         "execution_mode": "OFF / NO_EXECUTION",
         "generated_at":   datetime.now(UTC).isoformat(),
+        "snapshot_id":    original_snapshot_id,   # critique aynı snapshot'a referans verir
+        "contract_version": agent_response.get("contract_version"),
         "original":       agent_response,
         "critique":       critique_result.to_dict(),
         "synthesis":      critique_result.synthesis,
@@ -124,8 +128,8 @@ def get_insight_critiqued() -> dict:
                 "agreement":   critique_result.agreement_with_original,
                 "challenges":  len(critique_result.challenges),
             },
-            snapshot_id=agent_response.get("generated_at"),
-            contract_version="critique.1.0",
+            snapshot_id=original_snapshot_id or agent_response.get("generated_at"),
+            contract_version=agent_response.get("contract_version") or "critique.1.0",
             model="rule-based-critic",
             tool_calls=["agent.insight", "chart_patterns.list"],
             confidence={

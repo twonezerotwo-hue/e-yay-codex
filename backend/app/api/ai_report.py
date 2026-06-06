@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from app.services import agent_audit_log, agent_confidence, agent_self_validator
+from app.services import agent_audit_log, agent_confidence, agent_self_validator, job_runner
 from app.services.agent_output_guard import guard_response
 
 router = APIRouter(prefix="/ai-report", tags=["ai-report"])
@@ -236,6 +236,56 @@ def get_ai_report(
         pass
 
     return JSONResponse(content=payload)
+
+
+# ---------------------------------------------------------------------------
+# Async job pattern — LLM çağrısını request'ten çıkarır
+# ---------------------------------------------------------------------------
+
+def _run_ai_report_job(force_refresh: bool) -> dict:
+    """Job worker — get_ai_report'u sync çağırır, JSONResponse'tan dict çıkarır."""
+    resp = get_ai_report(force_refresh=force_refresh)
+    # JSONResponse içeriği — body'den dict üret
+    try:
+        import json as _json
+        return _json.loads(bytes(resp.body).decode("utf-8"))
+    except Exception:
+        return {"status": "error", "error": "job_decode_failed"}
+
+
+@router.post("/jobs")
+def submit_ai_report_job(
+    force_refresh: bool = Query(default=False, description="Önbelleği yoksay"),
+) -> dict:
+    """Async job submit — anında job_id döner, frontend polling yapar."""
+    job_id = job_runner.submit(
+        _run_ai_report_job,
+        force_refresh,
+        label="ai-report.current",
+    )
+    return {
+        "status": "submitted",
+        "job_id": job_id,
+        "poll":   f"/api/v1/ai-report/jobs/{job_id}",
+        "execution_mode": "OFF / NO_EXECUTION",
+    }
+
+
+@router.get("/jobs/{job_id}")
+def get_ai_report_job(job_id: str) -> dict:
+    """Job durumunu sorgula. status: pending|running|ready|failed."""
+    s = job_runner.get_status(job_id)
+    if s is None:
+        return {"status": "not_found", "job_id": job_id}
+    if s["status"] == "ready":
+        s["result"] = job_runner.get_result(job_id)
+    return s
+
+
+@router.get("/jobs")
+def list_ai_report_jobs(limit: int = Query(default=20, ge=1, le=100)) -> dict:
+    items = [it for it in job_runner.list_recent(limit) if it.get("label") == "ai-report.current"]
+    return {"status": "ok", "count": len(items), "items": items}
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]

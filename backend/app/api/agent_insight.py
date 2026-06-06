@@ -26,7 +26,12 @@ from app.providers.capital_rotation_provider import CapitalRotationProvider
 from app.providers.news_provider import NewsProvider
 from app.providers.real_market_provider import RealMarketProvider
 from app.providers.technical_provider import TechnicalProvider
-from app.services import agent_audit_log, agent_confidence, agent_self_validator
+from app.services import (
+    agent_audit_log,
+    agent_confidence,
+    agent_self_validator,
+    core_snapshot_cache,
+)
 from app.services.agent_output_guard import guard_response
 from app.services.market_snapshot_service import MarketSnapshotService
 from app.services.provider_ingestion_service import ProviderIngestionService
@@ -100,7 +105,24 @@ def get_agent_insight() -> dict:
     insights = generate_insights(report, rotation)
 
     generated_at = datetime.now(UTC).isoformat()
-    snapshot_id = f"insight::{generated_at}"
+
+    # ── Core snapshot contract (Item 3) ──────────────────────────────────
+    # Pipeline çıktısını dondur; agent/critic/audit aynı snapshot'a referans verir.
+    evidence_payload: dict = {
+        "snapshots":  [getattr(s, "asset_symbol", None) for s in snapshots],
+        "news_count": len(news),
+        "tech_keys":  sorted(list(tech_insights.keys())) if isinstance(tech_insights, dict) else [],
+        "decision":   getattr(report, "decision", None),
+        "macro": {
+            "regime":         getattr(getattr(report, "macro_layer", None), "regime", None),
+            "confidence_pct": getattr(getattr(report, "macro_layer", None), "confidence_pct", None),
+        },
+        "rotation_primary": (getattr(rotation, "primary_flow", None) if rotation else None),
+        "generated_at":     generated_at,
+    }
+    snapshot_id, snapshot_entry = core_snapshot_cache.create_snapshot(
+        evidence_payload, source="agent.insight", ttl_seconds=90,
+    )
 
     # ── Self-validation (Item 4) ─────────────────────────────────────────
     macro = getattr(report, "macro_layer", None)
@@ -144,6 +166,8 @@ def get_agent_insight() -> dict:
             "status":         "abstain",
             "execution_mode": "OFF / NO_EXECUTION",
             "generated_at":   generated_at,
+            "snapshot_id":    snapshot_id,
+            "contract_version": snapshot_entry["contract_version"],
             "abstention_reason": (
                 confidence.abstention_reason
                 or "; ".join(validation.reasons)
@@ -159,6 +183,8 @@ def get_agent_insight() -> dict:
             "status": "ok",
             "execution_mode": "OFF / NO_EXECUTION",
             "generated_at": generated_at,
+            "snapshot_id":  snapshot_id,
+            "contract_version": snapshot_entry["contract_version"],
             "decision":   report.decision,
             "insights":   [dataclasses.asdict(i) for i in insights],
             "validation": validation.to_dict(),
@@ -181,7 +207,7 @@ def get_agent_insight() -> dict:
                 "decision":  response.get("decision"),
             },
             snapshot_id=snapshot_id,
-            contract_version=agent_self_validator.DEFAULT_CONTRACT_VERSION,
+            contract_version=snapshot_entry["contract_version"],
             model="rule-based",
             validation=validation.to_dict(),
             confidence=confidence.to_dict(),

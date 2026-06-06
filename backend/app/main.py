@@ -20,6 +20,8 @@ from app.api.ceo_report import router as ceo_report_router
 from app.api.chart_patterns import router as chart_patterns_router
 from app.api.chat import router as chat_router
 from app.api.consensus import router as consensus_router
+from app.api.core_snapshots import jobs_router as core_jobs_router
+from app.api.core_snapshots import router as core_snapshots_router
 from app.api.health import router as health_router
 from app.api.paper_trading import router as paper_trading_router
 from app.api.regime_report import router as regime_report_router
@@ -49,6 +51,8 @@ app.include_router(agent_audit_router, prefix=settings.api_prefix)
 app.include_router(agent_critique_router, prefix=settings.api_prefix)
 app.include_router(paper_trading_router, prefix=settings.api_prefix)
 app.include_router(consensus_router, prefix=settings.api_prefix)
+app.include_router(core_snapshots_router, prefix=settings.api_prefix)
+app.include_router(core_jobs_router, prefix=settings.api_prefix)
 app.include_router(chart_patterns_router, prefix=settings.api_prefix)
 app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
 
