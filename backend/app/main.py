@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from app.api.agent_insight import router as agent_insight_router
 from app.api.ai_report import router as ai_report_router
+from app.api.alerts import router as alerts_router
 from app.api.ceo_report import router as ceo_report_router
 from app.api.chart_patterns import router as chart_patterns_router
 from app.api.chat import router as chat_router
@@ -30,6 +31,7 @@ app = FastAPI(title=settings.app_name)
 app.add_middleware(RequestIDMiddleware)
 register_exception_handlers(app)
 app.include_router(health_router)
+app.include_router(alerts_router, prefix=settings.api_prefix)
 app.include_router(ceo_report_router, prefix=settings.api_prefix)
 app.include_router(regime_report_router, prefix=settings.api_prefix)
 app.include_router(ai_report_router, prefix=settings.api_prefix)

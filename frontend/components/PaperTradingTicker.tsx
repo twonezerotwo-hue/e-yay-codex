@@ -53,6 +53,40 @@ interface TradingState {
   last_event_at: string | null;
 }
 
+interface AlertEvent {
+  id: number;
+  uid: string;
+  type: string;
+  level: "CRITICAL" | "ACTION_REQUIRED" | "TRADE_EVENT" | "WARNING" | "INFO";
+  title: string;
+  message: string;
+  created_at: string;
+  mode: string;
+  pair?: string;
+  side?: string;
+  size_usd?: number;
+  price?: number;
+  reason?: string;
+  metadata: Record<string, unknown>;
+  voice: boolean;
+}
+
+// Türkçe sesli uyarı metinleri
+function alertVoiceText(alert: AlertEvent): string {
+  const pair = alert.pair ?? "";
+  const side = alert.side === "LONG" ? "alış" : alert.side === "SHORT" ? "satış" : "";
+  switch (alert.type) {
+    case "pending_trade_created":      return `Bekleyen işlem: ${side} ${pair}`;
+    case "paper_trade_opened":         return `${pair} ${side} pozisyon açıldı`;
+    case "paper_trade_closed":         return `${pair} pozisyon kapatıldı`;
+    case "market_closed_trade_blocked":return `${pair} piyasa kapalı, işlem engellendi`;
+    case "daily_loss_limit_warning":   return "Günlük zarar limitine ulaşıldı";
+    case "agent_self_validation_failed":return "Agent doğrulama hatası";
+    case "paper_live_boundary_violation":return "Kritik: paper sınırı ihlali";
+    default:                           return alert.title;
+  }
+}
+
 const POLL_MS = 15_000;
 
 export default function PaperTradingTicker() {
@@ -63,7 +97,8 @@ export default function PaperTradingTicker() {
   const [closing,   setClosing]  = useState<string | null>(null);
   const [patterns,  setPatterns] = useState<Record<string, ChartPatternSummary>>({});
   const [nowMs,     setNowMs]    = useState(Date.now());
-  const lastEventAtRef = useRef<string | null>(null);
+  const lastEventAtRef  = useRef<string | null>(null);
+  const lastAlertIdRef  = useRef<number>(0);   // sesli uyarı dedup
 
   const loadState = async () => {
     const res = await fetch("/api/backend/trading/state", { cache: "no-store" });
@@ -114,16 +149,62 @@ export default function PaperTradingTicker() {
       } catch { /* sessiz */ }
     }
 
-    load(); loadPatterns();
+    async function loadAlerts() {
+      try {
+        const res = await fetch("/api/backend/alerts/recent?limit=20", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const d: { alerts: AlertEvent[] } = await res.json();
+        const newAlerts = (d.alerts ?? []).filter(a => a.id > lastAlertIdRef.current);
+        if (newAlerts.length === 0) return;
+        // En yeninin ID'sini kaydet
+        lastAlertIdRef.current = Math.max(...newAlerts.map(a => a.id));
+        // Sesli uyarıları sıraya al (önce kritik)
+        const voiceAlerts = newAlerts
+          .filter(a => a.voice)
+          .sort((a, b) => a.id - b.id);
+        for (const alert of voiceAlerts) {
+          speakAlert(alert);
+        }
+      } catch { /* sessiz */ }
+    }
+
+    // İlk yükleme: alert ID'yi sessizce initialize et (eski alert'leri sesletme)
+    async function initAlertBaseline() {
+      try {
+        const res = await fetch("/api/backend/alerts/recent?limit=1", { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const d: { alerts: AlertEvent[] } = await res.json();
+        if (d.alerts?.length > 0) {
+          lastAlertIdRef.current = d.alerts[0].id;
+        }
+      } catch { /* sessiz */ }
+    }
+
+    load(); loadPatterns(); initAlertBaseline();
     const i = setInterval(load, POLL_MS);
     const p = setInterval(loadPatterns, 60_000);
-    return () => { cancelled = true; clearInterval(i); clearInterval(p); };
+    const a = setInterval(loadAlerts, POLL_MS);
+    return () => { cancelled = true; clearInterval(i); clearInterval(p); clearInterval(a); };
   }, []);
 
   useEffect(() => {
     const intervalId = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(intervalId);
   }, []);
+
+  function speakAlert(alert: AlertEvent) {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const text = alertVoiceText(alert);
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = "tr-TR";
+    utt.rate = 1.05;
+    utt.volume = 1;
+    // CRITICAL/ACTION_REQUIRED daha yavaş ve net
+    if (alert.level === "CRITICAL" || alert.level === "ACTION_REQUIRED") {
+      utt.rate = 0.9;
+    }
+    window.speechSynthesis.speak(utt);
+  }
 
   async function handleManualClose(pair: string) {
     setClosing(pair);

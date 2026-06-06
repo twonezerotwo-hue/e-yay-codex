@@ -33,6 +33,7 @@ MARKET_HOURS_GATED_PAIRS = frozenset({"XAUUSD", "XAGUSD", "BRENT", "XCUUSD"})
 MARKET_CLOSE_FRIDAY_UTC_HOUR = 21
 MARKET_OPEN_SUNDAY_UTC_HOUR = 22
 OPEN_CONFIRMATION_WINDOW_SECONDS = 60
+DAILY_LOSS_LIMIT_USD = -5_000.0   # günlük zarar uyarı eşiği
 
 # Consensus-driven karar eşikleri
 STRONG_LONG_THR   = 70.0   # consensus + confluence aligned ile → 1.5× pos
@@ -105,6 +106,19 @@ def _consensus_to_action(
 
 _STATE_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_trading_state.json"
 _LOCK = threading.Lock()
+
+# ── Alert deduplication (spam önleme) ────────────────────────────────────────
+_MARKET_CLOSE_WARNED: dict[str, str] = {}    # pair → ISO date
+_DAILY_LOSS_WARNED_DATES: set[str] = set()   # ISO date
+
+
+def _try_emit(event_type: str, level: str, title: str, message: str, **kwargs: Any) -> None:
+    """Alert event'i güvenli şekilde emit et — hata olursa trading etkilenmez."""
+    try:
+        from app.services.alert_event_service import emit
+        emit(event_type, level, title, message, **kwargs)  # type: ignore[arg-type]
+    except Exception:
+        pass
 
 
 def _utc_now() -> datetime:
@@ -359,6 +373,13 @@ def _queue_pending_open(
         open_signal=signal_snapshot,
         fingerprint=fingerprint,
     )
+    _try_emit(
+        "pending_trade_created", "ACTION_REQUIRED",
+        f"{side} {pair} Bekleyen İşlem",
+        f"{OPEN_CONFIRMATION_WINDOW_SECONDS}s içinde {side} {pair} açılacak — reddedilmezse otomatik açılır.",
+        pair=pair, side=side, size_usd=size_usd, price=price,
+        metadata={"execute_at": execute_at},
+    )
 
 
 def _open_position_from_pending(
@@ -387,6 +408,13 @@ def _open_position_from_pending(
     }
     st.last_event_at = opened_at
     st.pending_orders.pop(pending.pair, None)
+    _try_emit(
+        "paper_trade_opened", "TRADE_EVENT",
+        f"{pending.side} {pending.pair} Açıldı",
+        f"Paper pozisyon açıldı: {pending.side} {pending.pair} @ ${current_price:,.2f}",
+        pair=pending.pair, side=pending.side,
+        size_usd=pending.size_usd, price=current_price,
+    )
 
 
 # ── Tick (ana mekanizma) ─────────────────────────────────────────────────────
@@ -579,6 +607,22 @@ def _tick_consensus_legacy(
         return st
 
 
+def _maybe_warn_daily_loss(st: TradingState, now_dt: datetime) -> None:
+    """Günlük gerçekleşen zarar DAILY_LOSS_LIMIT_USD'ye ulaşırsa uyar (günde 1 kez)."""
+    today = now_dt.date().isoformat()
+    if today in _DAILY_LOSS_WARNED_DATES:
+        return
+    today_pnl = sum(t.pnl_usd for t in st.trades if t.exit_at.startswith(today))
+    if today_pnl <= DAILY_LOSS_LIMIT_USD:
+        _DAILY_LOSS_WARNED_DATES.add(today)
+        _try_emit(
+            "daily_loss_limit_warning", "ACTION_REQUIRED",
+            "Günlük Zarar Limiti Uyarısı",
+            f"Bugün gerçekleşen zarar: ${today_pnl:,.2f}. Uyarı eşiği: ${DAILY_LOSS_LIMIT_USD:,.0f}",
+            metadata={"daily_pnl_usd": round(today_pnl, 2), "limit_usd": DAILY_LOSS_LIMIT_USD},
+        )
+
+
 def tick_consensus(
     consensus_signals: dict[str, dict[str, Any]],
     current_prices: dict[str, float],
@@ -639,7 +683,17 @@ def tick_consensus(
                             _open_position_from_pending(st, pending, price, now_iso)
                             cur = st.positions.get(pair)
                         else:
+                            _mkt_side = pending.side
                             st.pending_orders.pop(pair, None)
+                            _today = now_dt.date().isoformat()
+                            if _MARKET_CLOSE_WARNED.get(pair) != _today:
+                                _MARKET_CLOSE_WARNED[pair] = _today
+                                _try_emit(
+                                    "market_closed_trade_blocked", "WARNING",
+                                    f"Piyasa Kapalı — {pair}",
+                                    f"Bekleyen {_mkt_side} {pair} piyasa kapalı — açılamadı.",
+                                    pair=pair, side=_mkt_side,
+                                )
                         pending = None
 
             if cur is not None:
@@ -705,6 +759,17 @@ def tick_consensus(
                     }
                     st.last_event_at = now_iso
                     del st.positions[pair]
+                    _try_emit(
+                        "paper_trade_closed", "TRADE_EVENT",
+                        f"{cur.side} {pair} Kapatıldı",
+                        f"Paper pozisyon kapatıldı: {cur.side} {pair} PnL {pnl_usd:+,.2f} USD ({verdict})",
+                        pair=pair, side=cur.side, size_usd=cur.size_usd, price=price,
+                        reason=(
+                            f"consensus={final_direction}@{final_score:.1f}"
+                            if final_score is not None else "consensus"
+                        ),
+                        metadata={"pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2), "verdict": verdict},
+                    )
 
                     if target in ("LONG", "SHORT") and _is_market_open(pair, now_dt):
                         _queue_pending_open(
@@ -734,7 +799,18 @@ def tick_consensus(
                     fingerprint=signal_fingerprint,
                     now_dt=now_dt,
                 )
+            elif target in ("LONG", "SHORT") and pending is None and pair in MARKET_HOURS_GATED_PAIRS:
+                _today = now_dt.date().isoformat()
+                if _MARKET_CLOSE_WARNED.get(pair) != _today:
+                    _MARKET_CLOSE_WARNED[pair] = _today
+                    _try_emit(
+                        "market_closed_trade_blocked", "WARNING",
+                        f"Piyasa Kapalı — {pair}",
+                        f"{target} {pair} sinyali var ancak piyasa hafta sonu kapalı.",
+                        pair=pair, side=target,
+                    )
 
+        _maybe_warn_daily_loss(st, now_dt)
         _save_state(st)
         return st
 
@@ -865,7 +941,15 @@ def reject_pending_open(pair: str) -> bool:
             rejected_at=_utc_now().isoformat(),
         )
         _save_state(st)
-        return True
+        pending_side = pending.side
+
+    _try_emit(
+        "pending_trade_rejected", "INFO",
+        f"{pending_side} {pair} Reddedildi",
+        f"Bekleyen {pending_side} {pair} işlemi kullanıcı tarafından reddedildi.",
+        pair=pair, side=pending_side,
+    )
+    return True
 
 
 def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
@@ -976,15 +1060,26 @@ def force_close_position(pair: str, current_price: float, reason: str = "MANUEL"
             "price": current_price, "verdict": verdict, "reason": reason,
         }
         st.last_event_at = now_iso
+        _closed_side = cur.side
+        _closed_size = cur.size_usd
         del st.positions[pair]
         _save_state(st)
-        return {
-            "status": "closed",
-            "pair": pair, "side": cur.side,
-            "entry_price": cur.entry_price, "exit_price": current_price,
-            "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
-            "verdict": verdict, "reason": reason,
-        }
+
+    _try_emit(
+        "paper_trade_closed", "TRADE_EVENT",
+        f"{_closed_side} {pair} Manuel Kapatıldı",
+        f"Manuel kapatma: {_closed_side} {pair} PnL {pnl_usd:+,.2f} USD ({verdict})",
+        pair=pair, side=_closed_side, size_usd=_closed_size, price=current_price,
+        reason=reason,
+        metadata={"pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2), "verdict": verdict},
+    )
+    return {
+        "status": "closed",
+        "pair": pair, "side": _closed_side,
+        "entry_price": cur.entry_price, "exit_price": current_price,
+        "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+        "verdict": verdict, "reason": reason,
+    }
 
 
 __all__ = [
