@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from app.services import agent_audit_log, agent_confidence, agent_self_validator
 from app.services.agent_output_guard import guard_response
 
 router = APIRouter(prefix="/ai-report", tags=["ai-report"])
@@ -145,14 +146,95 @@ def get_ai_report(
         force_refresh=force_refresh,
     )
 
-    payload = guard_response({
-        "status": "ok",
-        "data_mode": data_mode,
-        "execution_mode": "OFF / NO_EXECUTION",
-        "ai_report": _to_dict(ai_report),
-        "geo_news_count": len(geo_news),
-        "capital_rotation": _to_dict(rotation) if rotation else None,
-    }, source="ai_report.current")
+    # ── Self-validation + confidence + audit ─────────────────────────────
+    from datetime import UTC, datetime as _dt
+    start_t = _time.monotonic()
+    generated_at = _dt.now(UTC).isoformat()
+
+    dq_pct: float | None = float(report.macro_layer.confidence_pct) if report.macro_layer else None
+    consensus_status = "OK" if assets_list else "INSUFFICIENT_DATA"
+
+    validation = agent_self_validator.validate(
+        snapshot_at=generated_at,
+        required_fields={
+            "snapshots": snapshots,
+            "assets":    assets_list,
+            "macro":     macro_dict,
+        },
+        data_quality_score=dq_pct,
+        consensus_status=consensus_status,
+        max_snapshot_age_s=1200,
+    )
+
+    # Asset signal'lardan ortalama skor → consensus_score temsilcisi
+    consensus_score_avg: float | None = None
+    try:
+        vals = [a.get("score") for a in assets_list if isinstance(a, dict)]
+        vals = [float(v) for v in vals if v is not None]
+        if vals:
+            consensus_score_avg = sum(vals) / len(vals)
+    except Exception:
+        consensus_score_avg = None
+
+    confidence = agent_confidence.compute(
+        data_quality_score=dq_pct,
+        consensus_score=consensus_score_avg,
+        consensus_status=consensus_status,
+        module_count=len(assets_list),
+        snapshot_age_seconds=validation.snapshot_age_seconds,
+        expected_module_count=8,
+    )
+
+    if confidence.abstain or not validation.is_valid:
+        payload = guard_response({
+            "status": "abstain",
+            "data_mode": data_mode,
+            "execution_mode": "OFF / NO_EXECUTION",
+            "abstention_reason": (
+                confidence.abstention_reason
+                or "; ".join(validation.reasons)
+                or "insufficient_evidence"
+            ),
+            "validation": validation.to_dict(),
+            "confidence": confidence.to_dict(),
+            "ai_report":  None,
+        }, source="ai_report.current")
+    else:
+        payload = guard_response({
+            "status": "ok",
+            "data_mode": data_mode,
+            "execution_mode": "OFF / NO_EXECUTION",
+            "ai_report": _to_dict(ai_report),
+            "geo_news_count": len(geo_news),
+            "capital_rotation": _to_dict(rotation) if rotation else None,
+            "validation": validation.to_dict(),
+            "confidence": confidence.to_dict(),
+        }, source="ai_report.current")
+
+    # Audit trail
+    try:
+        agent_audit_log.record(
+            endpoint="ai_report.current",
+            input_payload={
+                "data_mode":      data_mode,
+                "assets":         len(assets_list),
+                "geo_news":       len(geo_news),
+                "force_refresh":  force_refresh,
+            },
+            output_payload={
+                "status":     payload.get("status"),
+                "has_report": payload.get("ai_report") is not None,
+            },
+            snapshot_id=f"ai_report::{generated_at}",
+            contract_version=agent_self_validator.DEFAULT_CONTRACT_VERSION,
+            model="claude-opus-4-7",
+            validation=validation.to_dict(),
+            confidence=confidence.to_dict(),
+            duration_ms=(_time.monotonic() - start_t) * 1000.0,
+        )
+    except Exception:
+        pass
+
     return JSONResponse(content=payload)
 
 

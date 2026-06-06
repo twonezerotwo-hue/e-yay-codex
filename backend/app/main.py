@@ -11,6 +11,7 @@ import logging
 
 from fastapi import FastAPI
 
+from app.api.agent_audit import router as agent_audit_router
 from app.api.agent_insight import router as agent_insight_router
 from app.api.ai_report import router as ai_report_router
 from app.api.alerts import router as alerts_router
@@ -43,6 +44,7 @@ app.include_router(regime_report_router, prefix=settings.api_prefix)
 app.include_router(ai_report_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(agent_insight_router, prefix=settings.api_prefix)
+app.include_router(agent_audit_router, prefix=settings.api_prefix)
 app.include_router(paper_trading_router, prefix=settings.api_prefix)
 app.include_router(consensus_router, prefix=settings.api_prefix)
 app.include_router(chart_patterns_router, prefix=settings.api_prefix)
