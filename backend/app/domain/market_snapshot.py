@@ -86,5 +86,3 @@ class MarketSnapshot:
         return get_asset_definition(self.asset_symbol)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

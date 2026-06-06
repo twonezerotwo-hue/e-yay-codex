@@ -26,6 +26,8 @@ interface Position {
   current_price: number;
   pnl_usd: number;
   pnl_pct: number;
+  stop_loss: number;
+  take_profit: number;
 }
 
 interface TradingState {
@@ -47,6 +49,7 @@ export default function PaperTradingTicker() {
   const [expanded,      setExpanded]      = useState(false);
   const [banner,        setBanner]        = useState<TradeEvent | null>(null);
   const [agentOpen,     setAgentOpen]     = useState(false);  // agent modal açıksa gizle
+  const [closing,       setClosing]       = useState<string | null>(null);
   const lastEventAtRef = useRef<string | null>(null);
 
   // Agent modal açıkken trading widget'ı sayfa görünümünden gizle
@@ -86,6 +89,18 @@ export default function PaperTradingTicker() {
     const i = setInterval(load, POLL_MS);
     return () => { cancelled = true; clearInterval(i); };
   }, []);
+
+  async function handleManualClose(pair: string) {
+    setClosing(pair);
+    try {
+      await fetch(`/api/backend/trading/close/${pair}`, { method: "POST", cache: "no-store" });
+      // Hemen yeni state'i çek
+      const res = await fetch("/api/backend/trading/state", { cache: "no-store" });
+      if (res.ok) setState(await res.json());
+    } catch { /* sessiz */ } finally {
+      setClosing(null);
+    }
+  }
 
   if (!state) return null;
   if (agentOpen) return null;  // agent modal aktifken kendini gizle
@@ -181,20 +196,53 @@ export default function PaperTradingTicker() {
                 </p>
                 <div className="space-y-1.5">
                   {state.open_positions.map(p => {
-                    const sideColor = p.side === "LONG" ? "text-emerald-400" : "text-red-400";
-                    const pnlColor  = p.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400";
+                    const sideColor  = p.side === "LONG" ? "text-emerald-400" : "text-red-400";
+                    const pnlColor   = p.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400";
+                    const isClosing  = closing === p.pair;
+                    const fmt2       = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+                    const pctFromEntry = (level: number) =>
+                      ((level - p.entry_price) / p.entry_price * 100).toFixed(1);
                     return (
-                      <div key={p.pair} className="flex items-center justify-between text-[10px] font-mono bg-eyay-raised rounded px-2 py-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-black ${sideColor}`}>
-                            {p.side === "LONG" ? "▲" : "▼"} {p.pair}
-                          </span>
-                          <span className="text-eyay-faint">@{p.entry_price.toLocaleString("en-US", {maximumFractionDigits: 2})}</span>
+                      <div key={p.pair} className="bg-eyay-raised rounded px-2 py-1.5 space-y-1 text-[10px] font-mono">
+                        {/* Row 1: pair + PnL + Kapat */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-black ${sideColor}`}>
+                              {p.side === "LONG" ? "▲" : "▼"} {p.pair}
+                            </span>
+                            <span className="text-eyay-faint">@{fmt2(p.entry_price)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className={`font-bold ${pnlColor}`}>{fmtUsd(p.pnl_usd)}</p>
+                              <p className={`text-[8px] ${pnlColor}`}>{p.pnl_pct >= 0 ? "+" : ""}{p.pnl_pct.toFixed(2)}%</p>
+                            </div>
+                            <button
+                              onClick={() => handleManualClose(p.pair)}
+                              disabled={isClosing}
+                              className="text-[8px] font-bold bg-red-950/60 hover:bg-red-700/50 border border-red-700/40 text-red-400 hover:text-red-200 px-1.5 py-1 rounded transition-colors disabled:opacity-40 whitespace-nowrap leading-tight"
+                            >
+                              {isClosing ? "···" : <span className="flex flex-col items-center"><span>Manuel</span><span>Kapat</span></span>}
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className={`font-bold ${pnlColor}`}>{fmtUsd(p.pnl_usd)}</p>
-                          <p className={`text-[8px] ${pnlColor}`}>{p.pnl_pct >= 0 ? "+" : ""}{p.pnl_pct.toFixed(2)}%</p>
-                        </div>
+                        {/* Row 2: SL / TP seviyeleri */}
+                        {(p.stop_loss > 0 || p.take_profit > 0) && (
+                          <div className="flex items-center gap-3 text-[8px]">
+                            {p.stop_loss > 0 && (
+                              <span className="text-red-400">
+                                SL {fmt2(p.stop_loss)}
+                                <span className="opacity-70 ml-0.5">({pctFromEntry(p.stop_loss)}%)</span>
+                              </span>
+                            )}
+                            {p.take_profit > 0 && (
+                              <span className="text-emerald-400">
+                                TP {fmt2(p.take_profit)}
+                                <span className="opacity-70 ml-0.5">(+{pctFromEntry(p.take_profit)}%)</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

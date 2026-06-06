@@ -357,5 +357,3 @@ def list_main_assets() -> tuple[AssetDefinition, ...]:
     return tuple(ASSET_CATALOG[asset_code] for asset_code in AssetCode)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

@@ -123,5 +123,3 @@ def build_provider_source_bindings(source_registry_entries: Iterable[object]) ->
     return bindings
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

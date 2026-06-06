@@ -153,5 +153,3 @@ class CEOReportService:
         return tuple(sentences[:10])
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

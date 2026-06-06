@@ -58,5 +58,3 @@ def severity_ranking_gap_magnitude_sequence(
     )
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

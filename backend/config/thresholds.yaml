@@ -1,0 +1,136 @@
+# ============================================================
+# E-YAY BrainChain — Piyasa Eşik Değerleri
+# Kalibre: Haziran 2026
+#
+# Bu dosyayı düzenle, backend'i yeniden başlat — kod değiştirmeden
+# tüm sinyal eşikleri güncellenir.
+# ============================================================
+
+# ── Dolar (DXY) ───────────────────────────────────────────────
+dxy:
+  strong: 104.0     # above = dolar sıkılaşması, risk-off baskısı  [anlık: ~100]
+  weak:    99.0     # below = dolar zayıf, likidite açılıyor
+
+# ── Enerji (Brent Ham) ────────────────────────────────────────
+brent:
+  high: 100.0       # above = enerji baskısı kritik seviye          [anlık: ~93]
+  warn:  85.0       # 85-100 = izleme bölgesi
+
+# ── Faiz Eğrisi (10Y - 2Y spread) ────────────────────────────
+yield_curve:
+  inversion: 0.0    # 10Y - 2Y < 0 = resesyon sinyali
+  flat:      0.3    # < 0.3 = eğri düzleşiyor                      [anlık: +0.91]
+
+# ── Para Arzı (M2, trilyon $) ─────────────────────────────────
+m2:
+  expanding: 21500.0  # > 21.5T = para arzı genişliyor             [anlık: ~21.5T]
+  shrinking: 20500.0  # < 20.5T = sıkılaşma devam ediyor
+
+# ── Kredi Piyasası (HYG ETF) ─────────────────────────────────
+hyg:
+  healthy:  78.0    # above = kredi piyasası sağlıklı              [anlık: ~79.4]
+  breaking: 74.0    # below = kredi stresi
+
+# ── Bitcoin Dominansı (%) ────────────────────────────────────
+btc_dominance:
+  dominant: 52.0    # above = BTC lider                            [anlık: ~56%]
+  panic:    40.0    # below = piyasa paniği veya altseason
+
+# ── USDT Dominansı (%) ───────────────────────────────────────
+usdt_dominance:
+  safe:   5.0       # below = para kripto içinde
+  flight: 7.5       # above = stablecoin'e kaçış                   [anlık: ~8.6%]
+
+# ── Bitcoin Fiyatı ($) ───────────────────────────────────────
+btc:
+  strong: 70000.0   # above = güçlü momentum                       [anlık: ~60.9K]
+  watch:  58000.0   # below = dikkat bölgesi
+  weak:   48000.0   # below = zayıflama sinyali
+
+# ── Altın (XAUUSD, $) ────────────────────────────────────────
+xauusd:
+  breakout: 3800.0  # below = altın güç kaybediyor                 [anlık: ~4,337]
+
+# ── Gümüş (XAGUSD, $) ───────────────────────────────────────
+xagusd:
+  confirm: 62.0     # below = gümüş momentumu kırılıyor            [anlık: ~68.9]
+
+# ── Altın/Gümüş Oranı ────────────────────────────────────────
+xauxag:
+  high:   68.0      # ratio > 68 = gümüş ucuz, altına göre        [anlık: ~62.9]
+  crisis: 90.0      # above = deflasyon/kriz seviyesi (2020 zirvesi 125)
+
+# ── Bakır (XCUUSD, $/ton) ───────────────────────────────────
+xcuusd:
+  healthy: 12000.0  # above = endüstriyel talep sağlıklı           [anlık: ~13.8K]
+
+# ── S&P 500 ──────────────────────────────────────────────────
+sp500:
+  strong: 6800.0    # above = bull market aktif                    [anlık: ~7,384]
+  warn:   6000.0    # below = zayıflama izleme bölgesi
+  block:  5200.0    # below = bear piyasası BLOCKING
+
+# ── Kripto Toplam Market Cap ($, milyar) ─────────────────────
+total:
+  bull: 2200.0      # above = kripto sistemi genişliyor            [anlık: ~2,177]
+  warn: 1800.0      # below = daralma uyarısı
+
+# ── Kripto Toplam2 ex-BTC ($, milyar) ───────────────────────
+total2:
+  bull:  1000.0     # above = altcoin season potansiyeli           [anlık: ~955]
+  warn:   750.0     # below = sermaye BTC/stable'a çekildi
+
+# ── FXI (Çin ETF) ────────────────────────────────────────────
+fxi:
+  strong: 35.0      # above = Çin sermaye girişi güçlü             [anlık: ~34.75]
+  weak:   29.0      # below = Çin yavaşlama endişesi
+
+# ── VIX (Korku Endeksi) ──────────────────────────────────────
+vix:
+  calm:     20.0    # below = piyasa sakin, risk-on                [anlık: ~21.5]
+  elevated: 25.0    # 20-25 = dikkat bölgesi
+  fear:     30.0    # above = korku aktif
+  panic:    40.0    # above = panik, kriz seviyesi
+
+# ── Reel Faiz (10Y TIPS, DFII10) ────────────────────────────
+real_yield:
+  dovish:  0.5      # below = ucuz para, risk varlıkları pozitif
+  neutral: 1.5      # 0.5-1.5 = nötr bölge
+  hawkish: 2.5      # above = reel faiz yüksek, büyüme baskıda    [anlık: ~2.3]
+
+# ── HY Kredi Spread (ICE BofA OAS, %) ───────────────────────
+hy_spread:
+  healthy: 4.0      # below = kredi sağlıklı                       [anlık: ~3.5]
+  warn:    5.5      # 4-5.5 = dikkat bölgesi
+  stress:  7.5      # above = kredi stresi ciddi
+  crisis: 10.0      # above = kriz (2020=10%, 2008=20%)
+
+# ── Ethereum (ETHUSD, $) ────────────────────────────────────
+eth:
+  strong: 2500.0    # above = ETH güçlü momentum                   [anlık: ~1,567]
+  watch:  1800.0    # below = dikkat
+  weak:   1200.0    # below = zayıf, risk-off
+
+# ── IWM (Russell 2000, piyasa genişliği) ────────────────────
+iwm:
+  healthy:  265.0   # above = geniş katılım sağlıklı               [anlık: ~281.6]
+  narrow:   240.0   # below = rally daraldı, mega-cap sığınması
+  blocking: 210.0   # below = breadth tamamen bozuldu
+
+# ── LQD (Investment Grade Tahvil ETF) ───────────────────────
+lqd:
+  healthy: 108.0    # above = IG kredi sağlıklı                    [anlık: ~108.2]
+  stress:  103.0    # below = IG baskı altında
+  crisis:   97.0    # below = sistemik kredi korkusu
+
+# ── SMH (Yarı İletkenler ETF) ───────────────────────────────
+smh:
+  strong: 520.0     # above = tech cycle güçlü                     [anlık: ~569.7]
+  warn:   430.0     # below = chip talebi zayıflıyor
+  weak:   350.0     # below = tech resesyon bölgesi
+
+# ── XLF (Finansallar ETF) ───────────────────────────────────
+xlf:
+  healthy:  50.0    # above = bankacılık sağlıklı                  [anlık: ~52.3]
+  stress:   44.0    # below = banka stresi başlıyor
+  blocking: 38.0    # below = finansal sistem baskıda

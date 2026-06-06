@@ -39,5 +39,3 @@ app.include_router(consensus_router, prefix=settings.api_prefix)
 app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

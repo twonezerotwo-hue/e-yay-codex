@@ -99,7 +99,7 @@ def _build_pipeline() -> tuple:
     except Exception:
         mtf = {}
 
-    return report, rotation, mtf
+    return report, rotation, mtf, snapshots
 
 
 def _build_full_signal(asset: str, report, rotation, mtf, trained_adjustments=None) -> dict:
@@ -195,7 +195,7 @@ def get_consensus(
         return cached[1]
 
     trained_adj = _get_trained_adjustments()
-    report, rotation, mtf = _build_pipeline()
+    report, rotation, mtf, raw_snapshots = _build_pipeline()
     signal = _build_full_signal(asset, report, rotation, mtf, trained_adjustments=trained_adj)
 
     response = {
@@ -218,7 +218,7 @@ def get_consensus_all() -> dict:
         return cached[1]
 
     trained_adj = _get_trained_adjustments()
-    report, rotation, mtf = _build_pipeline()
+    report, rotation, mtf, raw_snapshots = _build_pipeline()
     signals = {
         asset: _build_full_signal(asset, report, rotation, mtf, trained_adjustments=trained_adj)
         for asset in MTF_ASSETS.keys()

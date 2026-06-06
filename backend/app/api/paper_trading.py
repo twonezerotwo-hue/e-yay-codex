@@ -53,12 +53,17 @@ def _consensus_signals_and_prices(report, rotation, mtf, trained_adjustments=Non
             "other_tf_scores": full.get("other_tf_scores"),
         }
 
-        # Fiyat — base TF technical price
+        # Fiyat + ATR — base TF technical provider'dan
         base_tf = full.get("primary_tf", "1h")
         try:
             ti = (mtf.get(asset) or {}).get(base_tf)
             if ti is not None and getattr(ti, "current_price", 0) > 0:
                 prices[asset] = float(ti.current_price)
+            # ATR — SL/TP otomatik hesabı için
+            if ti is not None and hasattr(ti, "levels") and ti.levels is not None:
+                atr_val = getattr(ti.levels, "atr", None)
+                if atr_val and float(atr_val) > 0:
+                    sigs[asset]["atr"] = float(atr_val)
         except Exception:
             pass
 
@@ -85,7 +90,7 @@ def get_state() -> dict:
         trained_adjustments = state.weight_adjustments
 
         # ── 2) Multi-TF consensus pipeline'ı (eğitilmiş ağırlıklarla) ─
-        report, rotation, mtf = _build_pipeline()
+        report, rotation, mtf, raw_snapshots = _build_pipeline()
         sigs, prices = _consensus_signals_and_prices(
             report, rotation, mtf, trained_adjustments=trained_adjustments,
         )
@@ -101,11 +106,24 @@ def get_state() -> dict:
             if training_result["status"] == "trained":
                 pts._save_state(state)
 
+        # ── 5) Veri kalite özeti — raw_snapshots üzerinden fallback uyarısı ─
+        from app.services.data_quality_service import get_data_quality_summary
+        try:
+            asset_snapshots = {
+                str(snap.asset_symbol): snap
+                for snap in raw_snapshots
+                if hasattr(snap, "fallback_used")
+            }
+            data_quality = get_data_quality_summary(asset_snapshots)
+        except Exception:
+            data_quality = {"quality_score": None, "decision": "UNKNOWN"}
+
         snap = pts.get_snapshot(prices)
         snap["status"] = "ok"
         snap["execution_mode"] = "PAPER_SAFE / NO_EXECUTION"
         snap["driver"] = "consensus_multi_tf_self_learning"
         snap["last_signals"] = sigs
+        snap["data_quality"] = data_quality
         snap["training"] = {
             "last_result":       training_result.get("status"),
             "trained_at_count":  state.last_trained_at_trade_count,
@@ -119,6 +137,37 @@ def get_state() -> dict:
 
     _RESPONSE_CACHE = (now, snap)
     return snap
+
+
+@router.post("/close/{pair}")
+def manual_close(pair: str) -> dict:
+    """Manuel kapat — kullanıcı talebiyle anlık fiyattan pozisyonu kapat. PAPER_SAFE."""
+    global _RESPONSE_CACHE
+    from fastapi import HTTPException
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+
+    # Güncel fiyatı pipeline'dan al
+    price = 0.0
+    try:
+        report, rotation, mtf, raw_snapshots = _build_pipeline()
+        _, prices = _consensus_signals_and_prices(report, rotation, mtf)
+        price = prices.get(pair_upper, 0.0)
+    except Exception:
+        pass
+
+    # Pipeline başarısız olduysa snapshot'taki son bilinen fiyatı kullan
+    if price <= 0:
+        snap = pts.get_snapshot({})
+        for pos in snap.get("open_positions", []):
+            if pos.get("pair") == pair_upper:
+                price = float(pos.get("current_price") or pos.get("entry_price") or 0.0)
+                break
+
+    result = pts.force_close_position(pair_upper, price, reason="MANUEL")
+    _RESPONSE_CACHE = None  # cache'i temizle — bir sonraki GET güncel durumu döndürsün
+    return result
 
 
 @router.post("/reset")

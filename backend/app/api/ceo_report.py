@@ -341,5 +341,3 @@ def ceo_report_demo(
     return build_demo_ceo_report_payload(settings, persist_snapshot=persist_snapshot)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

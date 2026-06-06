@@ -13,13 +13,31 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from pathlib import Path
+from typing import Any, Literal
 
 from app.domain import AssetCode
 from app.domain.market_snapshot import MarketSnapshot
 from app.providers.news_provider import NewsHeadline
 from app.providers.technical_provider import DynamicLevels, TechnicalInsight
 from app.services.event_calendar_service import CatalystEvent, EventCalendarService
+
+# ---------------------------------------------------------------------------
+# YAML threshold loader — config/thresholds.yaml tek kaynak
+# ---------------------------------------------------------------------------
+
+def _load_thresholds() -> dict[str, Any]:
+    """config/thresholds.yaml yükle; dosya yoksa boş dict döndür (fallback hardcoded)."""
+    try:
+        import yaml  # type: ignore[import]
+        p = Path(__file__).resolve().parents[2] / "config" / "thresholds.yaml"
+        if p.exists():
+            return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        pass
+    return {}
+
+_THR = _load_thresholds()
 
 # ---------------------------------------------------------------------------
 # Output models
@@ -156,97 +174,91 @@ class RegimeReport:
 
 
 # ---------------------------------------------------------------------------
-# Thresholds — Mayıs 2026 piyasa gerçeklerine göre kalibrate edildi
+# Thresholds — config/thresholds.yaml'dan yüklenir (fallback hardcoded)
+# Değiştirmek için: config/thresholds.yaml düzenle, backend'i yeniden başlat.
 # ---------------------------------------------------------------------------
 
-# ── Kalibre: Haziran 2026 ─────────────────────────────────────────────────
-_DXY_STRONG = 104.0       # above = dolar sıkılaşması, risk-off baskısı  [anlık: ~100]
-_DXY_WEAK   =  99.0       # below = dolar zayıf, likidite açılıyor
+def _t(section: str, key: str, default: float) -> float:
+    """_THR dict'inden güvenli okuma; YAML yoksa fallback kullan."""
+    return float((_THR.get(section) or {}).get(key, default))
 
-_BRENT_HIGH  = 100.0      # above = enerji baskısı kritik seviye          [anlık: ~93]
-_BRENT_WARN  =  85.0      # 85–100 = izleme bölgesi
+_DXY_STRONG = _t("dxy", "strong", 104.0)
+_DXY_WEAK   = _t("dxy", "weak",   99.0)
 
-_YIELD_INVERSION  = 0.0   # 10Y - 2Y < 0 = resesyon sinyali
-_YIELD_FLAT       = 0.3   # < 0.3 = eğri düzleşiyor                       [anlık: +0.91]
+_BRENT_HIGH  = _t("brent", "high", 100.0)
+_BRENT_WARN  = _t("brent", "warn",  85.0)
 
-_M2_EXPANDING = 21_500.0  # > 21.5T = para arzı genişliyor                [anlık: ~21.5T]
-_M2_SHRINKING = 20_500.0  # < 20.5T = sıkılaşma devam ediyor
+_YIELD_INVERSION = _t("yield_curve", "inversion", 0.0)
+_YIELD_FLAT      = _t("yield_curve", "flat",       0.3)
 
-_HYG_HEALTHY  = 78.0      # above = kredi piyasası sağlıklı               [anlık: ~79.4]
-_HYG_BREAKING = 74.0      # below = kredi stresi
+_M2_EXPANDING = _t("m2", "expanding", 21_500.0)
+_M2_SHRINKING = _t("m2", "shrinking", 20_500.0)
 
-_BTCD_DOMINANT   = 52.0   # BTC.D above = BTC lider                       [anlık: ~56%]
-_BTCD_PANIC      = 40.0   # BTC.D below = piyasa paniği veya altseason
+_HYG_HEALTHY  = _t("hyg", "healthy",  78.0)
+_HYG_BREAKING = _t("hyg", "breaking", 74.0)
 
-_USDTD_SAFE   = 5.0       # USDT.D below = para kripto içinde
-_USDTD_FLIGHT = 7.5       # USDT.D above = stablecoin'e kaçış             [anlık: ~8.6%]
+_BTCD_DOMINANT = _t("btc_dominance", "dominant", 52.0)
+_BTCD_PANIC    = _t("btc_dominance", "panic",    40.0)
 
-_BTC_STRONG = 70_000.0    # above = güçlü momentum                        [anlık: ~60.9K]
-_BTC_WATCH  = 58_000.0    # below = dikkat bölgesi
-_BTC_WEAK   = 48_000.0    # below = zayıflama sinyali
+_USDTD_SAFE   = _t("usdt_dominance", "safe",   5.0)
+_USDTD_FLIGHT = _t("usdt_dominance", "flight", 7.5)
 
-_XAUUSD_BREAKOUT = 3_800.0  # below = altın güç kaybediyor                [anlık: ~4,337]
-_XAGUSD_CONFIRM  =  62.0    # below = gümüş momentumu kırılıyor           [anlık: ~68.9]
-_XAUXAG_HIGH     =  68.0    # ratio > 68 = gümüş ucuz, altına göre        [anlık: ~62.9]
+_BTC_STRONG = _t("btc", "strong", 70_000.0)
+_BTC_WATCH  = _t("btc", "watch",  58_000.0)
+_BTC_WEAK   = _t("btc", "weak",   48_000.0)
 
-_XCUUSD_HEALTHY  = 12_000.0  # above = endüstriyel talep sağlıklı         [anlık: ~13.8K]
+_XAUUSD_BREAKOUT = _t("xauusd", "breakout", 3_800.0)
+_XAGUSD_CONFIRM  = _t("xagusd", "confirm",     62.0)
+_XAUXAG_HIGH     = _t("xauxag", "high",         68.0)
+_XAUXAG_CRISIS   = _t("xauxag", "crisis",        90.0)
 
-_SP500_STRONG  = 6_800.0   # above = bull market aktif                    [anlık: ~7,384]
-_SP500_WARN    = 6_000.0   # below = zayıflama izleme bölgesi
-_SP500_BLOCK   = 5_200.0   # below = bear piyasası BLOCKING
+_XCUUSD_HEALTHY = _t("xcuusd", "healthy", 12_000.0)
 
-_TOTAL_BULL    = 2_200.0   # above = kripto sistemi genişliyor (B$)       [anlık: ~2,177]
-_TOTAL_WARN    = 1_800.0   # below = daralma uyarısı
+_SP500_STRONG = _t("sp500", "strong", 6_800.0)
+_SP500_WARN   = _t("sp500", "warn",   6_000.0)
+_SP500_BLOCK  = _t("sp500", "block",  5_200.0)
 
-_TOTAL2_BULL   = 1_000.0   # above = altcoin season potansiyeli (B$)      [anlık: ~955]
-_TOTAL2_WARN   =   750.0   # below = sermaye BTC/stable'a çekildi
+_TOTAL_BULL  = _t("total",  "bull", 2_200.0)
+_TOTAL_WARN  = _t("total",  "warn", 1_800.0)
+_TOTAL2_BULL = _t("total2", "bull", 1_000.0)
+_TOTAL2_WARN = _t("total2", "warn",   750.0)
 
-_FXI_STRONG    = 35.0      # above = Çin sermaye girişi güçlü             [anlık: ~34.75]
-_FXI_WEAK      = 29.0      # below = Çin yavaşlama endişesi
+_FXI_STRONG = _t("fxi", "strong", 35.0)
+_FXI_WEAK   = _t("fxi", "weak",   29.0)
 
-_XAUXAG_CRISIS = 90.0      # above = deflasyon/kriz seviyesi (2020 zirvesi 125)
+_VIX_CALM     = _t("vix", "calm",     20.0)
+_VIX_ELEVATED = _t("vix", "elevated", 25.0)
+_VIX_FEAR     = _t("vix", "fear",     30.0)
+_VIX_PANIC    = _t("vix", "panic",    40.0)
 
-# VIX — hisse piyasası korku endeksi
-_VIX_CALM     = 20.0   # below = piyasa sakin, risk-on                    [anlık: ~21.5]
-_VIX_ELEVATED = 25.0   # 20-25 = dikkat bölgesi
-_VIX_FEAR     = 30.0   # above = korku aktif
-_VIX_PANIC    = 40.0   # above = panik, kriz seviyesi
+_REAL_YIELD_DOVISH  = _t("real_yield", "dovish",  0.5)
+_REAL_YIELD_NEUTRAL = _t("real_yield", "neutral", 1.5)
+_REAL_YIELD_HAWKISH = _t("real_yield", "hawkish", 2.5)
 
-# Real yield (10Y TIPS — DFII10)
-_REAL_YIELD_DOVISH  = 0.5   # below = ucuz para, risk varlıkları pozitif
-_REAL_YIELD_NEUTRAL = 1.5   # 0.5-1.5 = nötr bölge
-_REAL_YIELD_HAWKISH = 2.5   # above = reel faiz yüksek, büyüme baskıda   [anlık: ~2.3]
+_HY_SPREAD_HEALTHY = _t("hy_spread", "healthy",  4.0)
+_HY_SPREAD_WARN    = _t("hy_spread", "warn",      5.5)
+_HY_SPREAD_STRESS  = _t("hy_spread", "stress",    7.5)
+_HY_SPREAD_CRISIS  = _t("hy_spread", "crisis",   10.0)
 
-# HY Credit Spread (ICE BofA — BAMLH0A0HYM2)
-_HY_SPREAD_HEALTHY = 4.0   # below = kredi sağlıklı                       [anlık: ~3.5]
-_HY_SPREAD_WARN    = 5.5   # 4-5.5 = dikkat bölgesi
-_HY_SPREAD_STRESS  = 7.5   # above = kredi stresi ciddi
-_HY_SPREAD_CRISIS  = 10.0  # above = kriz (2020=10%, 2008=20%)
+_ETH_STRONG = _t("eth", "strong", 2_500.0)
+_ETH_WATCH  = _t("eth", "watch",  1_800.0)
+_ETH_WEAK   = _t("eth", "weak",   1_200.0)
 
-# ETH
-_ETH_STRONG = 2_500.0   # above = ETH güçlü momentum                      [anlık: ~1,567]
-_ETH_WATCH  = 1_800.0   # below = dikkat
-_ETH_WEAK   = 1_200.0   # below = zayıf, risk-off
+_IWM_HEALTHY  = _t("iwm", "healthy",  265.0)
+_IWM_NARROW   = _t("iwm", "narrow",   240.0)
+_IWM_BLOCKING = _t("iwm", "blocking", 210.0)
 
-# IWM (Russell 2000 — piyasa genişliği)
-_IWM_HEALTHY  = 265.0   # above = geniş katılım sağlıklı                  [anlık: ~281.6]
-_IWM_NARROW   = 240.0   # below = rally daraldı, mega-cap sığınması
-_IWM_BLOCKING = 210.0   # below = breadth tamamen bozuldu
+_LQD_HEALTHY = _t("lqd", "healthy", 108.0)
+_LQD_STRESS  = _t("lqd", "stress",  103.0)
+_LQD_CRISIS  = _t("lqd", "crisis",   97.0)
 
-# LQD (Investment Grade tahvil ETF)
-_LQD_HEALTHY = 108.0   # above = IG kredi sağlıklı                        [anlık: ~108.2]
-_LQD_STRESS  = 103.0   # below = IG baskı altında
-_LQD_CRISIS  =  97.0   # below = sistemik kredi korkusu
+_SMH_STRONG = _t("smh", "strong", 520.0)
+_SMH_WARN   = _t("smh", "warn",   430.0)
+_SMH_WEAK   = _t("smh", "weak",   350.0)
 
-# SMH (Yarı iletkenler — tech cycle leading indicator)
-_SMH_STRONG = 520.0   # above = tech cycle güçlü                          [anlık: ~569.7]
-_SMH_WARN   = 430.0   # below = chip talebi zayıflayor
-_SMH_WEAK   = 350.0   # below = tech resesyon bölgesi
-
-# XLF (Finansallar)
-_XLF_HEALTHY  = 50.0   # above = bankacılık sağlıklı                      [anlık: ~52.3]
-_XLF_STRESS   = 44.0   # below = banka stresi başlıyor
-_XLF_BLOCKING = 38.0   # below = finansal sistem baskıda
+_XLF_HEALTHY  = _t("xlf", "healthy",  50.0)
+_XLF_STRESS   = _t("xlf", "stress",   44.0)
+_XLF_BLOCKING = _t("xlf", "blocking", 38.0)
 
 
 # ---------------------------------------------------------------------------

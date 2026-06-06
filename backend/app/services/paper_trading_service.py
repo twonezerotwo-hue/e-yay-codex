@@ -105,6 +105,35 @@ _LOCK = threading.Lock()
 
 # ── Veri modelleri ────────────────────────────────────────────────────────────
 
+# ── SL/TP sabit yüzdeleri (ATR yoksa) ────────────────────────────────────────
+_SL_PCT: dict[str, float] = {
+    "BTCUSD": 0.04,
+    "XAUUSD": 0.03,
+    "XAGUSD": 0.05,
+    "BRENT":  0.04,
+}
+_TP_MULT = 2.0   # TP = SL × TP_MULT  (örn. SL%4 → TP%8 = 2:1 RR)
+
+def _calc_sl_tp(
+    side: PositionSide,
+    entry: float,
+    pair: str,
+    atr: float | None = None,
+) -> tuple[float, float]:
+    """ATR varsa 2×ATR SL / 3×ATR TP, yoksa sabit yüzde kullan."""
+    sl_pct = _SL_PCT.get(pair, 0.04)
+    if atr and atr > 0:
+        risk   = 2.0 * atr
+        reward = 3.0 * atr
+    else:
+        risk   = entry * sl_pct
+        reward = entry * sl_pct * _TP_MULT
+    if side == "LONG":
+        return round(entry - risk, 4), round(entry + reward, 4)
+    else:
+        return round(entry + risk, 4), round(entry - reward, 4)
+
+
 @dataclass
 class Position:
     pair:        str
@@ -113,6 +142,8 @@ class Position:
     entry_at:    str
     size_usd:    float
     last_signal: str
+    stop_loss:   float = 0.0    # otomatik SL seviyesi
+    take_profit: float = 0.0    # otomatik TP seviyesi
     # ── Öğrenme için: pozisyon açılırken alınan sinyal snapshot'ı ──
     open_signal: dict[str, Any] = field(default_factory=dict)
     fingerprint: str = ""        # sinyal imzası (benzer durumları tanıma için)
@@ -167,6 +198,8 @@ def _load_state() -> TradingState:
         for k, v in raw.get("positions", {}).items():
             v.setdefault("open_signal", {})
             v.setdefault("fingerprint", "")
+            v.setdefault("stop_loss", 0.0)
+            v.setdefault("take_profit", 0.0)
             positions[k] = Position(**v)
 
         # Trade — eski format
@@ -272,7 +305,46 @@ def tick_consensus(
                     final_size_mult *= learning_meta["size_multiplier"]
 
             new_size = round(POSITION_SIZE * final_size_mult, 2)
+            atr_val  = sig.get("atr")   # paper_trading.py'den geçirilirse kullanılır
             cur = st.positions.get(pair)
+
+            # ── SL/TP otomatik tetikleme (mevcut pozisyon varsa) ──────────────
+            if cur is not None and cur.stop_loss > 0 and cur.take_profit > 0:
+                sl_hit = (cur.side == "LONG"  and price <= cur.stop_loss) or \
+                         (cur.side == "SHORT" and price >= cur.stop_loss)
+                tp_hit = (cur.side == "LONG"  and price >= cur.take_profit) or \
+                         (cur.side == "SHORT" and price <= cur.take_profit)
+                if sl_hit or tp_hit:
+                    pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+                    duration_min = int(
+                        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+                    )
+                    close_reason = "SL" if sl_hit else "TP"
+                    verdict = "WIN" if tp_hit else "LOSS"
+                    trade_id = len(st.trades) + 1
+                    st.trades.append(Trade(
+                        id=trade_id, pair=pair, side=cur.side,
+                        entry_price=cur.entry_price, exit_price=price,
+                        entry_at=cur.entry_at, exit_at=now_iso,
+                        size_usd=cur.size_usd,
+                        pnl_usd=round(pnl_usd, 2), pnl_pct=round(pnl_pct, 2),
+                        duration_min=duration_min,
+                        reason=close_reason,
+                        open_signal=cur.open_signal,
+                        exit_signal={"trigger": close_reason, "price": price},
+                        verdict=verdict, fingerprint=cur.fingerprint,
+                    ))
+                    st.realized_pnl_usd += pnl_usd
+                    st.last_event = {
+                        "type": "CLOSE", "pair": pair, "side": cur.side,
+                        "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+                        "price": price, "verdict": verdict, "reason": close_reason,
+                    }
+                    st.last_event_at = now_iso
+                    del st.positions[pair]
+                    cur = None
+                    _save_state(st)
+                    continue   # bu pair için başka işlem yapma
 
             # ── Pozisyon var ──
             if cur is not None:
@@ -291,7 +363,6 @@ def tick_consensus(
                     duration_min = int(
                         (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
                     )
-                    # ── ÖĞRENME: verdict belirle ──
                     if pnl_usd > 5.0:
                         verdict = "WIN"
                     elif pnl_usd < -5.0:
@@ -308,7 +379,6 @@ def tick_consensus(
                         pnl_usd=round(pnl_usd, 2), pnl_pct=round(pnl_pct, 2),
                         duration_min=duration_min,
                         reason=f"consensus={final_direction}@{final_score:.1f if final_score else 0}",
-                        # ── ÖĞRENME: snapshot'ları kaydet ──
                         open_signal=cur.open_signal,
                         exit_signal={
                             "final_score":      final_score,
@@ -317,19 +387,14 @@ def tick_consensus(
                             "regime":           sig.get("raw_regime"),
                             "primary_tf":       sig.get("primary_tf"),
                         },
-                        verdict=verdict,
-                        fingerprint=cur.fingerprint,
+                        verdict=verdict, fingerprint=cur.fingerprint,
                     )
                     st.trades.append(trade)
                     st.realized_pnl_usd += pnl_usd
                     st.last_event = {
-                        "type":  "CLOSE",
-                        "pair":  pair,
-                        "side":  cur.side,
-                        "pnl_usd":  round(pnl_usd, 2),
-                        "pnl_pct":  round(pnl_pct, 2),
-                        "price":   price,
-                        "verdict": verdict,
+                        "type":  "CLOSE", "pair": pair, "side": cur.side,
+                        "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+                        "price": price, "verdict": verdict,
                     }
                     st.last_event_at = now_iso
                     del st.positions[pair]
@@ -338,20 +403,19 @@ def tick_consensus(
                     # Karşı yön sinyalinde anında yeni pozisyon aç
                     if target in ("LONG", "SHORT"):
                         new_fp = build_signal_fingerprint(sig)
+                        sl, tp = _calc_sl_tp(target, price, pair, atr_val)
                         st.positions[pair] = Position(
                             pair=pair, side=target,
                             entry_price=price, entry_at=now_iso,
                             size_usd=new_size,
                             last_signal=f"{final_direction}@{final_score:.1f}",
-                            open_signal=sig,
-                            fingerprint=new_fp,
+                            stop_loss=sl, take_profit=tp,
+                            open_signal=sig, fingerprint=new_fp,
                         )
                         st.last_event = {
-                            "type":  "OPEN",
-                            "pair":  pair,
-                            "side":  target,
-                            "price": price,
-                            "size_usd": new_size,
+                            "type": "OPEN", "pair": pair, "side": target,
+                            "price": price, "size_usd": new_size,
+                            "stop_loss": sl, "take_profit": tp,
                             "learning": learning_meta.get("action", "NORMAL"),
                             "fingerprint": new_fp,
                         }
@@ -360,20 +424,19 @@ def tick_consensus(
             else:
                 if target in ("LONG", "SHORT"):
                     new_fp = build_signal_fingerprint(sig)
+                    sl, tp = _calc_sl_tp(target, price, pair, atr_val)
                     st.positions[pair] = Position(
                         pair=pair, side=target,
                         entry_price=price, entry_at=now_iso,
                         size_usd=new_size,
                         last_signal=f"{final_direction}@{final_score:.1f}",
-                        open_signal=sig,
-                        fingerprint=new_fp,
+                        stop_loss=sl, take_profit=tp,
+                        open_signal=sig, fingerprint=new_fp,
                     )
                     st.last_event = {
-                        "type":  "OPEN",
-                        "pair":  pair,
-                        "side":  target,
-                        "price": price,
-                        "size_usd": new_size,
+                        "type": "OPEN", "pair": pair, "side": target,
+                        "price": price, "size_usd": new_size,
+                        "stop_loss": sl, "take_profit": tp,
                         "learning": learning_meta.get("action", "NORMAL"),
                         "fingerprint": new_fp,
                     }
@@ -552,7 +615,58 @@ def reset_state() -> None:
         _save_state(TradingState())
 
 
+def force_close_position(pair: str, current_price: float, reason: str = "MANUEL") -> dict[str, Any]:
+    """Kullanıcı talebiyle pozisyonu anlık fiyattan kapat (Manuel Kapat). PAPER_SAFE."""
+    with _LOCK:
+        st = _load_state()
+        cur = st.positions.get(pair)
+        if cur is None:
+            return {"status": "no_position", "pair": pair}
+
+        now_iso = datetime.now(UTC).isoformat()
+        pnl_usd, pnl_pct = _unrealized_pnl(cur, current_price)
+        duration_min = int(
+            (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+        )
+        if pnl_usd > 5.0:
+            verdict = "WIN"
+        elif pnl_usd < -5.0:
+            verdict = "LOSS"
+        else:
+            verdict = "BREAK_EVEN"
+
+        trade_id = len(st.trades) + 1
+        st.trades.append(Trade(
+            id=trade_id, pair=pair, side=cur.side,
+            entry_price=cur.entry_price, exit_price=current_price,
+            entry_at=cur.entry_at, exit_at=now_iso,
+            size_usd=cur.size_usd,
+            pnl_usd=round(pnl_usd, 2), pnl_pct=round(pnl_pct, 2),
+            duration_min=duration_min,
+            reason=reason,
+            open_signal=cur.open_signal,
+            exit_signal={"trigger": reason, "price": current_price},
+            verdict=verdict, fingerprint=cur.fingerprint,
+        ))
+        st.realized_pnl_usd += pnl_usd
+        st.last_event = {
+            "type": "CLOSE", "pair": pair, "side": cur.side,
+            "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+            "price": current_price, "verdict": verdict, "reason": reason,
+        }
+        st.last_event_at = now_iso
+        del st.positions[pair]
+        _save_state(st)
+        return {
+            "status": "closed",
+            "pair": pair, "side": cur.side,
+            "entry_price": cur.entry_price, "exit_price": current_price,
+            "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+            "verdict": verdict, "reason": reason,
+        }
+
+
 __all__ = [
-    "tick", "get_snapshot", "reset_state",
+    "tick", "tick_consensus", "get_snapshot", "reset_state", "force_close_position",
     "TRADED_PAIRS", "STARTING_BALANCE", "POSITION_SIZE",
 ]

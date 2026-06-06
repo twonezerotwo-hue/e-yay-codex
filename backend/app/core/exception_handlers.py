@@ -143,5 +143,3 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

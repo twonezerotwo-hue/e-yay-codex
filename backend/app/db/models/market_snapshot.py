@@ -33,5 +33,3 @@ class MarketSnapshotRecord(Base):
     raw_payload_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

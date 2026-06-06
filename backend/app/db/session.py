@@ -23,5 +23,3 @@ def get_session(database_url: str) -> Session:
     return get_session_factory(database_url)()
 
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]

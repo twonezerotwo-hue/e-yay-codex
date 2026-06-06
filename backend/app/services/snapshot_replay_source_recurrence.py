@@ -678,5 +678,3 @@ class SnapshotReplaySourceRecurrenceMixin:
             execution_side_effects="NO_EXECUTION",
         )
 __all__ = [name for name in globals() if not name.startswith('_')]
-
-__all__ = [name for name in globals() if not name.startswith('_')]
