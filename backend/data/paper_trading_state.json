@@ -8,7 +8,7 @@
       "entry_price": 93.09,
       "entry_at": "2026-06-06T09:25:32.663172+00:00",
       "size_usd": 25000.0,
-      "last_signal": "bullish@68.4",
+      "last_signal": "bullish@66.2",
       "stop_loss": 0.0,
       "take_profit": 0.0,
       "open_signal": {
@@ -301,7 +301,7 @@
       "entry_price": 68.943,
       "entry_at": "2026-06-06T09:40:53.545954+00:00",
       "size_usd": 25000.0,
-      "last_signal": "bullish@67.7",
+      "last_signal": "bullish@66.0",
       "stop_loss": 0.0,
       "take_profit": 0.0,
       "open_signal": {
@@ -880,6 +880,316 @@
         }
       },
       "fingerprint": "XAUUSD|CRISIS|bullish|strong_bull|aligned|sentinel"
+    },
+    "BTCUSD": {
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60860.0,
+      "entry_at": "2026-06-06T15:02:07.433426+00:00",
+      "size_usd": 37500.0,
+      "last_signal": "bullish@66.2",
+      "stop_loss": 55974.2278,
+      "take_profit": 68188.6583,
+      "open_signal": {
+        "symbol": "BTCUSD",
+        "final_score": 70.6192,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 58.8493,
+          "adjusted_score": 70.6192,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 2,
+            "opposing": 0,
+            "neutral_ignored": 0
+          },
+          "tf_directions": {
+            "1h": "bullish",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "DEFENSIVE",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BTCUSD",
+          "timeframe": "1d",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.205479,
+            "fundamental": 0.273973,
+            "news": 0.0,
+            "sentinel": 0.410959,
+            "quantum": 0.109589
+          },
+          "weights_trained": true,
+          "module_scores": {
+            "touche": 42.0,
+            "fundamental": 100.0,
+            "sentinel": 55.0,
+            "quantum": 2.0
+          },
+          "consensus_score": 58.8493,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [
+            "news"
+          ],
+          "contributions": {
+            "touche": {
+              "score": 42.0,
+              "weight": 0.205479,
+              "weighted_score": 8.6301,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 100.0,
+              "weight": 0.273973,
+              "weighted_score": 27.3973,
+              "source": "provided"
+            },
+            "news": {
+              "score": 0.0,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "missing_redistributed"
+            },
+            "sentinel": {
+              "score": 55.0,
+              "weight": 0.410959,
+              "weighted_score": 22.6027,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 2.0,
+              "weight": 0.109589,
+              "weighted_score": 0.2192,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": [
+            "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning).",
+            "Eksik modül(ler) ['news'] için ağırlık yeniden dağıtıldı (redistribute) — 50 nötr fallback YOK."
+          ]
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "1h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.205479,
+              "fundamental": 0.273973,
+              "news": 0.0,
+              "sentinel": 0.410959,
+              "quantum": 0.109589
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 54.0,
+              "fundamental": 100.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 61.3151,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [
+              "news"
+            ],
+            "contributions": {
+              "touche": {
+                "score": 54.0,
+                "weight": 0.205479,
+                "weighted_score": 11.0959,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.273973,
+                "weighted_score": 27.3973,
+                "source": "provided"
+              },
+              "news": {
+                "score": 0.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "missing_redistributed"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.410959,
+                "weighted_score": 22.6027,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.109589,
+                "weighted_score": 0.2192,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning).",
+              "Eksik modül(ler) ['news'] için ağırlık yeniden dağıtıldı (redistribute) — 50 nötr fallback YOK."
+            ]
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "4h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.205479,
+              "fundamental": 0.273973,
+              "news": 0.0,
+              "sentinel": 0.410959,
+              "quantum": 0.109589
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 33.0,
+              "fundamental": 100.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 57.0,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [
+              "news"
+            ],
+            "contributions": {
+              "touche": {
+                "score": 33.0,
+                "weight": 0.205479,
+                "weighted_score": 6.7808,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.273973,
+                "weighted_score": 27.3973,
+                "source": "provided"
+              },
+              "news": {
+                "score": 0.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "missing_redistributed"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.410959,
+                "weighted_score": 22.6027,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.109589,
+                "weighted_score": 0.2192,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning).",
+              "Eksik modül(ler) ['news'] için ağırlık yeniden dağıtıldı (redistribute) — 50 nötr fallback YOK."
+            ]
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "1d",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.205479,
+              "fundamental": 0.273973,
+              "news": 0.0,
+              "sentinel": 0.410959,
+              "quantum": 0.109589
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 42.0,
+              "fundamental": 100.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 58.8493,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [
+              "news"
+            ],
+            "contributions": {
+              "touche": {
+                "score": 42.0,
+                "weight": 0.205479,
+                "weighted_score": 8.6301,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.273973,
+                "weighted_score": 27.3973,
+                "source": "provided"
+              },
+              "news": {
+                "score": 0.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "missing_redistributed"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.410959,
+                "weighted_score": 22.6027,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.109589,
+                "weighted_score": 0.2192,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning).",
+              "Eksik modül(ler) ['news'] için ağırlık yeniden dağıtıldı (redistribute) — 50 nötr fallback YOK."
+            ]
+          }
+        },
+        "other_tf_scores": {
+          "1h": 61.3151,
+          "4h": 57.0
+        },
+        "atr": 2442.8861
+      },
+      "fingerprint": "BTCUSD|DEFENSIVE|bullish|extreme_bull|aligned|fundamental"
     }
   },
   "trades": [
@@ -2130,16 +2440,17 @@
     }
   ],
   "last_event": {
-    "type": "CLOSE",
+    "type": "OPEN",
     "pair": "BTCUSD",
     "side": "LONG",
-    "pnl_usd": 6.46,
-    "pnl_pct": 0.02,
-    "price": 60940.5898,
-    "verdict": "WIN",
-    "reason": "MANUEL"
+    "price": 60860.0,
+    "size_usd": 37500.0,
+    "stop_loss": 55974.2278,
+    "take_profit": 68188.6583,
+    "learning": "INSUFFICIENT_DATA",
+    "fingerprint": "BTCUSD|DEFENSIVE|bullish|extreme_bull|aligned|fundamental"
   },
-  "last_event_at": "2026-06-06T14:23:04.765222+00:00",
+  "last_event_at": "2026-06-06T15:02:07.433426+00:00",
   "weight_adjustments": {
     "bear_2022": {
       "touche": 0.0,

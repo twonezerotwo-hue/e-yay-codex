@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from app.api.agent_insight import router as agent_insight_router
 from app.api.ai_report import router as ai_report_router
 from app.api.ceo_report import router as ceo_report_router
+from app.api.chart_patterns import router as chart_patterns_router
 from app.api.chat import router as chat_router
 from app.api.consensus import router as consensus_router
 from app.api.health import router as health_router
@@ -36,6 +37,7 @@ app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(agent_insight_router, prefix=settings.api_prefix)
 app.include_router(paper_trading_router, prefix=settings.api_prefix)
 app.include_router(consensus_router, prefix=settings.api_prefix)
+app.include_router(chart_patterns_router, prefix=settings.api_prefix)
 app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
 
 __all__ = [name for name in globals() if not name.startswith('_')]

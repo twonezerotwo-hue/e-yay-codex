@@ -30,6 +30,12 @@ interface Position {
   take_profit: number;
 }
 
+interface ChartPatternSummary {
+  bias: "BULLISH" | "BEARISH" | "NEUTRAL";
+  consolidated_score: number;
+  active_patterns: string[];
+}
+
 interface TradingState {
   starting_balance: number;
   equity: number;
@@ -50,6 +56,7 @@ export default function PaperTradingTicker() {
   const [banner,        setBanner]        = useState<TradeEvent | null>(null);
   const [agentOpen,     setAgentOpen]     = useState(false);  // agent modal açıksa gizle
   const [closing,       setClosing]       = useState<string | null>(null);
+  const [patterns,      setPatterns]      = useState<Record<string, ChartPatternSummary>>({});
   const lastEventAtRef = useRef<string | null>(null);
 
   // Agent modal açıkken trading widget'ı sayfa görünümünden gizle
@@ -85,9 +92,19 @@ export default function PaperTradingTicker() {
         }
       } catch { /* sessiz */ }
     }
-    load();
+    async function loadPatterns() {
+      try {
+        const res = await fetch("/api/backend/chart-patterns", { cache: "no-store" });
+        if (!res.ok) return;
+        const d = await res.json();
+        if (cancelled || !d.pairs) return;
+        setPatterns(d.pairs);
+      } catch { /* sessiz */ }
+    }
+    load(); loadPatterns();
     const i = setInterval(load, POLL_MS);
-    return () => { cancelled = true; clearInterval(i); };
+    const p = setInterval(loadPatterns, 60_000);  // 1 dk'da bir (backend 3 dk cache)
+    return () => { cancelled = true; clearInterval(i); clearInterval(p); };
   }, []);
 
   async function handleManualClose(pair: string) {
@@ -239,6 +256,25 @@ export default function PaperTradingTicker() {
                               <span className="text-emerald-400">
                                 TP {fmt2(p.take_profit)}
                                 <span className="opacity-70 ml-0.5">(+{pctFromEntry(p.take_profit)}%)</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {/* Row 3: Chart Pattern göstergesi */}
+                        {patterns[p.pair] && (
+                          <div className="flex items-center gap-1.5 text-[8px] pt-0.5 border-t border-eyay-border/30">
+                            <span className="text-eyay-faint">📊</span>
+                            <span className={
+                              patterns[p.pair].bias === "BULLISH"  ? "text-emerald-400 font-bold" :
+                              patterns[p.pair].bias === "BEARISH"  ? "text-red-400 font-bold" :
+                              "text-eyay-faint"
+                            }>
+                              {patterns[p.pair].bias} {patterns[p.pair].consolidated_score >= 0 ? "+" : ""}
+                              {patterns[p.pair].consolidated_score.toFixed(1)}
+                            </span>
+                            {patterns[p.pair].active_patterns?.length > 0 && (
+                              <span className="text-eyay-faint truncate">
+                                · {patterns[p.pair].active_patterns.slice(0, 2).join(", ")}
                               </span>
                             )}
                           </div>

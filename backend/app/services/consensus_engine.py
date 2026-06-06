@@ -19,7 +19,7 @@ from app.services.regime_weights_engine import (
     get_weights_for_regime,
 )
 
-CANONICAL_MODULES = ("touche", "fundamental", "news", "sentinel", "quantum")
+CANONICAL_MODULES = ("touche", "fundamental", "news", "sentinel", "quantum", "chart_pattern")
 
 # E-YAY için sade alias mapping
 MODULE_ALIASES = {
@@ -45,7 +45,10 @@ def _canonical_module_name(raw_key: str) -> str:
 
 # ── Skor normalize (REVİZE: range explicit) ──────────────────────────────────
 
-ScoreRange = Literal["pct_0_100", "ratio_0_1", "signed_neg1_pos1", "signed_neg15_pos15"]
+ScoreRange = Literal[
+    "pct_0_100", "ratio_0_1", "signed_neg1_pos1", "signed_neg15_pos15",
+    "signed_neg100_pos100",
+]
 
 
 def _normalize_score(raw_score: float, score_range: ScoreRange = "pct_0_100") -> float:
@@ -65,6 +68,11 @@ def _normalize_score(raw_score: float, score_range: ScoreRange = "pct_0_100") ->
     if score_range == "signed_neg15_pos15":
         # -1.5 → 0, 0 → 50, +1.5 → 100
         return max(0.0, min(100.0, (v + 1.5) * (100.0 / 3.0)))
+
+    if score_range == "signed_neg100_pos100":
+        # -100 (tam bearish) → 0, 0 (nötr) → 50, +100 (tam bullish) → 100
+        # chart_pattern modülü bu range'i kullanır
+        return max(0.0, min(100.0, v * 0.5 + 50.0))
 
     return max(0.0, min(100.0, v))
 

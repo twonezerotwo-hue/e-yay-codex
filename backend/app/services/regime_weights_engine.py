@@ -38,11 +38,12 @@ REGIME_MAP: dict[str, str] = {
 }
 
 WEIGHT_FIELDS: dict[str, str] = {
-    "touche_weight":      "touche",
-    "fundamental_weight": "fundamental",
-    "news_weight":        "news",
-    "sentinel_weight":    "sentinel",
-    "quantum_weight":     "quantum",
+    "touche_weight":        "touche",
+    "fundamental_weight":   "fundamental",
+    "news_weight":          "news",
+    "sentinel_weight":      "sentinel",
+    "quantum_weight":       "quantum",
+    "chart_pattern_weight": "chart_pattern",
 }
 
 

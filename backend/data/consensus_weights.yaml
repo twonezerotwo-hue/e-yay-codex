@@ -18,66 +18,75 @@ regime_weights:
 
   # ── MEGA BULL (RISK_ON / LIQUIDITY_EXPANSION) ─────────────────────────────
   # Momentum + faktör akışı ağır basar, news/sentinel gözlemci.
+  # Chart pattern: trend devam paternleri (marubozu, HH/HL).
   mega_bull:
     primary_tf: "4h"
-    touche_weight:      0.30
-    fundamental_weight: 0.15
-    news_weight:        0.10
-    sentinel_weight:    0.20
-    quantum_weight:     0.25
+    touche_weight:        0.20
+    fundamental_weight:   0.15
+    news_weight:          0.10
+    sentinel_weight:      0.20
+    quantum_weight:       0.25
+    chart_pattern_weight: 0.10
 
   # ── BULL (NORMALIZATION) ──────────────────────────────────────────────────
   # Dengeli — her modülün eşit söz hakkı, hafif fundamental öncelik.
   bull:
     primary_tf: "1h"
-    touche_weight:      0.22
-    fundamental_weight: 0.25
-    news_weight:        0.15
-    sentinel_weight:    0.20
-    quantum_weight:     0.18
+    touche_weight:        0.12
+    fundamental_weight:   0.25
+    news_weight:          0.15
+    sentinel_weight:      0.20
+    quantum_weight:       0.18
+    chart_pattern_weight: 0.10
 
   # ── ACCUMULATION ──────────────────────────────────────────────────────────
   # Yapısal sağlık (fundamental) + rejim onayı (sentinel) ağır.
   # Sermaye akışı henüz net değil, quantum hafif.
+  # Chart pattern: dip dönüş paternleri (hammer, engulfing@destek) kritik.
   accumulation:
     primary_tf: "1d"
-    touche_weight:      0.20
-    fundamental_weight: 0.35
-    news_weight:        0.10
-    sentinel_weight:    0.25
-    quantum_weight:     0.10
+    touche_weight:        0.10
+    fundamental_weight:   0.35
+    news_weight:          0.10
+    sentinel_weight:      0.25
+    quantum_weight:       0.10
+    chart_pattern_weight: 0.10
 
   # ── DEFAULT (TRANSITIONING) ───────────────────────────────────────────────
   # Karar verilemeyen geçiş rejimi — sinyal güvenilirliği için sentinel ağır.
+  # Chart pattern: belirsizlikte mum okuma yön belirler.
   default:
     primary_tf: "1h"
-    touche_weight:      0.20
-    fundamental_weight: 0.20
-    news_weight:        0.15
-    sentinel_weight:    0.30
-    quantum_weight:     0.15
+    touche_weight:        0.10
+    fundamental_weight:   0.20
+    news_weight:          0.15
+    sentinel_weight:      0.30
+    quantum_weight:       0.15
+    chart_pattern_weight: 0.10
 
   # ── BEAR 2022 (RISK_OFF / DEFENSIVE) ──────────────────────────────────────
   # Makro rejim (sentinel) + risk haberi (news) en kritik.
-  # Touche minimum, çünkü teknik kırılımlar bear'da yanıltıcı.
+  # Chart pattern: dönüş paternleri için dikkat (shooting_star@direnç).
   bear_2022:
     primary_tf: "1d"
-    touche_weight:      0.15
-    fundamental_weight: 0.20
-    news_weight:        0.30
-    sentinel_weight:    0.30
-    quantum_weight:     0.05
+    touche_weight:        0.05
+    fundamental_weight:   0.20
+    news_weight:          0.30
+    sentinel_weight:      0.30
+    quantum_weight:       0.05
+    chart_pattern_weight: 0.10
 
   # ── BEAR 2022 AGGRESSIVE (CRISIS) ─────────────────────────────────────────
   # Kriz modunda yalnızca rejim + haber konuşur.
   # Teknik analiz ve faktör skorlarına güvenilmez (büyük gap'ler).
   bear_2022_aggressive:
     primary_tf: "1d"
-    touche_weight:      0.10
-    fundamental_weight: 0.15
-    news_weight:        0.35
-    sentinel_weight:    0.40
-    quantum_weight:     0.00
+    touche_weight:        0.05
+    fundamental_weight:   0.15
+    news_weight:          0.35
+    sentinel_weight:      0.40
+    quantum_weight:       0.00
+    chart_pattern_weight: 0.05
 
 # ── Konfigürasyon parametreleri ─────────────────────────────────────────────
 consensus_config:

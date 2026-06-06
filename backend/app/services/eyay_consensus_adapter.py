@@ -113,6 +113,31 @@ def _quantum_rotation_score(rotation: Any) -> float | None:
     return conviction
 
 
+def _chart_pattern_score(asset_code: str, timeframe: str | None = None) -> float | None:
+    """Chart Pattern Provider'dan asset+TF için pattern_score (-100..+100).
+
+    Provider cache'i 3 dk, yeni yfinance çağrısı tetiklemez genelde.
+    Hata olursa None döner → consensus modül redistribute yapar, mevcut yapı bozulmaz.
+    """
+    try:
+        from app.api.chart_patterns import list_chart_patterns
+        all_data = list_chart_patterns()
+        pair_data = (all_data.get("pairs") or {}).get(asset_code)
+        if pair_data is None:
+            return None
+        # TF bazlı skor, yoksa consolidated
+        tf_dict = pair_data.get("per_tf") or {}
+        if timeframe and tf_dict.get(timeframe):
+            score = tf_dict[timeframe].get("pattern_score")
+            if score is not None:
+                return float(score)
+        # Fallback: consolidated
+        cs = pair_data.get("consolidated_score")
+        return float(cs) if cs is not None else None
+    except Exception:
+        return None
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 def build_module_scores(
@@ -165,6 +190,12 @@ def build_module_scores(
     quantum = _quantum_rotation_score(rotation)
     if quantum is not None:
         scores["quantum"] = {"value": quantum, "range": "pct_0_100"}
+
+    # chart_pattern — signed_neg100_pos100 (mum + trend + S/R skoru)
+    # Sadece traded pair'ler için (BTCUSD/XAUUSD/XAGUSD/BRENT). Diğerleri için None.
+    pattern_score = _chart_pattern_score(asset_for_tech, timeframe=timeframe)
+    if pattern_score is not None:
+        scores["chart_pattern"] = {"value": pattern_score, "range": "signed_neg100_pos100"}
 
     return scores
 
