@@ -17,19 +17,22 @@ from app.providers import MockMarketProvider
 from app.providers import SourceRegistryBoundProviderAdapter
 from app.providers import build_provider_source_bindings
 from app.providers.news_provider import NewsProvider
+from app.providers.technical_provider import TechnicalProvider
+from app.providers.capital_rotation_provider import CapitalRotationProvider
 from app.providers.real_market_provider import RealMarketProvider
 from app.services import MarketSnapshotService
 from app.services import ProviderIngestionService
 from app.services.regime_report_service import RegimeReportService
+from app.services.event_calendar_service import EventCalendarService
 
 router = APIRouter(prefix="/regime-report", tags=["regime-report"])
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # ---------------------------------------------------------------------------
-# Provider önbelleği — 300 saniye (5 dk) geçerli, ardından yeniden çekilir
+# Provider önbelleği — 180 saniye (3 dk) yfinance soft limitiyle uyumlu
 # ---------------------------------------------------------------------------
 import time as _time
-_PROVIDER_CACHE_TTL = 300   # saniye
+_PROVIDER_CACHE_TTL = 180   # saniye
 _cached_provider: "RealMarketProvider | None" = None
 _cached_provider_ts: float = 0.0
 
@@ -96,6 +99,14 @@ def get_current_regime_report(
     base_provider = _get_provider()
     data_mode = "live" if isinstance(base_provider, RealMarketProvider) else "simulation"
 
+    # 7 günlük delta — sadece gerçek provider'da mevcut
+    delta_map: dict = {}
+    if isinstance(base_provider, RealMarketProvider):
+        try:
+            delta_map = base_provider.delta_map_by_code
+        except Exception:  # noqa: BLE001
+            delta_map = {}
+
     provider = SourceRegistryBoundProviderAdapter(
         base_provider,
         build_provider_source_bindings(source_registry_entries),
@@ -112,23 +123,83 @@ def get_current_regime_report(
     news = ()
     if include_news:
         try:
-            news = NewsProvider().fetch_headlines(max_total=15)
+            news = NewsProvider().fetch_headlines(max_total=30)
         except Exception:  # noqa: BLE001
             news = ()
 
-    report = RegimeReportService().generate(snapshots, news_headlines=news)
+    # Olay takvimi
+    try:
+        catalysts = EventCalendarService().fetch_upcoming(horizon_days=120, max_events=20)
+    except Exception:  # noqa: BLE001
+        catalysts = ()
+
+    # Teknik analiz (OHLCV bazlı dinamik eşikler)
+    tech_insights = {}
+    try:
+        tech_insights = TechnicalProvider().compute()
+    except Exception:  # noqa: BLE001
+        tech_insights = {}
+
+    # Sermaye rotasyonu (çapraz varlık korelasyon + para akış yönü)
+    rotation = None
+    try:
+        rotation = CapitalRotationProvider().compute()
+    except Exception:  # noqa: BLE001
+        rotation = None
+
+    report = RegimeReportService().generate(
+        snapshots,
+        news_headlines=news,
+        upcoming_catalysts=catalysts,
+        delta_map=delta_map,
+        tech_insights=tech_insights,
+    )
     serialized = _serialize_report(report)
+
+    # ── Modül sağlık skorları ──────────────────────────────────────────────
+    from datetime import date as _date
+    _today_str = _date.today().isoformat()
+    # Takvim: yaklaşık tarih içeriyorsa MEDIUM, yoksa HIGH
+    _cal_approx = sum(1 for c in report.upcoming_catalysts if "[~" in c.name)
+    _cal_score  = "HIGH" if _cal_approx == 0 else ("MEDIUM" if _cal_approx < 3 else "LOW")
+
+    # Fiyat verisi: simülasyon modunda LOW, live ise HIGH
+    _price_score = "HIGH" if data_mode == "live" else "LOW"
+
+    # Haber: kaç kaynak başarılı döndü (news_fetched / beklenen)
+    _news_count = len(report.news_headlines)
+    _news_score = "HIGH" if _news_count >= 20 else ("MEDIUM" if _news_count >= 8 else "LOW")
+
+    # Sinyal: blocking sayısına göre güven
+    _blocking = report.blocking_count
+    _sig_score = "LOW" if _blocking >= 3 else ("MEDIUM" if _blocking >= 2 else "HIGH")
+
+    # Rotasyon: veri var mı?
+    _rot_score = "HIGH" if (rotation and not rotation.error) else "LOW"
+
+    module_health = {
+        "calendar":  {"score": _cal_score,   "detail": f"BLS 2026 hardcoded · {_cal_approx} yaklaşık tarih"},
+        "price":     {"score": _price_score,  "detail": f"{data_mode} · {len(snapshots)} varlık"},
+        "news":      {"score": _news_score,   "detail": f"{_news_count} haber · çok kaynak"},
+        "signals":   {"score": _sig_score,    "detail": f"{_blocking} blocking · {report.confirmed_count} confirmed"},
+        "rotation":  {"score": _rot_score,    "detail": "sermaye rotasyonu aktif" if rotation else "rotasyon verisi yok"},
+    }
 
     return JSONResponse(content={
         "status": "ok",
         "data_mode": data_mode,
         "execution_mode": "OFF / NO_EXECUTION",
         "report": serialized,
+        "capital_rotation": _serialize_report(rotation) if rotation else None,
+        "module_health": module_health,
         "meta": {
             "total_snapshots": len(snapshots),
             "blocking_signals": report.blocking_count,
             "confirmed_signals": report.confirmed_count,
             "news_fetched": len(report.news_headlines),
+            "catalysts_fetched": len(report.upcoming_catalysts),
+            "tech_insights": len(report.tech_insights),
+            "rotation_ratios": len(rotation.ratios) if rotation else 0,
         },
     })
 

@@ -1,0 +1,99 @@
+# E-YAY × Aegis 5-modül consensus ağırlıkları.
+# Aegis YAML'ının REVİZE edilmiş versiyonu — her rejimde anlamlı dağılım.
+#
+# Modüller:
+#   touche      — TechnicalProvider skoru (destek/direnç + RSI + MACD)
+#   fundamental — ConfirmationChecklist (yapısal sağlık, met/total)
+#   news        — NewsProvider sentiment ortalaması
+#   sentinel    — MacroLayer confidence + AppetiteLayer (rejim sağlığı)
+#   quantum     — CapitalRotation conviction (faktör/akış)
+#
+# Rejim mapping (E-YAY → Aegis):
+#   RISK_ON       → mega_bull
+#   TRANSITIONING → default
+#   DEFENSIVE     → bear_2022
+#   CRISIS        → bear_2022_aggressive
+
+regime_weights:
+
+  # ── MEGA BULL (RISK_ON / LIQUIDITY_EXPANSION) ─────────────────────────────
+  # Momentum + faktör akışı ağır basar, news/sentinel gözlemci.
+  mega_bull:
+    primary_tf: "4h"
+    touche_weight:      0.30
+    fundamental_weight: 0.15
+    news_weight:        0.10
+    sentinel_weight:    0.20
+    quantum_weight:     0.25
+
+  # ── BULL (NORMALIZATION) ──────────────────────────────────────────────────
+  # Dengeli — her modülün eşit söz hakkı, hafif fundamental öncelik.
+  bull:
+    primary_tf: "1h"
+    touche_weight:      0.22
+    fundamental_weight: 0.25
+    news_weight:        0.15
+    sentinel_weight:    0.20
+    quantum_weight:     0.18
+
+  # ── ACCUMULATION ──────────────────────────────────────────────────────────
+  # Yapısal sağlık (fundamental) + rejim onayı (sentinel) ağır.
+  # Sermaye akışı henüz net değil, quantum hafif.
+  accumulation:
+    primary_tf: "1d"
+    touche_weight:      0.20
+    fundamental_weight: 0.35
+    news_weight:        0.10
+    sentinel_weight:    0.25
+    quantum_weight:     0.10
+
+  # ── DEFAULT (TRANSITIONING) ───────────────────────────────────────────────
+  # Karar verilemeyen geçiş rejimi — sinyal güvenilirliği için sentinel ağır.
+  default:
+    primary_tf: "1h"
+    touche_weight:      0.20
+    fundamental_weight: 0.20
+    news_weight:        0.15
+    sentinel_weight:    0.30
+    quantum_weight:     0.15
+
+  # ── BEAR 2022 (RISK_OFF / DEFENSIVE) ──────────────────────────────────────
+  # Makro rejim (sentinel) + risk haberi (news) en kritik.
+  # Touche minimum, çünkü teknik kırılımlar bear'da yanıltıcı.
+  bear_2022:
+    primary_tf: "1d"
+    touche_weight:      0.15
+    fundamental_weight: 0.20
+    news_weight:        0.30
+    sentinel_weight:    0.30
+    quantum_weight:     0.05
+
+  # ── BEAR 2022 AGGRESSIVE (CRISIS) ─────────────────────────────────────────
+  # Kriz modunda yalnızca rejim + haber konuşur.
+  # Teknik analiz ve faktör skorlarına güvenilmez (büyük gap'ler).
+  bear_2022_aggressive:
+    primary_tf: "1d"
+    touche_weight:      0.10
+    fundamental_weight: 0.15
+    news_weight:        0.35
+    sentinel_weight:    0.40
+    quantum_weight:     0.00
+
+# ── Konfigürasyon parametreleri ─────────────────────────────────────────────
+consensus_config:
+  # En az kaç modül skoru olmalı? Yetmezse INSUFFICIENT_DATA döner.
+  min_modules_required: 3
+
+  # Direction band — bu aralık nötr sayılır (false breakout filtresi)
+  direction_band:
+    bullish_threshold: 55.0
+    bearish_threshold: 45.0
+
+  # Confluence multiplier (revize: simetrik + nötr-aware)
+  confluence:
+    aligned_boost:      1.20    # Aegis 1.15 → 1.20 (daha agresif)
+    opposing_penalty:   0.65    # Aegis 0.70 → 0.65 (kayba duyarlı)
+    mixed_multiplier:   1.00
+    # Aegis "neutral TF = mixed sayar" hatası burada düzeltildi:
+    # Nötr TF'ler oylamada hiç dikkate alınmaz (vote yok).
+    ignore_neutral_tfs: true

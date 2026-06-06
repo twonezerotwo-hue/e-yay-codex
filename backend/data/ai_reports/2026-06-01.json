@@ -1,0 +1,17 @@
+{
+  "date": "2026-06-01",
+  "generated_at": "2026-06-01T20:13:41.060196+00:00",
+  "decision": "KÜÇÜLT",
+  "regime": "TRANSITIONING",
+  "verdict": "KÜÇÜLT ve BEKLE — jeopolitik riskler fiyatlanmış, ancak dolar momentumu ve kripto-altın çıkışı henüz tamamlanmadığından, yeni pozisyon almadan piyasanın İran'ın bir hamle yapıp yapmayacağını söylesiniz bırakmak daha akıllıca.",
+  "key_signals": [
+    "Petrol yüksek ama durağan kaldı — İsrail-İran haberlerine rağmen piyasa korunmasızlığı artırmadı, bu da riski zaten önceden fiyatlamış olduğunun işareti.",
+    "Altın ve Bitcoin eş zamanlı çıkıyor, dolar spot olarak zayıf olsa bile — doların yakın vadede güçlenebileceğine dair gizli bir bahis var.",
+    "Hisse senetleri 7.600 noktasında sakin, kredi piyasası sağlam — büyük yatırımcılar jeopolitik felaketinin hemen gelmediğini düşünüyor.",
+    "Gümüş, altından hızlı çıkıyor — endüstriyel talep değil, güvenli liman arayışı, bu da 'risk yok ama emin değiliz' duygusu.",
+    "Hisse tahvilden 8 puan önde — risk iştahı sürüyor ama dar tabanlı, sadece büyük teknoloji ve kredi şirketleri tutuyor."
+  ],
+  "snapshot": {
+    "HYG": 79.82
+  }
+}

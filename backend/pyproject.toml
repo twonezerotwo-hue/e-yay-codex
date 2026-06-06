@@ -22,6 +22,9 @@ dependencies = [
     "pandas",
     # News / RSS
     "feedparser",
+    # AI analyst
+    "anthropic>=0.105",
+    "pyyaml>=6.0",
     # Utilities
     "httpx",
     "structlog",

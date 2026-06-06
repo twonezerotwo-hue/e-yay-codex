@@ -68,7 +68,8 @@
               "rates",
               "inflation_liquidity",
               "industrial_metals",
-              "local_reference"
+              "local_reference",
+              "volatility"
             ]
           },
           "provider": {

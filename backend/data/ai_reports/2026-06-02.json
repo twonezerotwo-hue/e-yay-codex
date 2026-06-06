@@ -1,0 +1,17 @@
+{
+  "date": "2026-06-02",
+  "generated_at": "2026-06-02T07:23:00.049017+00:00",
+  "decision": "KÜÇÜLT",
+  "regime": "TRANSITIONING",
+  "verdict": "BEKLE — Jeopolitik riskler sınırlanmadıkça ve dolar 30 günlük momentumu kırılıp düşene kadar, altın-kripto pozisyonlarına dokunma; hisse senetleri güçlü ancak dar tabanlı (büyüme odaklı), kredi piyasası tuttuğu sürece yan yana hareket edecek, petrol ise ateşkes haberleri için pozisyon almaya değmez—fiyat zaten hazırlanmış.",
+  "key_signals": [
+    "Bitcoin'in hisse senetlerinden ayrışması (korelasyon -0.54): Büyük para kriptodan hisse sektörüne ve nakit pozisyonlara geçiş yapmış, kripto artık jeopolitik belirsizliğin koruma aracı olarak görülmüyor.",
+    "Dolar spot zayıf ama momentum güçlü: DXY 99.08 seviyesinde olsa da son 30 günde yüzde 1.1 kazanmış; bu altın ve Bitcoin'i baskılamaya devam ediyor ve dolar destekli bir geçiş işareti.",
+    "Petrol priminin yönetilmesi dengesiz: 94.18 dolarda yüksek ama Rusya masif saldırısına rağmen artış sınırlı—piyasa jeopolitik eskalasyonun sınırlı olacağını fiyatlamış.",
+    "Tahvil hisse senetlerine karşı destek veriyor: TLT/SPY oranı 7.7 puan farkla hisseye baskınlaşmış, bu da yatırımcıların henüz tam kaldırıçlı risk almaya hazır olmadığını, güvenli liman talebinin devam ettiğini gösteriyor.",
+    "Gümüş altına baskın (oranı 59.23): Endüstriyel metal talebinin güçlü kalması, ekonomik durgunluk beklentisinin sınırlı olduğu anlamına geliyor—büyüme tarafı henüz canlı."
+  ],
+  "snapshot": {
+    "HYG": 79.84
+  }
+}

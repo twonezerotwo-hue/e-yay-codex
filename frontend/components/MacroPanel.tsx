@@ -1,84 +1,140 @@
+"use client";
+
 import type { MacroLayer, RiskAppetiteLayer, RegimeCode, AppetiteCode } from "@/lib/types";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const REGIME_COLOR: Record<RegimeCode, string> = {
-  RISK_ON:      "text-emerald-400 border-emerald-700 bg-emerald-950",
-  TRANSITIONING:"text-amber-400   border-amber-700   bg-amber-950",
-  DEFENSIVE:    "text-orange-400  border-orange-700  bg-orange-950",
-  CRISIS:       "text-red-400     border-red-700     bg-red-950",
+// ── Renk haritaları ──────────────────────────────────────────────────────────
+
+const REGIME_BADGE: Record<RegimeCode, { bg: string; text: string; bar: string }> = {
+  RISK_ON:      { bg: "bg-emerald-950 border-emerald-700", text: "text-emerald-300", bar: "bg-emerald-500" },
+  TRANSITIONING:{ bg: "bg-amber-950   border-amber-700",   text: "text-amber-300",   bar: "bg-amber-500"   },
+  DEFENSIVE:    { bg: "bg-orange-950  border-orange-700",  text: "text-orange-300",  bar: "bg-orange-500"  },
+  CRISIS:       { bg: "bg-red-950     border-red-700",     text: "text-red-300",     bar: "bg-red-500"     },
 };
 
-const APPETITE_COLOR: Record<AppetiteCode, string> = {
-  STRONG:   "text-emerald-400",
-  MODERATE: "text-amber-400",
-  WEAK:     "text-orange-400",
-  CRISIS:   "text-red-400",
+const APPETITE_DOT: Record<AppetiteCode, { dot: string; text: string }> = {
+  STRONG:   { dot: "bg-emerald-400", text: "text-emerald-300" },
+  MODERATE: { dot: "bg-amber-400",   text: "text-amber-300"   },
+  WEAK:     { dot: "bg-orange-400",  text: "text-orange-300"  },
+  CRISIS:   { dot: "bg-red-400",     text: "text-red-300"     },
 };
 
-export default function MacroPanel({ macro, appetite }: { macro: MacroLayer; appetite: RiskAppetiteLayer }) {
+// ── Sinyal satırı renk çıkarıcı ──────────────────────────────────────────────
+
+function signalColor(value: string, label: string): string {
+  const v = value.toUpperCase();
+  if (v.includes("YÜKSEK") || v.includes("İNVERSİYON") || v.includes("KIRIYOR") ||
+      v.includes("KAÇIŞ")  || v.includes("DARALIYOR") || v.includes("BASKILI"))
+    return "text-red-300";
+  if (v.includes("ZAYIF") && label === "DXY") return "text-emerald-300";
+  if (v.includes("NORMAL") || v.includes("SAĞLAM") || v.includes("GENİŞLİYOR") ||
+      (v.includes("ZAYIF") && label !== "DXY"))
+    return "text-emerald-300";
+  if (v.includes("İZLE") || v.includes("NÖTR") || v.includes("GEÇIŞ"))
+    return "text-amber-300";
+  return "text-eyay-dim";
+}
+
+// ── Ana bileşen ──────────────────────────────────────────────────────────────
+
+export default function MacroPanel({ macro, appetite }: {
+  macro: MacroLayer;
+  appetite: RiskAppetiteLayer;
+}) {
+  const { t } = useLanguage();
+  const rb = REGIME_BADGE[macro.regime];
+  const ad = APPETITE_DOT[appetite.status];
+  const appetiteLabel = t.macro.appetiteLabels[appetite.status] ?? appetite.status;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Katman 1 */}
-      <div className="bg-eyay-surface border border-eyay-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-eyay-dim">
-            Katman 1 — Makro Rejim
-          </h2>
-          <span className={`font-mono text-xs font-bold border rounded px-2 py-0.5 ${REGIME_COLOR[macro.regime]}`}>
-            {macro.regime}
-          </span>
-        </div>
-        <div className="space-y-3">
-          <SignalRow label="DXY"         value={macro.dxy_signal} />
-          <SignalRow label="ENERJİ"      value={macro.energy_signal} />
-          <SignalRow label="YİELD CURVE" value={macro.yield_curve_signal} />
-          <SignalRow label="M2SL"        value={macro.m2_signal} />
-        </div>
-        <div className="mt-4 pt-3 border-t border-eyay-border">
-          <p className="text-xs text-eyay-dim font-mono">{macro.summary}</p>
-          <div className="mt-2 h-1.5 bg-eyay-muted rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${macro.regime === "RISK_ON" ? "bg-emerald-500" : macro.regime === "TRANSITIONING" ? "bg-amber-500" : macro.regime === "DEFENSIVE" ? "bg-orange-500" : "bg-red-500"}`}
-              style={{ width: `${macro.confidence_pct}%` }}
-            />
+
+      {/* ── Katman 1 — Makro Rejim ─────────────────────────────────────── */}
+      <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between">
+          <div>
+            <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">{t.macro.layer1}</p>
+            <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.macro.macroRegime}</p>
           </div>
-          <p className="text-xs text-eyay-dim font-mono mt-1">Güven: %{macro.confidence_pct}</p>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold ${rb.bg} ${rb.text}`}>
+            {macro.regime.replace("_", " ")}
+          </div>
+        </div>
+
+        <div className="px-5 pt-4 pb-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs text-eyay-faint">{t.macro.confidence}</span>
+            <span className={`font-mono text-sm font-semibold ${rb.text}`}>%{macro.confidence_pct}</span>
+          </div>
+          <div className="h-1.5 bg-eyay-raised rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${rb.bar}`}
+              style={{ width: `${macro.confidence_pct}%` }} />
+          </div>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <MacroRow label="DXY"                    value={macro.dxy_signal} />
+          <MacroRow label="Brent"                  value={macro.energy_signal} />
+          <MacroRow label={t.macro.yieldCurve}     value={macro.yield_curve_signal} />
+          <MacroRow label="M2"                     value={macro.m2_signal} />
+        </div>
+
+        <div className="px-5 pb-4">
+          <p className="text-xs text-eyay-dim leading-relaxed bg-eyay-raised rounded-xl px-4 py-3 border border-eyay-border">
+            {macro.summary}
+          </p>
         </div>
       </div>
 
-      {/* Katman 2 */}
-      <div className="bg-eyay-surface border border-eyay-border rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-eyay-dim">
-            Katman 2 — Risk İştahı
-          </h2>
-          <span className={`font-mono text-sm font-bold ${APPETITE_COLOR[appetite.status]}`}>
-            {appetite.status}
-          </span>
+      {/* ── Katman 2 — Risk İştahı ─────────────────────────────────────── */}
+      <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between">
+          <div>
+            <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">{t.macro.layer2}</p>
+            <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.macro.riskAppetite}</p>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-eyay-raised border border-eyay-border">
+            <span className={`w-2 h-2 rounded-full ${ad.dot}`} />
+            <span className={`text-xs font-semibold ${ad.text}`}>{appetiteLabel}</span>
+          </div>
         </div>
-        <div className="space-y-3">
-          <SignalRow label="KREDİ"      value={appetite.credit_signal} />
-          <SignalRow label="BTC.D"      value={appetite.btc_dominance_signal} />
-          <SignalRow label="USDT.D"     value={appetite.usdt_dominance_signal} />
-          <SignalRow label="GÜVENLI"    value={appetite.safe_haven_signal} />
+
+        <div className="px-5 py-4 space-y-3">
+          <MacroRow label="Kredi (HYG)"  value={appetite.credit_signal} />
+          <MacroRow label="BTC.D"        value={appetite.btc_dominance_signal} />
+          <MacroRow label="USDT.D"       value={appetite.usdt_dominance_signal} />
+          <MacroRow label={t.macro.gold} value={appetite.safe_haven_signal} />
         </div>
-        <div className="mt-4 pt-3 border-t border-eyay-border">
-          <p className="text-xs text-eyay-dim font-mono">{appetite.summary}</p>
+
+        <div className="px-5 pb-4">
+          <p className="text-xs text-eyay-dim leading-relaxed bg-eyay-raised rounded-xl px-4 py-3 border border-eyay-border">
+            {appetite.summary}
+          </p>
         </div>
       </div>
+
     </div>
   );
 }
 
-function SignalRow({ label, value }: { label: string; value: string }) {
-  const isNeg = value.includes("YÜKSEK") || value.includes("İNVERSİYON") || value.includes("KIRIYOR") || value.includes("KAÇIŞ") || value.includes("DARALIYOR");
-  const isPos = value.includes("ZAYIF") && label === "DXY" || value.includes("NORMAL") || value.includes("SAĞLAM") || value.includes("GENİŞLİYOR");
+function MacroRow({ label, value }: { label: string; value: string }) {
+  const color = signalColor(value, label.toUpperCase());
+  const [first, ...rest] = value.split(" — ");
+  const hasDetail = rest.length > 0;
 
   return (
-    <div className="flex gap-3">
-      <span className="font-mono text-xs text-eyay-dim w-24 shrink-0 pt-0.5">{label}</span>
-      <span className={`font-mono text-xs leading-relaxed ${isNeg ? "text-orange-300" : isPos ? "text-emerald-300" : "text-eyay-text"}`}>
-        {value}
-      </span>
+    <div className="flex items-start gap-3">
+      <span className="text-xs text-eyay-faint w-24 shrink-0 pt-px font-medium">{label}</span>
+      <div className="flex-1 min-w-0">
+        {hasDetail ? (
+          <>
+            <span className={`text-xs font-semibold ${color}`}>{first}</span>
+            <span className="text-xs text-eyay-dim"> — {rest.join(" — ")}</span>
+          </>
+        ) : (
+          <span className={`text-xs ${color}`}>{value}</span>
+        )}
+      </div>
     </div>
   );
 }

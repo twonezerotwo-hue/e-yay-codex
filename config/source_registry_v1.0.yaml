@@ -252,3 +252,75 @@ sources:
     verified: false
     decision_usage: "simulation_only"
     active: true
+  - source_id: "approved_vix_feed"
+    asset_code: "VIX"
+    asset_category: "volatility"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_real_yield_feed"
+    asset_code: "REAL_YIELD"
+    asset_category: "rates"
+    provider: "approved_rates_feed"
+    source_type: "macro_market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_hy_spread_feed"
+    asset_code: "HY_SPREAD"
+    asset_category: "credit"
+    provider: "approved_credit_feed"
+    source_type: "macro_market_data"
+    cadence: "daily"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_ethusd_feed"
+    asset_code: "ETHUSD"
+    asset_category: "crypto"
+    provider: "approved_crypto_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_iwm_feed"
+    asset_code: "IWM"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_lqd_feed"
+    asset_code: "LQD"
+    asset_category: "credit"
+    provider: "approved_credit_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_smh_feed"
+    asset_code: "SMH"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true
+  - source_id: "approved_xlf_feed"
+    asset_code: "XLF"
+    asset_category: "equities_us"
+    provider: "approved_equity_feed"
+    source_type: "market_data"
+    cadence: "realtime"
+    verified: true
+    decision_usage: "verified_required"
+    active: true

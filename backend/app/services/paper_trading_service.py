@@ -1,0 +1,558 @@
+"""
+Paper Trading Engine — agent sinyallerine göre otomatik long/short.
+
+Mekanik:
+  • Başlangıç bakiyesi: $100,000
+  • 4 parite: BTCUSD, XAUUSD (altın), XAGUSD (gümüş), BRENT
+  • Her parite için max 1 açık pozisyon, $25,000 büyüklük
+  • Sinyal LONG / SHORT  → pozisyon aç
+  • Sinyal AVOID / yön değişimi → pozisyon kapat
+  • LONG_AWAIT / SHORT_AWAIT / HOLD / NEUTRAL → dokunma
+  • Realized PnL kayıtlı, Unrealized PnL canlı hesaplanır
+
+PAPER_SAFE / NO_EXECUTION — sadece simülasyon, gerçek emir YOK.
+"""
+from __future__ import annotations
+
+import json
+import threading
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Literal
+
+PositionSide = Literal["LONG", "SHORT"]
+TradeEvent   = Literal["OPEN", "CLOSE"]
+
+# ── Sabitler ──────────────────────────────────────────────────────────────────
+
+STARTING_BALANCE = 100_000.0
+POSITION_SIZE    = 25_000.0   # baz pozisyon büyüklüğü (consensus güveni ile ×0.6 .. ×1.5)
+TRADED_PAIRS     = ("BTCUSD", "XAUUSD", "XAGUSD", "BRENT")
+
+# Consensus-driven karar eşikleri
+STRONG_LONG_THR   = 70.0   # consensus + confluence aligned ile → 1.5× pos
+LONG_THR          = 60.0   # zayıf bullish → 1.0× pos
+SHORT_THR         = 40.0   # zayıf bearish → 1.0× pos
+STRONG_SHORT_THR  = 30.0   # consensus + aligned → 1.5× pos
+
+
+def _action_to_side(asset_action: str) -> PositionSide | Literal["CLOSE"] | None:
+    """ESKİ MOD: Agent asset_action sinyalini paper trading aksiyonuna çevir.
+       Backward compatibility için tutuluyor."""
+    if asset_action == "LONG":
+        return "LONG"
+    if asset_action == "SHORT":
+        return "SHORT"
+    if asset_action in ("AVOID",):
+        return "CLOSE"
+    return None
+
+
+def _consensus_to_action(
+    final_score: float | None,
+    final_direction: str | None,
+    confluence_status: str | None = None,
+) -> tuple[PositionSide | Literal["CLOSE"] | None, float]:
+    """
+    YENİ MOD: Multi-TF consensus skoru → (action, size_multiplier).
+
+    Returns:
+      (action, multiplier) burada:
+        action       = "LONG" | "SHORT" | "CLOSE" | None (None=dokunma)
+        multiplier   = pozisyon büyüklüğü katsayısı (0.6 .. 1.5)
+    """
+    if final_score is None or final_direction is None:
+        return None, 1.0
+
+    aligned = confluence_status == "aligned"
+    opposing = confluence_status == "opposing"
+
+    # Bullish — güven seviyesine göre
+    if final_direction == "bullish":
+        if final_score >= STRONG_LONG_THR and aligned:
+            return "LONG", 1.5
+        if final_score >= LONG_THR:
+            return "LONG", 1.0
+        if final_score >= 55.0:
+            return "LONG", 0.6  # zayıf — küçük pozisyon
+        return None, 1.0
+
+    # Bearish — güven seviyesine göre
+    if final_direction == "bearish":
+        if final_score <= STRONG_SHORT_THR and aligned:
+            return "SHORT", 1.5
+        if final_score <= SHORT_THR:
+            return "SHORT", 1.0
+        if final_score <= 45.0:
+            return "SHORT", 0.6
+        return None, 1.0
+
+    # Neutral
+    if final_direction == "neutral":
+        # Opposing confluence varsa pozisyon kapat (riskten kaç)
+        if opposing:
+            return "CLOSE", 1.0
+        # Saf nötr — yeni açma, mevcut tutma
+        return None, 1.0
+
+    return None, 1.0
+
+
+_STATE_PATH = Path(__file__).resolve().parents[2] / "data" / "paper_trading_state.json"
+_LOCK = threading.Lock()
+
+
+# ── Veri modelleri ────────────────────────────────────────────────────────────
+
+@dataclass
+class Position:
+    pair:        str
+    side:        PositionSide
+    entry_price: float
+    entry_at:    str
+    size_usd:    float
+    last_signal: str
+    # ── Öğrenme için: pozisyon açılırken alınan sinyal snapshot'ı ──
+    open_signal: dict[str, Any] = field(default_factory=dict)
+    fingerprint: str = ""        # sinyal imzası (benzer durumları tanıma için)
+
+
+@dataclass
+class Trade:
+    id:           int
+    pair:         str
+    side:         PositionSide
+    entry_price:  float
+    exit_price:   float
+    entry_at:     str
+    exit_at:      str
+    size_usd:     float
+    pnl_usd:      float
+    pnl_pct:      float
+    duration_min: int
+    reason:       str
+    # ── Öğrenme alanları ──
+    open_signal:  dict[str, Any] = field(default_factory=dict)
+    exit_signal:  dict[str, Any] = field(default_factory=dict)
+    verdict:      str = ""       # "WIN" | "LOSS" | "BREAK_EVEN"
+    fingerprint:  str = ""       # benzer trade lookup için
+
+
+@dataclass
+class TradingState:
+    starting_balance: float = STARTING_BALANCE
+    realized_pnl_usd: float = 0.0
+    positions:        dict[str, Position]   = field(default_factory=dict)
+    trades:           list[Trade]           = field(default_factory=list)
+    last_event:       dict[str, Any] | None = None
+    last_event_at:    str | None            = None
+    # ── Otomatik ağırlık öğrenmesi ──
+    weight_adjustments: dict[str, dict[str, float]] = field(default_factory=dict)
+    # ↑ {regime_key: {module: delta}} — baseline YAML'a eklenen düzeltmeler
+    last_trained_at_trade_count: int = 0
+    training_history: list[dict[str, Any]] = field(default_factory=list)
+
+
+# ── State persist ─────────────────────────────────────────────────────────────
+
+def _load_state() -> TradingState:
+    if not _STATE_PATH.exists():
+        return TradingState()
+    try:
+        raw = json.loads(_STATE_PATH.read_text(encoding="utf-8"))
+
+        # Position — eski format default open_signal/fingerprint için backward compatible
+        positions = {}
+        for k, v in raw.get("positions", {}).items():
+            v.setdefault("open_signal", {})
+            v.setdefault("fingerprint", "")
+            positions[k] = Position(**v)
+
+        # Trade — eski format
+        trades = []
+        for t in raw.get("trades", []):
+            t.setdefault("open_signal", {})
+            t.setdefault("exit_signal", {})
+            t.setdefault("verdict", "")
+            t.setdefault("fingerprint", "")
+            trades.append(Trade(**t))
+
+        st = TradingState(
+            starting_balance=raw.get("starting_balance", STARTING_BALANCE),
+            realized_pnl_usd=raw.get("realized_pnl_usd", 0.0),
+            positions=positions,
+            trades=trades,
+            last_event=raw.get("last_event"),
+            last_event_at=raw.get("last_event_at"),
+            weight_adjustments=raw.get("weight_adjustments", {}),
+            last_trained_at_trade_count=raw.get("last_trained_at_trade_count", 0),
+            training_history=raw.get("training_history", []),
+        )
+        return st
+    except Exception:
+        return TradingState()
+
+
+def _save_state(st: TradingState) -> None:
+    _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "starting_balance": st.starting_balance,
+        "realized_pnl_usd": st.realized_pnl_usd,
+        "positions": {k: asdict(v) for k, v in st.positions.items()},
+        "trades":    [asdict(t) for t in st.trades],
+        "last_event": st.last_event,
+        "last_event_at": st.last_event_at,
+        "weight_adjustments": st.weight_adjustments,
+        "last_trained_at_trade_count": st.last_trained_at_trade_count,
+        "training_history": st.training_history,
+    }
+    _STATE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ── PnL helpers ───────────────────────────────────────────────────────────────
+
+def _unrealized_pnl(p: Position, current_price: float) -> tuple[float, float]:
+    """Pozisyonun (USD, %) cinsinden anlık PnL'i."""
+    if current_price <= 0 or p.entry_price <= 0:
+        return 0.0, 0.0
+    if p.side == "LONG":
+        pct = (current_price - p.entry_price) / p.entry_price
+    else:
+        pct = (p.entry_price - current_price) / p.entry_price
+    return pct * p.size_usd, pct * 100.0
+
+
+# ── Tick (ana mekanizma) ─────────────────────────────────────────────────────
+
+def tick_consensus(
+    consensus_signals: dict[str, dict[str, Any]],
+    current_prices: dict[str, float],
+) -> TradingState:
+    """
+    YENİ MOD: Multi-TF consensus skoruna göre pozisyon aç/kapat.
+
+    Öğrenme entegre:
+      • Pozisyon açılırken sinyalin TAM snapshot'ı + fingerprint kaydedilir
+      • Açma öncesi: bu fingerprint'in geçmiş win rate'ine bakılır
+        - AVOID  → işlem AÇILMAZ (öğrenilmiş hata)
+        - BOOST  → pozisyon ×1.3
+        - NORMAL → ×1.0
+      • Pozisyon kapatılırken PnL + verdict + exit_signal kaydedilir
+    """
+    from app.services.learning_engine import (
+        build_signal_fingerprint, should_avoid_or_boost,
+    )
+
+    with _LOCK:
+        st = _load_state()
+        now_iso = datetime.now(UTC).isoformat()
+
+        for pair in TRADED_PAIRS:
+            sig = consensus_signals.get(pair) or {}
+            final_score = sig.get("final_score")
+            final_direction = sig.get("final_direction")
+            confluence = sig.get("confluence") or {}
+            confluence_status = confluence.get("status") if isinstance(confluence, dict) else None
+
+            target, base_mult = _consensus_to_action(final_score, final_direction, confluence_status)
+            price = current_prices.get(pair, 0.0)
+            if price <= 0:
+                continue
+
+            # ── ÖĞRENME: açma öncesi avoidance + boost ──
+            learning_meta = {}
+            final_size_mult = base_mult
+            if target in ("LONG", "SHORT"):
+                learning_meta = should_avoid_or_boost(sig, st.trades)
+                if learning_meta["action"] == "AVOID":
+                    # Öğrenilmiş hata — AÇMA
+                    target = None
+                elif learning_meta["action"] == "BOOST":
+                    final_size_mult *= learning_meta["size_multiplier"]
+
+            new_size = round(POSITION_SIZE * final_size_mult, 2)
+            cur = st.positions.get(pair)
+
+            # ── Pozisyon var ──
+            if cur is not None:
+                # Aynı yön + skor güçlü → boyut güncellemesi (resize için kapatma)
+                if target == cur.side:
+                    cur.last_signal = f"{final_direction}@{final_score:.1f}" if final_score else "noop"
+                    continue
+
+                # Karşı yön veya CLOSE
+                should_close = (
+                    target in ("LONG", "SHORT") and target != cur.side
+                ) or target == "CLOSE"
+
+                if should_close:
+                    pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+                    duration_min = int(
+                        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+                    )
+                    # ── ÖĞRENME: verdict belirle ──
+                    if pnl_usd > 5.0:
+                        verdict = "WIN"
+                    elif pnl_usd < -5.0:
+                        verdict = "LOSS"
+                    else:
+                        verdict = "BREAK_EVEN"
+
+                    trade_id = len(st.trades) + 1
+                    trade = Trade(
+                        id=trade_id, pair=pair, side=cur.side,
+                        entry_price=cur.entry_price, exit_price=price,
+                        entry_at=cur.entry_at, exit_at=now_iso,
+                        size_usd=cur.size_usd,
+                        pnl_usd=round(pnl_usd, 2), pnl_pct=round(pnl_pct, 2),
+                        duration_min=duration_min,
+                        reason=f"consensus={final_direction}@{final_score:.1f if final_score else 0}",
+                        # ── ÖĞRENME: snapshot'ları kaydet ──
+                        open_signal=cur.open_signal,
+                        exit_signal={
+                            "final_score":      final_score,
+                            "final_direction":  final_direction,
+                            "confluence_status": confluence_status,
+                            "regime":           sig.get("raw_regime"),
+                            "primary_tf":       sig.get("primary_tf"),
+                        },
+                        verdict=verdict,
+                        fingerprint=cur.fingerprint,
+                    )
+                    st.trades.append(trade)
+                    st.realized_pnl_usd += pnl_usd
+                    st.last_event = {
+                        "type":  "CLOSE",
+                        "pair":  pair,
+                        "side":  cur.side,
+                        "pnl_usd":  round(pnl_usd, 2),
+                        "pnl_pct":  round(pnl_pct, 2),
+                        "price":   price,
+                        "verdict": verdict,
+                    }
+                    st.last_event_at = now_iso
+                    del st.positions[pair]
+                    cur = None
+
+                    # Karşı yön sinyalinde anında yeni pozisyon aç
+                    if target in ("LONG", "SHORT"):
+                        new_fp = build_signal_fingerprint(sig)
+                        st.positions[pair] = Position(
+                            pair=pair, side=target,
+                            entry_price=price, entry_at=now_iso,
+                            size_usd=new_size,
+                            last_signal=f"{final_direction}@{final_score:.1f}",
+                            open_signal=sig,
+                            fingerprint=new_fp,
+                        )
+                        st.last_event = {
+                            "type":  "OPEN",
+                            "pair":  pair,
+                            "side":  target,
+                            "price": price,
+                            "size_usd": new_size,
+                            "learning": learning_meta.get("action", "NORMAL"),
+                            "fingerprint": new_fp,
+                        }
+
+            # ── Pozisyon yok ──
+            else:
+                if target in ("LONG", "SHORT"):
+                    new_fp = build_signal_fingerprint(sig)
+                    st.positions[pair] = Position(
+                        pair=pair, side=target,
+                        entry_price=price, entry_at=now_iso,
+                        size_usd=new_size,
+                        last_signal=f"{final_direction}@{final_score:.1f}",
+                        open_signal=sig,
+                        fingerprint=new_fp,
+                    )
+                    st.last_event = {
+                        "type":  "OPEN",
+                        "pair":  pair,
+                        "side":  target,
+                        "price": price,
+                        "size_usd": new_size,
+                        "learning": learning_meta.get("action", "NORMAL"),
+                        "fingerprint": new_fp,
+                    }
+                    st.last_event_at = now_iso
+
+        _save_state(st)
+        return st
+
+
+def tick(
+    agent_signals: dict[str, dict[str, Any]],
+    current_prices: dict[str, float],
+) -> TradingState:
+    """
+    Tek tick:
+      1. Her parite için son sinyali oku (LONG/SHORT/AVOID/...).
+      2. Mevcut pozisyon varsa: yön değişimi/kapatma sinyali geldi mi?
+      3. Pozisyon yoksa: LONG/SHORT geldi mi → aç.
+      4. State'i diske kaydet, son event'i set et.
+
+    agent_signals:  {"BTCUSD": {"asset_action": "LONG", "value": 60000, ...}, ...}
+    current_prices: {"BTCUSD": 60055.5, ...}
+    """
+    with _LOCK:
+        st = _load_state()
+        now_iso = datetime.now(UTC).isoformat()
+
+        for pair in TRADED_PAIRS:
+            sig = agent_signals.get(pair) or {}
+            action = sig.get("asset_action") or "NEUTRAL"
+            target = _action_to_side(action)
+            price = current_prices.get(pair, 0.0)
+            if price <= 0:
+                continue
+
+            cur = st.positions.get(pair)
+
+            # ── Pozisyon var ──
+            if cur is not None:
+                # Aynı yönde sinyal devam ediyorsa dokunma
+                if target == cur.side:
+                    cur.last_signal = action
+                    continue
+
+                # Karşı yön veya CLOSE sinyali → kapat
+                should_close = (
+                    target in ("LONG", "SHORT") and target != cur.side
+                ) or target == "CLOSE"
+
+                if should_close:
+                    pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+                    duration_min = int(
+                        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+                    )
+                    trade_id = len(st.trades) + 1
+                    trade = Trade(
+                        id=trade_id,
+                        pair=pair,
+                        side=cur.side,
+                        entry_price=cur.entry_price,
+                        exit_price=price,
+                        entry_at=cur.entry_at,
+                        exit_at=now_iso,
+                        size_usd=cur.size_usd,
+                        pnl_usd=round(pnl_usd, 2),
+                        pnl_pct=round(pnl_pct, 2),
+                        duration_min=duration_min,
+                        reason=f"signal={action}",
+                    )
+                    st.trades.append(trade)
+                    st.realized_pnl_usd += pnl_usd
+                    st.last_event = {
+                        "type":   "CLOSE",
+                        "pair":   pair,
+                        "side":   cur.side,
+                        "pnl_usd": round(pnl_usd, 2),
+                        "pnl_pct": round(pnl_pct, 2),
+                        "price":   price,
+                    }
+                    st.last_event_at = now_iso
+                    del st.positions[pair]
+                    cur = None  # akış için sıfırla
+
+                    # Karşı yönde sinyal varsa hemen aç (önce kapat, sonra aç)
+                    if target in ("LONG", "SHORT"):
+                        st.positions[pair] = Position(
+                            pair=pair, side=target,
+                            entry_price=price, entry_at=now_iso,
+                            size_usd=POSITION_SIZE, last_signal=action,
+                        )
+                        st.last_event = {
+                            "type":  "OPEN",
+                            "pair":  pair,
+                            "side":  target,
+                            "price": price,
+                            "size_usd": POSITION_SIZE,
+                        }
+
+            # ── Pozisyon yok ──
+            else:
+                if target in ("LONG", "SHORT"):
+                    st.positions[pair] = Position(
+                        pair=pair, side=target,
+                        entry_price=price, entry_at=now_iso,
+                        size_usd=POSITION_SIZE, last_signal=action,
+                    )
+                    st.last_event = {
+                        "type":  "OPEN",
+                        "pair":  pair,
+                        "side":  target,
+                        "price": price,
+                        "size_usd": POSITION_SIZE,
+                    }
+                    st.last_event_at = now_iso
+
+        _save_state(st)
+        return st
+
+
+# ── Public read API ────────────────────────────────────────────────────────────
+
+def get_snapshot(current_prices: dict[str, float]) -> dict[str, Any]:
+    """Frontend için tek seferlik durum görüntüsü."""
+    st = _load_state()
+
+    # Açık pozisyonların unrealized PnL'i + her birinin fingerprint geçmişi
+    open_positions = []
+    unrealized_total = 0.0
+    from app.services.learning_engine import win_rate_for_fingerprint
+    for p in st.positions.values():
+        cur_price = current_prices.get(p.pair, p.entry_price)
+        pnl_usd, pnl_pct = _unrealized_pnl(p, cur_price)
+        unrealized_total += pnl_usd
+        # ── Bu pozisyonun fingerprint'inin geçmişi
+        fp_history = win_rate_for_fingerprint(p.fingerprint, st.trades) if p.fingerprint else None
+        open_positions.append({
+            **asdict(p),
+            "current_price": cur_price,
+            "pnl_usd":  round(pnl_usd, 2),
+            "pnl_pct":  round(pnl_pct, 2),
+            "fingerprint_history": fp_history,
+        })
+
+    equity = st.starting_balance + st.realized_pnl_usd + unrealized_total
+
+    # Günlük PnL — bugün kapatılan trade'lerin sum'ı + bugün açılmış pozisyonların unreal'i
+    today = datetime.now(UTC).date().isoformat()
+    today_realized = sum(
+        t.pnl_usd for t in st.trades if t.exit_at.startswith(today)
+    )
+    today_unreal = sum(
+        _unrealized_pnl(p, current_prices.get(p.pair, p.entry_price))[0]
+        for p in st.positions.values()
+        if p.entry_at.startswith(today)
+    )
+    daily_pnl = today_realized + today_unreal
+
+    return {
+        "starting_balance": st.starting_balance,
+        "realized_pnl_usd": round(st.realized_pnl_usd, 2),
+        "unrealized_pnl_usd": round(unrealized_total, 2),
+        "equity":           round(equity, 2),
+        "daily_pnl_usd":    round(daily_pnl, 2),
+        "open_positions":   open_positions,
+        "trades":           [asdict(t) for t in st.trades[-20:]],  # son 20 trade
+        "trade_count":      len(st.trades),
+        "last_event":       st.last_event,
+        "last_event_at":    st.last_event_at,
+        "traded_pairs":     list(TRADED_PAIRS),
+    }
+
+
+def reset_state() -> None:
+    """Tüm trading state'i sıfırla — sadece debug için."""
+    with _LOCK:
+        _save_state(TradingState())
+
+
+__all__ = [
+    "tick", "get_snapshot", "reset_state",
+    "TRADED_PAIRS", "STARTING_BALANCE", "POSITION_SIZE",
+]

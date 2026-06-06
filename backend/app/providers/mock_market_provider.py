@@ -40,6 +40,15 @@ MOCK_ASSET_VALUES: dict[AssetCode, float] = {
     AssetCode.BTCXAUK: 43.4,
     AssetCode.XAUUSDK: 1.02,
     AssetCode.XAGUSDK: 0.97,
+    # Yeni göstergeler
+    AssetCode.VIX:        19.5,    # sakin piyasa
+    AssetCode.REAL_YIELD:  2.2,    # TIPS 10Y — elevated real rates
+    AssetCode.HY_SPREAD:   3.8,    # ICE BofA HY OAS — sağlıklı
+    AssetCode.ETHUSD:   2600.0,
+    AssetCode.IWM:       215.0,    # Russell 2000
+    AssetCode.LQD:       113.0,    # iBoxx IG
+    AssetCode.SMH:       245.0,    # Yarı iletkenler
+    AssetCode.XLF:        43.5,    # Finansallar
 }
 
 SOURCE_NAME_BY_CATEGORY: dict[AssetCategory, str] = {
@@ -56,6 +65,7 @@ SOURCE_NAME_BY_CATEGORY: dict[AssetCategory, str] = {
     AssetCategory.INFLATION_LIQUIDITY: "mock_macro_provider",
     AssetCategory.INDUSTRIAL_METALS: "mock_industrial_metals_provider",
     AssetCategory.LOCAL_REFERENCE: "mock_reference_provider",
+    AssetCategory.VOLATILITY:      "mock_volatility_provider",
 }
 
 SOURCE_TIER_BY_CATEGORY: dict[AssetCategory, SourceTier] = {
@@ -72,6 +82,7 @@ SOURCE_TIER_BY_CATEGORY: dict[AssetCategory, SourceTier] = {
     AssetCategory.INFLATION_LIQUIDITY: SourceTier.SECONDARY,
     AssetCategory.INDUSTRIAL_METALS: SourceTier.PRIMARY,
     AssetCategory.LOCAL_REFERENCE: SourceTier.REFERENCE,
+    AssetCategory.VOLATILITY:      SourceTier.PRIMARY,
 }
 
 

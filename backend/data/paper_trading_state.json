@@ -1,0 +1,1856 @@
+{
+  "starting_balance": 100000.0,
+  "realized_pnl_usd": 0.0,
+  "positions": {
+    "BTCUSD": {
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 61117.7617,
+      "entry_at": "2026-06-06T09:25:32.663172+00:00",
+      "size_usd": 25000.0,
+      "last_signal": "bullish@66.9",
+      "open_signal": {
+        "symbol": "BTCUSD",
+        "final_score": 67.68,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 56.4,
+          "adjusted_score": 67.68,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 2,
+            "opposing": 0,
+            "neutral_ignored": 0
+          },
+          "tf_directions": {
+            "1h": "bullish",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "DEFENSIVE",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BTCUSD",
+          "timeframe": "1d",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.15,
+            "fundamental": 0.2,
+            "news": 0.3,
+            "sentinel": 0.3,
+            "quantum": 0.05
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 42.0,
+            "fundamental": 100.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 2.0
+          },
+          "consensus_score": 56.4,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 42.0,
+              "weight": 0.15,
+              "weighted_score": 6.3,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 100.0,
+              "weight": 0.2,
+              "weighted_score": 20.0,
+              "source": "provided"
+            },
+            "news": {
+              "score": 45.0,
+              "weight": 0.3,
+              "weighted_score": 13.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 55.0,
+              "weight": 0.3,
+              "weighted_score": 16.5,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 2.0,
+              "weight": 0.05,
+              "weighted_score": 0.1,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "1h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 58.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 58.8,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 58.0,
+                "weight": 0.15,
+                "weighted_score": 8.7,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "4h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 48.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 57.3,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 48.0,
+                "weight": 0.15,
+                "weighted_score": 7.2,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BTCUSD",
+            "timeframe": "1d",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 42.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 56.4,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 42.0,
+                "weight": 0.15,
+                "weighted_score": 6.3,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          }
+        },
+        "other_tf_scores": {
+          "1h": 58.8,
+          "4h": 57.3
+        }
+      },
+      "fingerprint": "BTCUSD|DEFENSIVE|bullish|strong_bull|aligned|fundamental"
+    },
+    "BRENT": {
+      "pair": "BRENT",
+      "side": "LONG",
+      "entry_price": 93.09,
+      "entry_at": "2026-06-06T09:25:32.663172+00:00",
+      "size_usd": 25000.0,
+      "last_signal": "bullish@77.2",
+      "open_signal": {
+        "symbol": "BRENT",
+        "final_score": 66.06,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 55.05,
+          "adjusted_score": 66.06,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 1,
+            "opposing": 0,
+            "neutral_ignored": 1
+          },
+          "tf_directions": {
+            "1h": "neutral",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "DEFENSIVE",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BRENT",
+          "timeframe": "1d",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.15,
+            "fundamental": 0.2,
+            "news": 0.3,
+            "sentinel": 0.3,
+            "quantum": 0.05
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 33.0,
+            "fundamental": 100.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 2.0
+          },
+          "consensus_score": 55.05,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 33.0,
+              "weight": 0.15,
+              "weighted_score": 4.95,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 100.0,
+              "weight": 0.2,
+              "weighted_score": 20.0,
+              "source": "provided"
+            },
+            "news": {
+              "score": 45.0,
+              "weight": 0.3,
+              "weighted_score": 13.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 55.0,
+              "weight": 0.3,
+              "weighted_score": 16.5,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 2.0,
+              "weight": 0.05,
+              "weighted_score": 0.1,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "1h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 17.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 52.65,
+            "direction": "neutral",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 17.0,
+                "weight": 0.15,
+                "weighted_score": 2.55,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "4h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 65.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 59.85,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 65.0,
+                "weight": 0.15,
+                "weighted_score": 9.75,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "1d",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.15,
+              "fundamental": 0.2,
+              "news": 0.3,
+              "sentinel": 0.3,
+              "quantum": 0.05
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 33.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 55.05,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 33.0,
+                "weight": 0.15,
+                "weighted_score": 4.95,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.2,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.3,
+                "weighted_score": 13.5,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.3,
+                "weighted_score": 16.5,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.05,
+                "weighted_score": 0.1,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          }
+        },
+        "other_tf_scores": {
+          "1h": 52.65,
+          "4h": 59.85
+        }
+      },
+      "fingerprint": "BRENT|DEFENSIVE|bullish|strong_bull|aligned|fundamental"
+    },
+    "XAGUSD": {
+      "pair": "XAGUSD",
+      "side": "LONG",
+      "entry_price": 68.943,
+      "entry_at": "2026-06-06T09:40:53.545954+00:00",
+      "size_usd": 25000.0,
+      "last_signal": "bullish@77.2",
+      "open_signal": {
+        "symbol": "XAGUSD",
+        "final_score": 66.1999,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 55.1666,
+          "adjusted_score": 66.1999,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 1,
+            "opposing": 0,
+            "neutral_ignored": 1
+          },
+          "tf_directions": {
+            "1h": "neutral",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "CRISIS",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAGUSD",
+          "timeframe": "1d",
+          "raw_regime": "CRISIS",
+          "weight_key": "bear_2022_aggressive",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.15,
+            "news": 0.35,
+            "sentinel": 0.4,
+            "quantum": 0.0
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 30.0,
+            "fundamental": 33.3333,
+            "news": 43.3333,
+            "sentinel": 80.0,
+            "quantum": 2.0
+          },
+          "consensus_score": 55.1666,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 30.0,
+              "weight": 0.1,
+              "weighted_score": 3.0,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 33.3333,
+              "weight": 0.15,
+              "weighted_score": 5.0,
+              "source": "provided"
+            },
+            "news": {
+              "score": 43.3333,
+              "weight": 0.35,
+              "weighted_score": 15.1667,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 80.0,
+              "weight": 0.4,
+              "weighted_score": 32.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 2.0,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAGUSD",
+            "timeframe": "1h",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 17.0,
+              "fundamental": 33.3333,
+              "news": 43.3333,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 53.8666,
+            "direction": "neutral",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 17.0,
+                "weight": 0.1,
+                "weighted_score": 1.7,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 33.3333,
+                "weight": 0.15,
+                "weighted_score": 5.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 43.3333,
+                "weight": 0.35,
+                "weighted_score": 15.1667,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAGUSD",
+            "timeframe": "4h",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 47.0,
+              "fundamental": 33.3333,
+              "news": 43.3333,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 56.8666,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 47.0,
+                "weight": 0.1,
+                "weighted_score": 4.7,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 33.3333,
+                "weight": 0.15,
+                "weighted_score": 5.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 43.3333,
+                "weight": 0.35,
+                "weighted_score": 15.1667,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAGUSD",
+            "timeframe": "1d",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 30.0,
+              "fundamental": 33.3333,
+              "news": 43.3333,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 55.1666,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 30.0,
+                "weight": 0.1,
+                "weighted_score": 3.0,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 33.3333,
+                "weight": 0.15,
+                "weighted_score": 5.0,
+                "source": "provided"
+              },
+              "news": {
+                "score": 43.3333,
+                "weight": 0.35,
+                "weighted_score": 15.1667,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          }
+        },
+        "other_tf_scores": {
+          "1h": 53.8666,
+          "4h": 56.8666
+        }
+      },
+      "fingerprint": "XAGUSD|CRISIS|bullish|strong_bull|aligned|sentinel"
+    },
+    "XAUUSD": {
+      "pair": "XAUUSD",
+      "side": "LONG",
+      "entry_price": 4337.1001,
+      "entry_at": "2026-06-06T09:49:54.810549+00:00",
+      "size_usd": 25000.0,
+      "last_signal": "bullish@77.2",
+      "open_signal": {
+        "symbol": "XAUUSD",
+        "final_score": 69.3,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 57.75,
+          "adjusted_score": 69.3,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 2,
+            "opposing": 0,
+            "neutral_ignored": 0
+          },
+          "tf_directions": {
+            "1h": "bullish",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "CRISIS",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAUUSD",
+          "timeframe": "1d",
+          "raw_regime": "CRISIS",
+          "weight_key": "bear_2022_aggressive",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.15,
+            "news": 0.35,
+            "sentinel": 0.4,
+            "quantum": 0.0
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 25.0,
+            "fundamental": 50.0,
+            "news": 45.0,
+            "sentinel": 80.0,
+            "quantum": 2.0
+          },
+          "consensus_score": 57.75,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 25.0,
+              "weight": 0.1,
+              "weighted_score": 2.5,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "news": {
+              "score": 45.0,
+              "weight": 0.35,
+              "weighted_score": 15.75,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 80.0,
+              "weight": 0.4,
+              "weighted_score": 32.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 2.0,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "1h",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 30.0,
+              "fundamental": 50.0,
+              "news": 45.0,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 58.25,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 30.0,
+                "weight": 0.1,
+                "weighted_score": 3.0,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 50.0,
+                "weight": 0.15,
+                "weighted_score": 7.5,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.35,
+                "weighted_score": 15.75,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "4h",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 29.0,
+              "fundamental": 50.0,
+              "news": 45.0,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 58.15,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 29.0,
+                "weight": 0.1,
+                "weighted_score": 2.9,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 50.0,
+                "weight": 0.15,
+                "weighted_score": 7.5,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.35,
+                "weighted_score": 15.75,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "1d",
+            "raw_regime": "CRISIS",
+            "weight_key": "bear_2022_aggressive",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.1,
+              "fundamental": 0.15,
+              "news": 0.35,
+              "sentinel": 0.4,
+              "quantum": 0.0
+            },
+            "weights_trained": false,
+            "module_scores": {
+              "touche": 25.0,
+              "fundamental": 50.0,
+              "news": 45.0,
+              "sentinel": 80.0,
+              "quantum": 2.0
+            },
+            "consensus_score": 57.75,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 25.0,
+                "weight": 0.1,
+                "weighted_score": 2.5,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 50.0,
+                "weight": 0.15,
+                "weighted_score": 7.5,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.35,
+                "weighted_score": 15.75,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 80.0,
+                "weight": 0.4,
+                "weighted_score": 32.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 2.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": []
+          }
+        },
+        "other_tf_scores": {
+          "1h": 58.25,
+          "4h": 58.15
+        }
+      },
+      "fingerprint": "XAUUSD|CRISIS|bullish|strong_bull|aligned|sentinel"
+    }
+  },
+  "trades": [
+    {
+      "id": 1,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 2,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 3,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 4,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 5,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 6,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 7,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 8,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 61200.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": 200,
+      "pnl_pct": 0.8,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 5,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 20,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "WIN",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 9,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 59100.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": -150,
+      "pnl_pct": -0.6,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 25,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 3,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "LOSS",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 10,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 59100.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": -150,
+      "pnl_pct": -0.6,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 25,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 3,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "LOSS",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 11,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 59100.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": -150,
+      "pnl_pct": -0.6,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 25,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 3,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "LOSS",
+      "fingerprint": "test_fp"
+    },
+    {
+      "id": 12,
+      "pair": "BTCUSD",
+      "side": "LONG",
+      "entry_price": 60000,
+      "exit_price": 59100.0,
+      "entry_at": "2026-06-05T00:00:00+00:00",
+      "exit_at": "2026-06-05T01:00:00+00:00",
+      "size_usd": 25000,
+      "pnl_usd": -150,
+      "pnl_pct": -0.6,
+      "duration_min": 60,
+      "reason": "test",
+      "open_signal": {
+        "raw_regime": "DEFENSIVE",
+        "symbol": "BTCUSD",
+        "final_score": 65.0,
+        "final_direction": "bullish",
+        "base": {
+          "contributions": {
+            "touche": {
+              "weighted_score": 10,
+              "score": 50,
+              "weight": 0.2
+            },
+            "fundamental": {
+              "weighted_score": 12,
+              "score": 60,
+              "weight": 0.2
+            },
+            "news": {
+              "weighted_score": 25,
+              "score": 50,
+              "weight": 0.2
+            },
+            "sentinel": {
+              "weighted_score": 15,
+              "score": 60,
+              "weight": 0.25
+            },
+            "quantum": {
+              "weighted_score": 3,
+              "score": 50,
+              "weight": 0.15
+            }
+          }
+        }
+      },
+      "exit_signal": {},
+      "verdict": "LOSS",
+      "fingerprint": "test_fp"
+    }
+  ],
+  "last_event": {
+    "type": "OPEN",
+    "pair": "XAUUSD",
+    "side": "LONG",
+    "price": 4337.1001,
+    "size_usd": 25000.0,
+    "learning": "INSUFFICIENT_DATA",
+    "fingerprint": "XAUUSD|CRISIS|bullish|strong_bull|aligned|sentinel"
+  },
+  "last_event_at": "2026-06-06T09:49:54.810549+00:00",
+  "weight_adjustments": {
+    "bear_2022": {
+      "touche": 0.0,
+      "fundamental": 0.0,
+      "news": -0.03,
+      "sentinel": 0.0,
+      "quantum": 0.03
+    }
+  },
+  "last_trained_at_trade_count": 12,
+  "training_history": [
+    {
+      "trained_at": "2026-06-06T09:26:03.562831+00:00",
+      "total_closed": 12,
+      "updates": [
+        {
+          "regime_key": "bear_2022",
+          "trades_used": 12,
+          "delta_applied": {
+            "touche": 0.0,
+            "fundamental": 0.0,
+            "news": -0.03,
+            "sentinel": 0.0,
+            "quantum": 0.03
+          },
+          "total_adjustment": {
+            "touche": 0.0,
+            "fundamental": 0.0,
+            "news": -0.03,
+            "sentinel": 0.0,
+            "quantum": 0.03
+          },
+          "effective_weights": {
+            "touche": 0.15,
+            "fundamental": 0.2,
+            "news": 0.27,
+            "sentinel": 0.3,
+            "quantum": 0.08
+          },
+          "skews": {
+            "touche": 0.0,
+            "fundamental": 0.0,
+            "news": -20.0,
+            "sentinel": 0.0,
+            "quantum": 17.0
+          }
+        }
+      ]
+    }
+  ]
+}

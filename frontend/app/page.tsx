@@ -1,90 +1,158 @@
-import { fetchRegimeReport } from "@/lib/api";
+import { fetchAIReport, fetchRegimeReport } from "@/lib/api";
+import AIAnalystReportPanel from "@/components/AIAnalystReport";
 import DecisionBanner from "@/components/DecisionBanner";
+import ScenarioPanel from "@/components/ScenarioPanel";
 import MacroPanel from "@/components/MacroPanel";
 import AssetGrid from "@/components/AssetGrid";
-import ConfirmationChecklist from "@/components/ConfirmationChecklist";
+import AsymmetryCard from "@/components/AsymmetryCard";
+import CatalystSidebar from "@/components/CatalystSidebar";
+import ConfirmationStrip from "@/components/ConfirmationStrip";
 import NewsPanel from "@/components/NewsPanel";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import ActionCenter from "@/components/ActionCenter";
+import CapitalFlowWidget from "@/components/CapitalFlowWidget"
+import AIChatPanel from "@/components/AIChatPanel";
+import AgentInsightBar from "@/components/AgentInsightBar";
+import AutoRefresh from "@/components/AutoRefresh";
+import PaperTradingTicker from "@/components/PaperTradingTicker";
+import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
-export const revalidate = 60; // ISR — her 60 saniyede yenile
+// Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
+// Önemli: önceki "revalidate = 60" sayfayı dondurup eski 401 hatasını saplıyordu.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function HomePage() {
   let data = null;
   let error: string | null = null;
+  let aiReport = null;
+  let aiError: string | null = null;
+  let geoNewsCount = 0;
 
-  try {
-    data = await fetchRegimeReport(true);
-  } catch (e) {
-    error = e instanceof Error ? e.message : "Backend bağlantısı kurulamadı.";
+  const [regimeResult, aiResult] = await Promise.allSettled([
+    fetchRegimeReport(true),
+    fetchAIReport(),
+  ]);
+
+  if (regimeResult.status === "fulfilled") {
+    data = regimeResult.value;
+  } else {
+    error = regimeResult.reason instanceof Error
+      ? regimeResult.reason.message
+      : "Backend bağlantısı kurulamadı.";
+  }
+
+  if (aiResult.status === "fulfilled") {
+    aiReport = aiResult.value.ai_report;
+    geoNewsCount = aiResult.value.geo_news_count;
+  } else {
+    aiError = aiResult.reason instanceof Error
+      ? aiResult.reason.message
+      : "AI raporu alınamadı.";
   }
 
   return (
-    <main className="min-h-screen bg-eyay-bg">
-      {/* Top bar */}
-      <header className="border-b border-eyay-border bg-eyay-surface/60 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-mono font-bold text-eyay-text tracking-widest">E-YAY</span>
-            <span className="text-eyay-dim font-mono text-xs">BrainChain</span>
-            <span className="text-xs font-mono border border-red-800 text-red-400 bg-red-950 rounded px-2 py-0.5">
-              NO EXECUTION
-            </span>
-          </div>
-          {data && (
-            <span className="text-xs font-mono text-eyay-dim">
-              {data.meta.total_snapshots} asset · {data.data_mode}
-            </span>
-          )}
-        </div>
-      </header>
+    <div className="min-h-screen bg-eyay-bg">
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Error state */}
+      {/* 🤖 AGENT — proaktif gözlem bandı (en üstte sticky) */}
+      <AgentInsightBar />
+
+      <Header
+        totalSnapshots={data?.meta.total_snapshots}
+        dataMode={data?.data_mode}
+      />
+
+      <MonitoringBanner aiError={!!(aiError || aiReport?.error)} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-4 space-y-2">
+
+        {data?.module_health && (
+          <div className="flex items-center gap-2 px-1 pb-1">
+            <SystemHealthBar health={data.module_health} />
+          </div>
+        )}
+
         {error && (
-          <div className="border border-red-800 bg-red-950/50 rounded-xl p-6 text-center">
-            <p className="font-mono text-red-400 text-sm mb-2">Backend bağlantısı yok</p>
-            <p className="font-mono text-eyay-dim text-xs">{error}</p>
-            <p className="font-mono text-eyay-dim text-xs mt-3">
-              Backend başlatmak için: <code className="text-eyay-blue">cd backend && uvicorn app.main:app --reload</code>
+          <div className="rounded-2xl border border-red-900/60 bg-red-950/30 p-6 text-center space-y-2">
+            <p className="font-semibold text-red-400">Backend bağlantısı yok</p>
+            <p className="text-sm text-eyay-dim">{error}</p>
+            <p className="text-xs text-eyay-faint mt-2">
+              <code className="font-mono text-eyay-blue bg-eyay-raised px-2 py-0.5 rounded">
+                cd backend && uvicorn app.main:app --reload
+              </code>
             </p>
           </div>
         )}
 
         {data && (
           <>
-            {/* Katman 4 — Karar */}
+            {/* 1 ── Karar */}
             <DecisionBanner report={data.report} />
 
-            {/* Katman 1 + 2 */}
-            <MacroPanel
-              macro={data.report.macro_layer}
-              appetite={data.report.appetite_layer}
+            {/* 2 ── Operasyonel Merkez */}
+            <ActionCenter
+              decision={data.report.decision}
+              ownerActions={data.report.owner_actions ?? []}
+              flipConditions={data.report.flip_conditions ?? []}
             />
 
-            {/* Alt grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Katman 3 — Asset sinyalleri (2 col) */}
-              <div className="lg:col-span-2">
-                <AssetGrid signals={data.report.asset_signals} />
-              </div>
-
-              {/* Teyit listesi (1 col) */}
-              <div>
-                <ConfirmationChecklist items={data.report.confirmation_checklist} />
+            {/* 3 ── AI Yorumu  +  AI Sohbet (yan yana) */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-2 items-start">
+              <AIAnalystReportPanel
+                report={aiReport}
+                error={aiError}
+                geoNewsCount={geoNewsCount}
+              />
+              <div className="lg:sticky lg:top-16">
+                <AIChatPanel />
               </div>
             </div>
 
-            {/* Haberler */}
+            {/* 3 ── Durum Odası + Makro  |  Takvim */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-2 items-start">
+              <div className="flex flex-col gap-2">
+                <AssetGrid
+                  signals={data.report.asset_signals}
+                  techInsights={data.report.tech_insights ?? []}
+                />
+                <MacroPanel
+                  macro={data.report.macro_layer}
+                  appetite={data.report.appetite_layer}
+                />
+              </div>
+              <div className="sticky top-16 self-start">
+                <CatalystSidebar catalysts={data.report.upcoming_catalysts ?? []} />
+              </div>
+            </div>
+
+            {/* 4 ── Sermaye Rotasyonu */}
+            <CapitalFlowWidget rotation={data.capital_rotation} />
+
+            {/* 5 ── Senaryo  |  Teyit  |  Asimetri */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-stretch">
+              <ScenarioPanel
+                scenarios={data.report.scenarios ?? []}
+                decision={data.report.decision}
+              />
+              <ConfirmationStrip items={data.report.confirmation_checklist} />
+              <AsymmetryCard asymmetry={data.report.asymmetry} />
+            </div>
+
+            {/* 5 ── Haberler */}
             <NewsPanel headlines={data.report.news_headlines} />
 
-            {/* Footer */}
-            <footer className="text-center py-4 border-t border-eyay-border">
-              <p className="font-mono text-xs text-eyay-dim">
-                E-YAY BrainChain · PAPER_SAFE · NO_EXECUTION · Sadece analiz — trade kararı insana aittir.
-              </p>
-            </footer>
+            <Footer />
           </>
         )}
-      </div>
-    </main>
+      </main>
+
+      {/* 30 saniyede bir RSC tabanlı yenileme — Groq dostu (cache hit)
+          Fiyatlar 3dk'da tazelenir, haberler 60sn'de, AI Yorumu 50dk'da. */}
+      <AutoRefresh intervalSeconds={30} />
+
+      {/* Paper Trading — 100k bakiye, agent sinyalleriyle otomatik long/short */}
+      <PaperTradingTicker />
+    </div>
   );
 }

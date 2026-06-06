@@ -9,22 +9,31 @@ const config: Config = {
     extend: {
       colors: {
         eyay: {
-          bg:       "#0a0e17",
-          surface:  "#111827",
-          border:   "#1f2937",
-          muted:    "#374151",
-          text:     "#e5e7eb",
-          dim:      "#9ca3af",
-          accent:   "#3b82f6",
-          green:    "#10b981",
-          yellow:   "#f59e0b",
-          orange:   "#f97316",
-          red:      "#ef4444",
-          blue:     "#60a5fa",
+          bg:       "#080c14",   // sayfa arka plan — en koyu
+          surface:  "#0f1520",   // kart arka plan
+          raised:   "#161e2e",   // kart içi yükseltilmiş alan
+          border:   "#1e2d42",   // ince sınır
+          muted:    "#2d3f56",   // muted border / placeholder
+          text:     "#e2e8f0",   // ana metin
+          dim:      "#8899aa",   // ikincil metin
+          faint:    "#4a5d72",   // en soluk metin
+          blue:     "#60a5fa",   // vurgu
+          teal:     "#2dd4bf",   // ikincil vurgu
         },
       },
       fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "Fira Code", "Consolas", "monospace"],
+      },
+      fontSize: {
+        "2xs": ["0.65rem", { lineHeight: "1rem" }],
+      },
+      boxShadow: {
+        "card": "0 1px 3px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)",
+        "glow-green":  "0 0 20px rgba(16,185,129,0.15)",
+        "glow-amber":  "0 0 20px rgba(245,158,11,0.15)",
+        "glow-orange": "0 0 20px rgba(249,115,22,0.12)",
+        "glow-red":    "0 0 20px rgba(239,68,68,0.15)",
       },
     },
   },

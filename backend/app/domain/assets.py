@@ -18,6 +18,7 @@ class AssetCategory(str, Enum):
     INFLATION_LIQUIDITY = "inflation_liquidity"
     INDUSTRIAL_METALS = "industrial_metals"
     LOCAL_REFERENCE = "local_reference"
+    VOLATILITY = "volatility"
 
 
 class AssetCode(str, Enum):
@@ -48,6 +49,15 @@ class AssetCode(str, Enum):
     BTCXAUK = "BTCXAUK"
     XAUUSDK = "XAUUSDK"
     XAGUSDK = "XAGUSDK"
+    # --- Yeni göstergeler ---
+    VIX       = "VIX"
+    REAL_YIELD= "REAL_YIELD"
+    HY_SPREAD = "HY_SPREAD"
+    ETHUSD    = "ETHUSD"
+    IWM       = "IWM"
+    LQD       = "LQD"
+    SMH       = "SMH"
+    XLF       = "XLF"
 
 
 @dataclass(frozen=True)
@@ -277,6 +287,63 @@ ASSET_CATALOG: dict[AssetCode, AssetDefinition] = {
         "local_reference_index",
         required_for_core_report=False,
         requires_verified_data_for_live=False,
+    ),
+    # --- Yeni göstergeler ---
+    AssetCode.VIX: _asset(
+        AssetCode.VIX,
+        "CBOE Volatility Index",
+        AssetCategory.VOLATILITY,
+        "index_points",
+        required_for_core_report=True,
+    ),
+    AssetCode.REAL_YIELD: _asset(
+        AssetCode.REAL_YIELD,
+        "US 10Y Real Yield (TIPS)",
+        AssetCategory.RATES,
+        "yield_percent",
+        required_for_core_report=True,
+    ),
+    AssetCode.HY_SPREAD: _asset(
+        AssetCode.HY_SPREAD,
+        "ICE BofA HY Credit Spread",
+        AssetCategory.CREDIT,
+        "spread_percent",
+        required_for_core_report=True,
+    ),
+    AssetCode.ETHUSD: _asset(
+        AssetCode.ETHUSD,
+        "Ethereum / US Dollar",
+        AssetCategory.CRYPTO,
+        "usd_per_eth",
+        required_for_core_report=True,
+    ),
+    AssetCode.IWM: _asset(
+        AssetCode.IWM,
+        "iShares Russell 2000 ETF",
+        AssetCategory.EQUITIES_US,
+        "usd_per_share",
+        required_for_core_report=True,
+    ),
+    AssetCode.LQD: _asset(
+        AssetCode.LQD,
+        "iShares Investment Grade Bond ETF",
+        AssetCategory.CREDIT,
+        "usd_per_share",
+        required_for_core_report=True,
+    ),
+    AssetCode.SMH: _asset(
+        AssetCode.SMH,
+        "VanEck Semiconductor ETF",
+        AssetCategory.EQUITIES_US,
+        "usd_per_share",
+        required_for_core_report=True,
+    ),
+    AssetCode.XLF: _asset(
+        AssetCode.XLF,
+        "Financial Select Sector SPDR",
+        AssetCategory.EQUITIES_US,
+        "usd_per_share",
+        required_for_core_report=True,
     ),
 }
 

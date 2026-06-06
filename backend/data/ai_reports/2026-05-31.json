@@ -1,0 +1,15 @@
+{
+  "date": "2026-05-31",
+  "generated_at": "2026-05-31T21:56:53.670673+00:00",
+  "decision": "BEKLE",
+  "regime": "TRANSITIONING",
+  "verdict": "Risk-on rejimi hisse-kredi ekseninde devam ediyor ancak emtia-kripto kanadındaki dolar baskısı tek yönlü pozisyon almayı engelliyor; BEKLE kararı geçerli.",
+  "key_signals": [
+    "HİSSE+NAKİT eş zamanlı giriş, BTC/ALTIN/PETROL eş zamanlı çıkış — dar tabanlı risk-on",
+    "DXY zayıf etiketine rağmen GLD/DXY -%5,1 ve BTC/DXY -%4,2: dolar baskısı emtia-kripto kanadında sürüyor",
+    "HYG/SPY +0,85 + VIX 15,3 + HY spread %3,5: kredi cephesinde sistemik stres yok, ralinin tabanı sağlam"
+  ],
+  "snapshot": {
+    "HYG": 80.31
+  }
+}

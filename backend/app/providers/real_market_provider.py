@@ -51,6 +51,13 @@ _YFINANCE_MAP: dict[AssetCode, str] = {
     AssetCode.US02Y:              "^IRX",   # 13-haftalık T-bill ≈ 2Y proxy
     AssetCode.US10Y:              "^TNX",   # 10Y Treasury
     AssetCode.US20Y:              "^TYX",   # 30Y Treasury (20Y proxy)
+    # --- Yeni göstergeler ---
+    AssetCode.VIX:                "^VIX",   # CBOE korku endeksi
+    AssetCode.ETHUSD:             "ETH-USD",
+    AssetCode.IWM:                "IWM",    # Russell 2000
+    AssetCode.LQD:                "LQD",    # iBoxx Investment Grade
+    AssetCode.SMH:                "SMH",    # Yarı iletkenler
+    AssetCode.XLF:                "XLF",    # Finansallar
 }
 
 # FRED series_id → (series_id, units_param)
@@ -61,11 +68,15 @@ _FRED_MAP: dict[AssetCode, tuple[str, str]] = {
     AssetCode.US20Y: ("DGS20",     ""),
     AssetCode.USCPI: ("CPIAUCSL",  "pc1"),
     AssetCode.USPPI: ("PPIACO",    "pc1"),
-    AssetCode.M2SL:  ("M2SL",      ""),
+    AssetCode.M2SL:       ("M2SL",           ""),
+    # Yeni FRED serileri
+    AssetCode.REAL_YIELD: ("DFII10",          ""),   # 10Y TIPS real yield
+    AssetCode.HY_SPREAD:  ("BAMLH0A0HYM2",   ""),   # ICE BofA HY OAS spread
 }
 
 _COINGECKO_GLOBAL_URL = "https://api.coingecko.com/api/v3/global"
-_CACHE_TTL_SECONDS = 300   # 5 dakika
+_CACHE_TTL_SECONDS = 180   # 3 dakika — yfinance soft IP limitiyle uyumlu
+                            # CoinGecko free: 10-30 RPM, 3 dk yeterli
 
 # macOS Homebrew Python'da SSL sertifikaları için unverified context kullan
 _SSL_CTX = ssl._create_unverified_context()
@@ -122,6 +133,48 @@ def _fetch_yfinance_batch(tickers: list[str]) -> dict[str, float]:
             except Exception as exc:
                 logger.debug("yfinance worker hata: %s", exc)
     logger.info("yfinance fast_info: %d/%d ticker başarılı", len(result), len(tickers))
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 7 günlük momentum (delta) çekimi
+# ---------------------------------------------------------------------------
+
+def _fetch_single_delta(ticker: str) -> tuple[str, Optional[float]]:
+    """Son ~10 iş gününün kapanışını çekerek ilk→son % değişimini hesaplar."""
+    import yfinance as yf
+    try:
+        t = yf.Ticker(ticker)
+        hist = t.history(period="10d", interval="1d")
+        if hist.empty or len(hist) < 2:
+            return ticker, None
+        close = hist["Close"].dropna()
+        if len(close) < 2:
+            return ticker, None
+        old = float(close.iloc[0])
+        new = float(close.iloc[-1])
+        if old > 0:
+            return ticker, round((new - old) / old * 100, 2)
+    except Exception as exc:
+        logger.debug("7d delta %s başarısız: %s", ticker, exc)
+    return ticker, None
+
+
+def _fetch_yf_deltas(tickers: list[str]) -> dict[str, float]:
+    """Tüm ticker'lar için 7-günlük % değişimi paralel olarak çeker."""
+    result: dict[str, float] = {}
+    if not tickers:
+        return result
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8)) as pool:
+        futures = {pool.submit(_fetch_single_delta, t): t for t in tickers}
+        for future in as_completed(futures, timeout=20):
+            try:
+                ticker, delta = future.result()
+                if delta is not None:
+                    result[ticker] = delta
+            except Exception as exc:
+                logger.debug("delta worker hata: %s", exc)
+    logger.info("7d delta: %d/%d ticker başarılı", len(result), len(tickers))
     return result
 
 
@@ -233,6 +286,46 @@ def _fetch_fred_all() -> dict[AssetCode, float]:
     return result
 
 
+def _derive_fred_fallbacks(
+    yf_data: dict[str, float],
+    fred_data: dict[AssetCode, float],
+) -> dict[AssetCode, float]:
+    """
+    FRED erişilemeyen durumlarda yfinance verisinden FRED serilerini türetir.
+
+    REAL_YIELD: 10Y nominal (^TNX) − ortalama 10Y breakeven (~2.2%)
+                Fisherian ayrıştırma: reel faiz = nominal - enflasyon beklentisi
+    HY_SPREAD:  HYG fiyat seviyesinden OAS spread tahmini
+                Tarihsel ilişki: HYG>80→~3.5%, 77-80→~4.5%, 74-77→~6%, <74→~8%
+    """
+    extras: dict[AssetCode, float] = {}
+
+    # REAL_YIELD türetme
+    if AssetCode.REAL_YIELD not in fred_data:
+        us10y = yf_data.get("^TNX")   # 10Y nominal getiri
+        if us10y is not None:
+            breakeven = 2.2   # 10Y TIPS/nominal spread yaklaşığı
+            extras[AssetCode.REAL_YIELD] = round(us10y - breakeven, 2)
+            logger.info("REAL_YIELD türetildi (^TNX %.2f - %.1f = %.2f)", us10y, breakeven, extras[AssetCode.REAL_YIELD])
+
+    # HY_SPREAD türetme
+    if AssetCode.HY_SPREAD not in fred_data:
+        hyg = yf_data.get("HYG")
+        if hyg is not None:
+            if hyg > 80.0:
+                spread = 3.5
+            elif hyg > 77.0:
+                spread = 4.5
+            elif hyg > 74.0:
+                spread = 6.0
+            else:
+                spread = 8.0
+            extras[AssetCode.HY_SPREAD] = spread
+            logger.info("HY_SPREAD türetildi (HYG %.2f → %.1f%%)", hyg, spread)
+
+    return extras
+
+
 class RealMarketProvider(MarketProvider):
     """
     Gerçek piyasa verisi sağlayıcısı.
@@ -242,34 +335,51 @@ class RealMarketProvider(MarketProvider):
     """
 
     def __init__(self) -> None:
-        self._yf:   dict[str, float] = {}
-        self._cg:   dict[str, float] = {}
-        self._fred: dict[AssetCode, float] = {}
+        self._yf:    dict[str, float] = {}
+        self._cg:    dict[str, float] = {}
+        self._fred:  dict[AssetCode, float] = {}
+        self._delta: dict[str, float] = {}   # yfinance ticker → 7d % değişimi
         self._fetched_at: datetime = datetime.now(UTC)
         self._prefetch()
 
+    @property
+    def delta_map_by_code(self) -> dict[str, float]:
+        """AssetCode string → 7 günlük % değişimi. RegimeReportService için."""
+        result: dict[str, float] = {}
+        for code, ticker in _YFINANCE_MAP.items():
+            if ticker in self._delta:
+                result[code.value] = self._delta[ticker]
+        return result
+
     def _prefetch(self) -> None:
-        """yfinance, CoinGecko ve FRED'i paralel olarak tek seferde çeker."""
+        """yfinance, CoinGecko, FRED ve 7d delta'yı paralel olarak tek seferde çeker."""
         tickers = list(_YFINANCE_MAP.values())
         logger.info(
-            "Gerçek piyasa verisi prefetch başlıyor: %d yfinance + %d FRED + CoinGecko…",
+            "Gerçek piyasa verisi prefetch başlıyor: %d yfinance + %d FRED + CoinGecko + delta…",
             len(tickers), len(_FRED_MAP),
         )
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            yf_future   = pool.submit(_fetch_yfinance_batch, tickers)
-            cg_future   = pool.submit(_fetch_coingecko)
-            fred_future = pool.submit(_fetch_fred_all)
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            yf_future    = pool.submit(_fetch_yfinance_batch, tickers)
+            cg_future    = pool.submit(_fetch_coingecko)
+            fred_future  = pool.submit(_fetch_fred_all)
+            delta_future = pool.submit(_fetch_yf_deltas, tickers)
 
-            self._yf   = yf_future.result()
-            self._cg   = cg_future.result()
-            self._fred = fred_future.result()
+            self._yf    = yf_future.result()
+            self._cg    = cg_future.result()
+            self._fred  = fred_future.result()
+            self._delta = delta_future.result()
+
+        # FRED erişilemeyen seriler için yfinance'tan türetme
+        fallbacks = _derive_fred_fallbacks(self._yf, self._fred)
+        self._fred.update(fallbacks)
 
         self._fetched_at = datetime.now(UTC)
         logger.info(
-            "Prefetch tamamlandı: yfinance=%d/%d, CoinGecko=%d/4, FRED=%d/%d",
+            "Prefetch tamamlandı: yfinance=%d/%d, CoinGecko=%d/4, FRED=%d/%d, delta=%d/%d",
             len(self._yf), len(tickers),
             len(self._cg),
             len(self._fred), len(_FRED_MAP),
+            len(self._delta), len(tickers),
         )
 
     # ------------------------------------------------------------------
@@ -371,7 +481,7 @@ class RealMarketProvider(MarketProvider):
         if code in (AssetCode.BTC_DOMINANCE, AssetCode.USDT_DOMINANCE,
                     AssetCode.TOTAL, AssetCode.TOTAL2):
             return "coingecko", SourceTier.PRIMARY
-        if code in _FRED_MAP and code not in _YFINANCE_MAP:
+        if code in _FRED_MAP:
             return "fred", SourceTier.SECONDARY
         return "derived", SourceTier.PRIMARY
 

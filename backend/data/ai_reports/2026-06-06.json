@@ -1,0 +1,18 @@
+{
+  "date": "2026-06-06",
+  "generated_at": "2026-06-06T12:53:27.444601+00:00",
+  "decision": "KAPAT",
+  "regime": "CRISIS",
+  "verdict": "Güvenlik önce gelir, KAPAT.",
+  "key_signals": [
+    "Para kriptodan hisseye geçti, büyük para kriptodan altın ve dolara geçti",
+    "Dolar 104.80'den düşer",
+    "Brent 82.35 dolardan düşer",
+    "QQQ 492.70 dolardan düşer",
+    "XCUUSD 10,318.00 dolardan düşer",
+    "VIX 19.50'den artar"
+  ],
+  "snapshot": {
+    "HYG": 77.4
+  }
+}
