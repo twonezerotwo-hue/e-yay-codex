@@ -278,6 +278,10 @@ class PendingOpenOrder:
     fingerprint: str = ""
     # ATR — sonradan pozisyon açılırken risk_plan hesaplaması için
     atr_value: float = 0.0
+    # Yinelenen-sinyal tespiti için: bu pending hangi TF'den geldi
+    primary_tf: str = ""
+    # Yinelenen-sinyal mi (farklı TF/side ile gelen tekrar) — UI gösterimi için
+    is_recurring: bool = False
 
 
 @dataclass
@@ -286,6 +290,30 @@ class RejectedOpenSignal:
     side: PositionSide
     fingerprint: str
     rejected_at: str
+    # Aynı fingerprint farklı TF'den gelirse "yinelenen sinyal" olarak yeniden sor
+    primary_tf: str = ""
+
+
+@dataclass
+class ManualReadyTrade:
+    """Kullanıcı 60sn pending'i reddettikten sonra el ile açılabilen işlem.
+
+    `manual_ready_trades[pair]` dict'inde tutulur; banner'da "Açılmaya Hazır
+    İşlemler" bölümünde görünür. Kullanıcı `Aç` derse anlık fiyattan açılır,
+    `Sil` derse listeden düşer. Yeni bir TF'den sinyal gelirse otomatik
+    silinmez — ek olarak 60sn pending banner'ı gönderilir (yinelenen sinyal).
+    """
+    pair: str
+    side: PositionSide
+    requested_at: str          # ilk reddedildiği zaman
+    rejected_at: str           # reddedildiği iso ts
+    last_signal: str
+    size_usd: float
+    requested_price: float
+    open_signal: dict[str, Any] = field(default_factory=dict)
+    fingerprint: str = ""
+    atr_value: float = 0.0
+    primary_tf: str = ""
 
 
 @dataclass
@@ -318,6 +346,7 @@ class TradingState:
     positions:        dict[str, Position]   = field(default_factory=dict)
     pending_orders:   dict[str, PendingOpenOrder] = field(default_factory=dict)
     rejected_signals: dict[str, RejectedOpenSignal] = field(default_factory=dict)
+    manual_ready_trades: dict[str, "ManualReadyTrade"] = field(default_factory=dict)
     trades:           list[Trade]           = field(default_factory=list)
     last_event:       dict[str, Any] | None = None
     last_event_at:    str | None            = None
@@ -358,15 +387,28 @@ def _load_state() -> TradingState:
             v.setdefault("open_signal", {})
             v.setdefault("fingerprint", "")
             v.setdefault("atr_value", 0.0)
+            v.setdefault("primary_tf", "")
+            v.setdefault("is_recurring", False)
             valid = {f.name for f in fields(PendingOpenOrder)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
             pending_orders[k] = PendingOpenOrder(**v)
 
         rejected_signals = {}
         for k, v in raw.get("rejected_signals", {}).items():
+            v.setdefault("primary_tf", "")
             valid = {f.name for f in fields(RejectedOpenSignal)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
             rejected_signals[k] = RejectedOpenSignal(**v)
+
+        manual_ready_trades = {}
+        for k, v in raw.get("manual_ready_trades", {}).items():
+            v.setdefault("open_signal", {})
+            v.setdefault("fingerprint", "")
+            v.setdefault("atr_value", 0.0)
+            v.setdefault("primary_tf", "")
+            valid = {f.name for f in fields(ManualReadyTrade)}
+            v = {kk: vv for kk, vv in v.items() if kk in valid}
+            manual_ready_trades[k] = ManualReadyTrade(**v)
 
         # Trade — eski format
         trades = []
@@ -386,6 +428,7 @@ def _load_state() -> TradingState:
             positions=positions,
             pending_orders=pending_orders,
             rejected_signals=rejected_signals,
+            manual_ready_trades=manual_ready_trades,
             trades=trades,
             last_event=raw.get("last_event"),
             last_event_at=raw.get("last_event_at"),
@@ -434,6 +477,7 @@ def _save_state(st: TradingState) -> None:
         "positions": {k: asdict(v) for k, v in st.positions.items()},
         "pending_orders": {k: asdict(v) for k, v in st.pending_orders.items()},
         "rejected_signals": {k: asdict(v) for k, v in st.rejected_signals.items()},
+        "manual_ready_trades": {k: asdict(v) for k, v in st.manual_ready_trades.items()},
         "trades":    [asdict(t) for t in st.trades],
         "last_event": st.last_event,
         "last_event_at": st.last_event_at,
@@ -470,16 +514,44 @@ def _clear_rejected_signal_if_changed(
     pair: str,
     target: PositionSide | Literal["CLOSE"] | None,
     fingerprint: str,
+    primary_tf: str = "",
 ) -> bool:
+    """Aynı (side, fingerprint, primary_tf) üçlüsünde rejection sürer.
+
+    Returns True → sinyal sessizce engellenmeli (kullanıcıyı rahatsız etme).
+    False → ya rejection yok ya da farklı sinyal/TF → engel kaldırılır.
+    """
     rejected = st.rejected_signals.get(pair)
     if rejected is None:
         return False
 
-    if target in ("LONG", "SHORT") and rejected.side == target and rejected.fingerprint == fingerprint:
+    if (
+        target in ("LONG", "SHORT")
+        and rejected.side == target
+        and rejected.fingerprint == fingerprint
+        and (not rejected.primary_tf or not primary_tf or rejected.primary_tf == primary_tf)
+    ):
         return True
 
     del st.rejected_signals[pair]
     return False
+
+
+def _is_recurring_signal(
+    st: TradingState,
+    pair: str,
+    target: PositionSide | Literal["CLOSE"] | None,
+    primary_tf: str,
+) -> bool:
+    """Pair'in 'manual_ready' bekleyişi varken farklı TF veya yönden yeni
+    sinyal gelirse 'yinelenen sinyal' sayılır → 60sn pending tekrar gönderilir.
+    """
+    if target not in ("LONG", "SHORT"):
+        return False
+    mr = st.manual_ready_trades.get(pair)
+    if mr is None:
+        return False
+    return (mr.side != target) or (bool(primary_tf) and mr.primary_tf != primary_tf)
 
 
 def _queue_pending_open(
@@ -493,6 +565,8 @@ def _queue_pending_open(
     fingerprint: str,
     now_dt: datetime,
     atr_value: float = 0.0,
+    primary_tf: str = "",
+    is_recurring: bool = False,
 ) -> None:
     requested_at = now_dt.isoformat()
     execute_at = (now_dt + timedelta(seconds=OPEN_CONFIRMATION_WINDOW_SECONDS)).isoformat()
@@ -507,14 +581,26 @@ def _queue_pending_open(
         open_signal=signal_snapshot,
         fingerprint=fingerprint,
         atr_value=atr_value,
+        primary_tf=primary_tf,
+        is_recurring=is_recurring,
     )
-    _try_emit(
-        "pending_trade_created", "ACTION_REQUIRED",
-        f"{side} {pair} Bekleyen İşlem",
-        f"{OPEN_CONFIRMATION_WINDOW_SECONDS}s içinde {side} {pair} açılacak — reddedilmezse otomatik açılır.",
-        pair=pair, side=side, size_usd=size_usd, price=price,
-        metadata={"execute_at": execute_at},
-    )
+    if is_recurring:
+        _try_emit(
+            "recurring_signal_pending", "ACTION_REQUIRED",
+            f"Yinelenen sinyal: {side} {pair} (TF: {primary_tf or 'n/a'})",
+            f"{pair} için açılmaya hazır işlem dururken farklı TF/yönden yeni sinyal geldi. "
+            f"{OPEN_CONFIRMATION_WINDOW_SECONDS}s içinde reddedilmezse otomatik açılır.",
+            pair=pair, side=side, size_usd=size_usd, price=price,
+            metadata={"execute_at": execute_at, "primary_tf": primary_tf, "recurring": True},
+        )
+    else:
+        _try_emit(
+            "pending_trade_created", "ACTION_REQUIRED",
+            f"{side} {pair} Bekleyen İşlem",
+            f"{OPEN_CONFIRMATION_WINDOW_SECONDS}s içinde {side} {pair} açılacak — reddedilmezse otomatik açılır.",
+            pair=pair, side=side, size_usd=size_usd, price=price,
+            metadata={"execute_at": execute_at, "primary_tf": primary_tf},
+        )
 
 
 def _open_position_from_pending(
@@ -551,6 +637,8 @@ def _open_position_from_pending(
     }
     st.last_event_at = opened_at
     st.pending_orders.pop(pending.pair, None)
+    # Otomatik açıldı: manual_ready'den de düş (aynı pair için zaten geçerli değil)
+    st.manual_ready_trades.pop(pending.pair, None)
     _try_emit(
         "paper_trade_opened", "TRADE_EVENT",
         f"{pending.side} {pending.pair} Açıldı",
@@ -803,6 +891,7 @@ def tick_consensus(
             confluence = sig.get("confluence") or {}
             confluence_status = confluence.get("status") if isinstance(confluence, dict) else None
             atr_val_pending = float(sig.get("atr") or 0.0)
+            current_primary_tf = str(sig.get("primary_tf") or "")
 
             target, base_mult = _consensus_to_action(final_score, final_direction, confluence_status)
             price = current_prices.get(pair, 0.0)
@@ -820,7 +909,13 @@ def tick_consensus(
                     final_size_mult *= learning_meta["size_multiplier"]
                 signal_fingerprint = build_signal_fingerprint(sig)
 
-            if _clear_rejected_signal_if_changed(st, pair, target, signal_fingerprint):
+            # Yinelenen sinyal kontrolü — manual_ready varken farklı TF/side
+            # → silent block'u bypass et, yeni 60sn pending'i 'recurring' bayrağıyla kur.
+            is_recurring_signal = _is_recurring_signal(st, pair, target, current_primary_tf)
+
+            if not is_recurring_signal and _clear_rejected_signal_if_changed(
+                st, pair, target, signal_fingerprint, current_primary_tf,
+            ):
                 target = None
 
             new_size = round(POSITION_SIZE * final_size_mult, 2)
@@ -939,6 +1034,8 @@ def tick_consensus(
                             fingerprint=signal_fingerprint,
                             now_dt=now_dt,
                             atr_value=atr_val_pending,
+                            primary_tf=current_primary_tf,
+                            is_recurring=is_recurring_signal,
                         )
                     else:
                         st.pending_orders.pop(pair, None)
@@ -956,6 +1053,8 @@ def tick_consensus(
                     fingerprint=signal_fingerprint,
                     now_dt=now_dt,
                     atr_value=atr_val_pending,
+                    primary_tf=current_primary_tf,
+                    is_recurring=is_recurring_signal,
                 )
             elif target in ("LONG", "SHORT") and pending is None and pair in MARKET_HOURS_GATED_PAIRS:
                 _today = now_dt.date().isoformat()
@@ -1090,26 +1189,119 @@ def tick(
 # ── Public read API ────────────────────────────────────────────────────────────
 
 def reject_pending_open(pair: str) -> bool:
+    """Pending'i reddet: silent block (rejected_signals) + manuel açılabilir kuyruğa al.
+
+    Aynı (side, fingerprint, primary_tf) sinyali bir daha sormayız.
+    Manuel açılabilir işlem `manual_ready_trades` içinde durur — kullanıcı isterse
+    `force_open_manual_ready` ile el ile açar, `dismiss_manual_ready` ile siler.
+    """
     with _LOCK:
         st = _load_state()
         pending = st.pending_orders.pop(pair, None)
         if pending is None:
             return False
 
+        rejected_at = _utc_now().isoformat()
         st.rejected_signals[pair] = RejectedOpenSignal(
             pair=pair,
             side=pending.side,
             fingerprint=pending.fingerprint,
-            rejected_at=_utc_now().isoformat(),
+            rejected_at=rejected_at,
+            primary_tf=pending.primary_tf,
+        )
+        # Manuel açılabilir olarak hazırda tut
+        st.manual_ready_trades[pair] = ManualReadyTrade(
+            pair=pair,
+            side=pending.side,
+            requested_at=pending.requested_at,
+            rejected_at=rejected_at,
+            last_signal=pending.last_signal,
+            size_usd=pending.size_usd,
+            requested_price=pending.requested_price,
+            open_signal=pending.open_signal,
+            fingerprint=pending.fingerprint,
+            atr_value=pending.atr_value,
+            primary_tf=pending.primary_tf,
         )
         _save_state(st)
         pending_side = pending.side
 
     _try_emit(
         "pending_trade_rejected", "INFO",
-        f"{pending_side} {pair} Reddedildi",
-        f"Bekleyen {pending_side} {pair} işlemi kullanıcı tarafından reddedildi.",
+        f"{pending_side} {pair} Reddedildi · Manuel hazırda",
+        f"Bekleyen {pending_side} {pair} reddedildi — 'Açılmaya Hazır İşlemler' listesinde manuel açılmaya hazır.",
         pair=pair, side=pending_side,
+        metadata={"moved_to": "manual_ready_trades"},
+    )
+    return True
+
+
+# ── Manuel açılabilir işlemler ──────────────────────────────────────────────
+
+def force_open_manual_ready(pair: str, current_price: float | None = None) -> dict[str, Any]:
+    """Manuel açılabilir kuyruğundan pozisyon aç — anlık fiyattan.
+
+    Returns: {"status": "opened"|"not_found"|"no_price", ...}
+    """
+    with _LOCK:
+        st = _load_state()
+        mr = st.manual_ready_trades.get(pair)
+        if mr is None:
+            return {"status": "not_found", "pair": pair}
+
+        # Anlık fiyat: parametreden veya last_tick_prices'tan
+        price = float(current_price or 0.0) or float(st.last_tick_prices.get(pair, 0.0))
+        if price <= 0:
+            return {"status": "no_price", "pair": pair}
+
+        now_dt = _utc_now()
+        now_iso = now_dt.isoformat()
+        if not _is_market_open(pair, now_dt):
+            return {"status": "market_closed", "pair": pair}
+
+        # Pending-like geçici nesne üzerinden açıyoruz — risk_plan otomatik kurulur.
+        pending_obj = PendingOpenOrder(
+            pair=mr.pair,
+            side=mr.side,
+            requested_at=mr.requested_at,
+            execute_at=now_iso,
+            requested_price=mr.requested_price,
+            size_usd=mr.size_usd,
+            last_signal=mr.last_signal,
+            open_signal=mr.open_signal,
+            fingerprint=mr.fingerprint,
+            atr_value=mr.atr_value,
+            primary_tf=mr.primary_tf,
+        )
+        _open_position_from_pending(st, pending_obj, price, now_iso)
+        # Manuel açıldı: hem manual_ready hem rejected_signals temizlensin
+        st.manual_ready_trades.pop(pair, None)
+        st.rejected_signals.pop(pair, None)
+        _save_state(st)
+
+    _try_emit(
+        "manual_ready_opened", "TRADE_EVENT",
+        f"Manuel açıldı: {pending_obj.side} {pair}",
+        f"Açılmaya hazır {pending_obj.side} {pair} kullanıcı talebiyle ${price:,.2f} fiyatından açıldı.",
+        pair=pair, side=pending_obj.side, price=price, size_usd=pending_obj.size_usd,
+    )
+    return {"status": "opened", "pair": pair, "side": pending_obj.side, "price": price}
+
+
+def dismiss_manual_ready(pair: str) -> bool:
+    """Manuel açılabilir kuyruğundan sil — silent block (rejected_signals) korunur."""
+    with _LOCK:
+        st = _load_state()
+        mr = st.manual_ready_trades.pop(pair, None)
+        if mr is None:
+            return False
+        _save_state(st)
+
+    _try_emit(
+        "manual_ready_dismissed", "INFO",
+        f"Manuel hazır iptal: {mr.side} {pair}",
+        f"Açılmaya hazır {mr.side} {pair} kullanıcı tarafından listeden çıkarıldı.",
+        pair=pair, side=mr.side,
     )
     return True
 
@@ -1166,6 +1358,17 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
         })
     pending_orders.sort(key=lambda item: (item["execute_at"], item["pair"]))
 
+    # Manuel açılabilir işlemler — reddedilmiş, hazırda bekleyen
+    manual_ready_trades = []
+    for mr in st.manual_ready_trades.values():
+        cur_price = current_prices.get(mr.pair, mr.requested_price)
+        manual_ready_trades.append({
+            **asdict(mr),
+            "current_price": cur_price,
+            "market_open":   _is_market_open(mr.pair, now_dt),
+        })
+    manual_ready_trades.sort(key=lambda it: (it["rejected_at"], it["pair"]))
+
     # Stale ölçümü — son tick'ten bu yana kaç saniye geçti?
     tick_age_s: float | None = None
     if st.last_tick_at:
@@ -1182,6 +1385,7 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
         "daily_pnl_usd":    round(daily_pnl, 2),
         "open_positions":   open_positions,
         "pending_orders":   pending_orders,
+        "manual_ready_trades": manual_ready_trades,
         "trades":           [asdict(t) for t in st.trades[-20:]],  # son 20 trade
         "trade_count":      len(st.trades),
         "last_event":       st.last_event,
@@ -1265,6 +1469,8 @@ def force_close_position(pair: str, current_price: float, reason: str = "MANUEL"
 __all__ = [
     "tick", "tick_consensus", "get_snapshot", "reject_pending_open", "reset_state",
     "force_close_position",
+    "force_open_manual_ready", "dismiss_manual_ready",
     "OPEN_CONFIRMATION_WINDOW_SECONDS", "_is_market_open",
     "TRADED_PAIRS", "STARTING_BALANCE", "POSITION_SIZE",
+    "ManualReadyTrade", "PendingOpenOrder", "RejectedOpenSignal",
 ]

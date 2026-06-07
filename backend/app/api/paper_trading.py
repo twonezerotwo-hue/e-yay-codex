@@ -237,10 +237,41 @@ def reset() -> dict:
 
 @router.post("/pending/{pair}/reject", dependencies=[Depends(require_paper_safe)])
 def reject_pending_trade(pair: str) -> dict:
+    """Bekleyen pending'i reddet → 'Açılmaya Hazır İşlemler' listesine taşı.
+
+    Aynı (side, fingerprint, primary_tf) sinyali bir daha sorulmaz. Farklı
+    TF/yönden gelen yeni sinyal 'yinelenen' olarak yeni 60sn pending açar.
+    """
     rejected = pts.reject_pending_open(pair.upper())
     _invalidate_caches()
     return {
         "status": "rejected" if rejected else "not_found",
+        "pair":   pair.upper(),
+        "moved_to": "manual_ready_trades" if rejected else None,
+    }
+
+
+@router.post("/manual-ready/{pair}/open", dependencies=[Depends(require_paper_safe)])
+def open_manual_ready(pair: str) -> dict:
+    """Açılmaya hazır işlemi kullanıcı talebiyle anlık fiyattan aç."""
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    # Anlık fiyat — state'in last_tick_prices'ından gelsin
+    state = pts._load_state()
+    price = float(state.last_tick_prices.get(pair_upper, 0.0))
+    result = pts.force_open_manual_ready(pair_upper, current_price=price if price > 0 else None)
+    _invalidate_caches()
+    return result
+
+
+@router.post("/manual-ready/{pair}/dismiss", dependencies=[Depends(require_paper_safe)])
+def dismiss_manual_ready_route(pair: str) -> dict:
+    """Açılmaya hazır işlemi listeden çıkar (silent block hâlâ devam eder)."""
+    dismissed = pts.dismiss_manual_ready(pair.upper())
+    _invalidate_caches()
+    return {
+        "status": "dismissed" if dismissed else "not_found",
         "pair":   pair.upper(),
     }
 

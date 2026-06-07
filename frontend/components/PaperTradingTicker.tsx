@@ -52,6 +52,22 @@ interface PendingOrder {
   size_usd: number;
   seconds_remaining: number;
   market_open: boolean;
+  primary_tf?: string;
+  is_recurring?: boolean;       // yinelenen sinyal (farklı TF/side ile tekrar gelen)
+}
+
+interface ManualReadyTrade {
+  pair: string;
+  side: "LONG" | "SHORT";
+  requested_at: string;
+  rejected_at: string;
+  last_signal: string;
+  size_usd: number;
+  requested_price: number;
+  current_price?: number;
+  market_open?: boolean;
+  primary_tf?: string;
+  fingerprint?: string;
 }
 
 interface TradingState {
@@ -62,6 +78,7 @@ interface TradingState {
   daily_pnl_usd: number;
   open_positions: Position[];
   pending_orders: PendingOrder[];
+  manual_ready_trades?: ManualReadyTrade[];
   trade_count: number;
   last_event: TradeEvent | null;
   last_event_at: string | null;
@@ -236,6 +253,7 @@ export default function PaperTradingTicker() {
   }
 
   const pendingOrders = state.pending_orders ?? [];
+  const manualReadyTrades = state.manual_ready_trades ?? [];
   const showWidget = !agentOpen;
   const equityPct = ((state.equity - state.starting_balance) / state.starting_balance) * 100;
   const dailyColor = state.daily_pnl_usd >= 0 ? "text-emerald-300" : "text-red-300";
@@ -247,6 +265,30 @@ export default function PaperTradingTicker() {
   const rejectPendingOrder = async (pair: string) => {
     try {
       await fetch(`/api/backend/trading/pending/${pair}/reject`, {
+        method: "POST",
+        cache: "no-store",
+      });
+      await loadState();
+    } catch {
+      // no-op
+    }
+  };
+
+  const openManualReady = async (pair: string) => {
+    try {
+      await fetch(`/api/backend/trading/manual-ready/${pair}/open`, {
+        method: "POST",
+        cache: "no-store",
+      });
+      await loadState();
+    } catch {
+      // no-op
+    }
+  };
+
+  const dismissManualReady = async (pair: string) => {
+    try {
+      await fetch(`/api/backend/trading/manual-ready/${pair}/dismiss`, {
         method: "POST",
         cache: "no-store",
       });
@@ -311,6 +353,18 @@ export default function PaperTradingTicker() {
                     <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Bekleyen</p>
                     <p className="font-mono font-bold text-sm leading-tight text-amber-300">
                       {pendingOrders.length}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {manualReadyTrades.length > 0 && (
+                <>
+                  <div className="w-px h-8 bg-eyay-border" />
+                  <div className="text-right">
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Hazır</p>
+                    <p className="font-mono font-bold text-sm leading-tight text-violet-300">
+                      {manualReadyTrades.length}
                     </p>
                   </div>
                 </>
@@ -471,33 +525,98 @@ export default function PaperTradingTicker() {
               {pendingOrders.length > 0 && (
                 <div className="pt-2 border-t border-eyay-border/40 space-y-1.5">
                   <p className="text-[9px] font-mono text-amber-300 uppercase tracking-wider">
-                    Bekleyen Agent Islemleri
+                    Bekleyen Agent Islemleri ({pendingOrders.length})
                   </p>
                   {pendingOrders.map((order) => {
                     const secondsLeft = Math.max(
                       0,
                       Math.ceil((new Date(order.execute_at).getTime() - nowMs) / 1000),
                     );
+                    const recurring = !!order.is_recurring;
                     return (
-                      <div key={order.pair} className="flex items-center justify-between text-[10px] font-mono bg-amber-950/20 border border-amber-900/40 rounded px-2 py-1">
-                        <div>
-                          <p className="font-bold text-amber-300">
+                      <div key={order.pair}
+                           className={`flex items-center justify-between text-[10px] font-mono rounded px-2 py-1 border ${
+                             recurring
+                               ? "bg-fuchsia-950/30 border-fuchsia-700/50"
+                               : "bg-amber-950/20 border-amber-900/40"
+                           }`}>
+                        <div className="min-w-0">
+                          <p className={`font-bold ${recurring ? "text-fuchsia-300" : "text-amber-300"}`}>
+                            {recurring && (
+                              <span className="px-1 py-0.5 rounded text-[8px] mr-1.5 bg-fuchsia-500/20 border border-fuchsia-700/40">
+                                YİNELENEN
+                              </span>
+                            )}
                             {order.side} {order.pair}
+                            {order.primary_tf && (
+                              <span className="text-eyay-faint ml-1 text-[9px]">· TF {order.primary_tf}</span>
+                            )}
                           </p>
-                          <p className="text-eyay-faint">{secondsLeft}s sonra otomatik acilacak</p>
+                          <p className="text-eyay-faint">
+                            {secondsLeft}s sonra otomatik açılacak
+                          </p>
                         </div>
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
                             void rejectPendingOrder(order.pair);
                           }}
-                          className="px-2 py-1 rounded border border-red-700/60 text-red-300 hover:bg-red-950/30"
+                          className="px-2 py-1 rounded border border-red-700/60 text-red-300 hover:bg-red-950/30 shrink-0"
                         >
                           Reddet
                         </button>
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {manualReadyTrades.length > 0 && (
+                <div className="pt-2 border-t border-eyay-border/40 space-y-1.5">
+                  <p className="text-[9px] font-mono text-violet-300 uppercase tracking-wider">
+                    Açılmaya Hazır İşlemler ({manualReadyTrades.length})
+                  </p>
+                  {manualReadyTrades.map((mr) => (
+                    <div
+                      key={`mr-${mr.pair}-${mr.rejected_at}`}
+                      className="flex items-center justify-between text-[10px] font-mono bg-violet-950/20 border border-violet-900/40 rounded px-2 py-1"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-violet-300">
+                          {mr.side} {mr.pair}
+                          {mr.primary_tf && (
+                            <span className="text-eyay-faint ml-1 text-[9px]">· TF {mr.primary_tf}</span>
+                          )}
+                        </p>
+                        <p className="text-eyay-faint">
+                          {mr.last_signal} · son ${(mr.current_price ?? mr.requested_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void openManualReady(mr.pair);
+                          }}
+                          className="px-2 py-1 rounded border border-emerald-700/60 text-emerald-300 hover:bg-emerald-950/30"
+                          title={mr.market_open === false ? "Piyasa kapalı" : "Anlık fiyattan aç"}
+                          disabled={mr.market_open === false}
+                        >
+                          Aç
+                        </button>
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void dismissManualReady(mr.pair);
+                          }}
+                          className="px-2 py-1 rounded border border-eyay-border text-eyay-dim hover:bg-eyay-raised/40"
+                          title="Listeden çıkar"
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -522,22 +641,31 @@ function PendingTradeBanner({
   onReject: () => void;
 }) {
   const secondsLeft = Math.max(0, Math.ceil((new Date(order.execute_at).getTime() - nowMs) / 1000));
+  const recurring = !!order.is_recurring;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-[260]">
-      <div className="bg-gradient-to-r from-amber-700 to-amber-900 text-white shadow-2xl">
+      <div className={`shadow-2xl text-white ${
+        recurring
+          ? "bg-gradient-to-r from-fuchsia-700 to-fuchsia-900"
+          : "bg-gradient-to-r from-amber-700 to-amber-900"
+      }`}>
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-2xl font-black">⏳</span>
+            <span className="text-2xl font-black">{recurring ? "🔁" : "⏳"}</span>
             <div>
               <p className="text-[10px] font-mono font-bold tracking-widest opacity-80">
-                AGENT ISLEM ACIYOR
+                {recurring
+                  ? `YINELENEN SINYAL · TF ${order.primary_tf || "n/a"}`
+                  : "AGENT ISLEM ACIYOR"}
               </p>
               <p className="text-base font-black tracking-tight">
                 {order.side} {order.pair} {secondsLeft}s icinde acilacak
               </p>
               <p className="text-[11px] opacity-85">
-                Reddetmezsen otomatik acilir. Planlanan boyut ${order.size_usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                {recurring
+                  ? `Hazırda bekleyen ${order.pair} için farklı TF/yönden yeni sinyal geldi. Reddetmezsen otomatik açılır.`
+                  : `Reddetmezsen otomatik acilir. Planlanan boyut $${order.size_usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
               </p>
             </div>
           </div>

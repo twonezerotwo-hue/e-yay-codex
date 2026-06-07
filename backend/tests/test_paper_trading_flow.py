@@ -184,7 +184,14 @@ def test_trading_state_endpoint_exposes_pending_orders_and_reject_flow(monkeypat
     reject_response = client.post("/api/v1/trading/pending/XAUUSD/reject")
     reject_body = reject_response.json()
     assert reject_response.status_code == 200
-    assert reject_body == {"status": "rejected", "pair": "XAUUSD"}
+    # Yeni davranış: reject pending'i 'manual_ready_trades' kuyruğuna taşır.
+    assert reject_body["status"]            == "rejected"
+    assert reject_body["pair"]              == "XAUUSD"
+    assert reject_body.get("moved_to")      == "manual_ready_trades"
 
     refreshed = client.get("/api/v1/trading/state").json()
     assert refreshed["pending_orders"] == []
+    # manual_ready_trades artık snapshot'ta görünmeli
+    mr_list = refreshed.get("manual_ready_trades", [])
+    assert any(it.get("pair") == "XAUUSD" for it in mr_list), \
+        "Reddedilen XAUUSD manual_ready_trades'te olmalı"
