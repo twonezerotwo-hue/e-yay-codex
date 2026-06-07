@@ -36,7 +36,11 @@ from app.services.agent_output_guard import guard_response
 from app.services.market_snapshot_service import MarketSnapshotService
 from app.services.provider_ingestion_service import ProviderIngestionService
 from app.services.regime_report_service import RegimeReportService
-from app.services.agent_insight_service import generate_insights
+from app.services.agent_insight_service import (
+    derive_paper_decision_label_safely,
+    generate_insights,
+    synthesize_paper_decision_insights,
+)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -103,6 +107,20 @@ def get_agent_insight() -> dict:
         rotation = None
 
     insights = generate_insights(report, rotation)
+
+    # ── Paper Trading Karar Zinciri — agent içsel olarak okur ────────────
+    # Ham bloklar UI'a SIZDIRILMAZ; sadece sentezlenmiş insight + disiplinli
+    # decision_label döner. KÜÇÜLT açık pozisyon yokken üretilmez.
+    paper_decision_label = ""
+    try:
+        from dataclasses import asdict as _asdict
+        from app.services import paper_decision_service as _pds
+        paper_payload = _asdict(_pds.build_latest_decision())
+        paper_decision_label = derive_paper_decision_label_safely(paper_payload)
+        # CRITICAL/WARNING önce, OPPORTUNITY/OBSERVATION sonra
+        insights = list(insights) + synthesize_paper_decision_insights(paper_payload)
+    except Exception:
+        paper_payload = None
 
     generated_at = datetime.now(UTC).isoformat()
 
@@ -190,6 +208,7 @@ def get_agent_insight() -> dict:
             "confidence":  confidence.to_dict(),
             "insights":    [],
             "decision":    None,
+            "paper_decision_label": paper_decision_label or None,
         }
     else:
         response = {
@@ -210,6 +229,8 @@ def get_agent_insight() -> dict:
                 ),
             },
             "insights":   [dataclasses.asdict(i) for i in insights],
+            # Disiplinli karar dili — açık pozisyon yokken "KÜÇÜLT" denmez.
+            "paper_decision_label": paper_decision_label or report.decision,
             "validation": validation.to_dict(),
             "confidence": confidence.to_dict(),
         }

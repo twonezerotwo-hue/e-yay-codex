@@ -372,4 +372,178 @@ def generate_insights(report: Any, rotation: Any | None = None) -> list[AgentIns
     return _INSIGHT_CACHE[1]
 
 
-__all__ = ["AgentInsight", "InsightSeverity", "generate_insights"]
+# ────────────────────────────────────────────────────────────────────────────
+# Paper Trading Karar Zinciri Sentezi
+# ────────────────────────────────────────────────────────────────────────────
+#
+# Agent, kullanıcıya HAM blokları (DQS / Trigger / Risk / Entry / Exit / vs.)
+# göstermez — bunları içsel analiz olarak okur ve insight üretir.
+# UI yalnızca insight + disiplinli decision label görür.
+
+def synthesize_paper_decision_insights(decision_payload: dict[str, Any]) -> list[AgentInsight]:
+    """
+    paper_decision_service.build_latest_decision().to_dict() çıktısını okur,
+    UI'a göstermek istediğimiz kritik insight'lara dönüştürür.
+
+    Aşağıdaki durumları yakalar (öncelik sırasına göre):
+      • KILL_SWITCH aktif                        → CRITICAL
+      • DQS BLOCKED veya FAIL_NO_DECISION        → CRITICAL
+      • RISK_REDUCE + açık pozisyon              → WARNING (KÜÇÜLT)
+      • RISK_REDUCE + flat                       → WARNING (YENİ RİSK AÇMA)
+      • NO_POSITION_INCREASE                     → WARNING
+      • setup_validity=True + flat               → OPPORTUNITY (giriş hazır)
+      • why_no_trade dolu + flat                 → OBSERVATION (bekleyiş sebebi)
+      • learning_layer.prediction_id             → OBSERVATION (kararlı log)
+
+    Tüm insight'ler kısa, eylem yönelimli; ham veri sızıntısı YOK.
+    """
+    if not isinstance(decision_payload, dict):
+        return []
+
+    now_iso = datetime.now(UTC).isoformat()
+    out: list[AgentInsight] = []
+
+    risk     = decision_payload.get("risk_engine_verdict") or {}
+    dq       = decision_payload.get("data_quality_status") or {}
+    paper    = decision_payload.get("paper_trading_decision") or {}
+    learning = decision_payload.get("learning_layer") or {}
+    triggers = decision_payload.get("trigger_engine_output") or {}
+    label    = str(decision_payload.get("decision_label") or "")
+
+    has_open      = bool(paper.get("has_open_positions"))
+    risk_action   = str(risk.get("risk_action") or "HOLD")
+    kill_switch   = bool(risk.get("kill_switch_active"))
+    dqs_decision  = str(dq.get("dqs_decision") or "")
+    dqs_permission = str(dq.get("decision_permission") or "")
+    setup_valid   = bool(paper.get("setup_validity"))
+    would_pair    = paper.get("would_trade_asset")
+    would_dir     = paper.get("would_trade_direction")
+    consensus     = paper.get("best_consensus_score")
+    why_no_trade  = paper.get("why_no_trade") or []
+
+    # 1) KILL_SWITCH — en üst öncelik
+    if kill_switch or risk_action == "KILL_SWITCH":
+        out.append(AgentInsight(
+            "CRITICAL",
+            "Sistem durduruldu — KILL_SWITCH aktif",
+            "Risk motoru kritik veri/sistem koşulu nedeniyle tüm yeni işlemleri durdurdu. "
+            "Mevcut pozisyonlar gözden geçirilmeli, yeni risk açılmamalı.",
+            "", "🛑", now_iso,
+        ))
+
+    # 2) DQS koruması
+    if dqs_decision == "FAIL_NO_DECISION":
+        out.append(AgentInsight(
+            "CRITICAL",
+            "Veri kalitesi karar vermek için yetersiz",
+            f"DQS {dq.get('overall_dqs', '?')}/100 ile karar verme eşiğinin altında. "
+            "Yeni paper trade açılamaz; mevcut pozisyonlar takip ediliyor.",
+            "", "⚠", now_iso,
+        ))
+    elif dqs_permission == "BELOW_THRESHOLD":
+        out.append(AgentInsight(
+            "WARNING",
+            "Veri kalitesi giriş eşiğinin altında",
+            f"DQS {dq.get('overall_dqs', '?')}/100 — yeni pozisyon açmak için yeterli güven yok. "
+            "Stale/mock kaynaklar düzelene dek bekliyorum.",
+            "", "⚠", now_iso,
+        ))
+
+    # 3) Risk action bağlı uyarı
+    if risk_action == "RISK_REDUCE" and not has_open:
+        out.append(AgentInsight(
+            "WARNING",
+            "Risk modu yüksek — yeni risk açmıyorum",
+            "Risk motoru çoklu sert teyit gördü; açık pozisyonum olmadığı için 'KÜÇÜLT' demiyorum. "
+            "Yeni giriş için baskı azalmasını bekliyorum.",
+            "", "🛡", now_iso,
+        ))
+    elif risk_action == "RISK_REDUCE" and has_open:
+        out.append(AgentInsight(
+            "WARNING",
+            "Açık pozisyonları küçültme zamanı",
+            "Risk motoru RISK_REDUCE — açık pozisyonları boyut/maruziyet açısından gözden geçirmem gerek.",
+            "", "🛡", now_iso,
+        ))
+    elif risk_action == "NO_POSITION_INCREASE":
+        out.append(AgentInsight(
+            "WARNING",
+            "Pozisyon artırma yasak — mevcut maruziyet sabit",
+            "Risk motoru ek risk almaya izin vermiyor. Mevcut pozisyonlar korunabilir, "
+            "ama yeni giriş veya scale-in yapılamaz.",
+            "", "🛡", now_iso,
+        ))
+
+    # 4) Giriş fırsatı
+    if setup_valid and not has_open and would_pair and would_dir and not kill_switch:
+        conf_pct = ""
+        try:
+            if consensus is not None:
+                conf_pct = f" ({float(consensus):.0f}/100 güven)"
+        except Exception:
+            pass
+        out.append(AgentInsight(
+            "OPPORTUNITY",
+            f"{would_pair} {would_dir} setup'ı hazır{conf_pct}",
+            "Konsensus, veri kalitesi ve risk kapısı uygun — şartlar tamamlanırsa giriş üretebilirim. "
+            "Önce makro/kredi teyitlerini izlemek istiyorum.",
+            str(would_pair), "🎯", now_iso,
+        ))
+
+    # 5) why_no_trade — agent neyi beklediğini açıkça yazar
+    if why_no_trade and not has_open:
+        first = str(why_no_trade[0])
+        # Teknik kodları sade Türkçeye çevir
+        translate = {
+            "no_directional_consensus":      "Yönlü konsensus oluşmamış",
+            "data_quality_blocks_open":      "Veri kalitesi giriş için yetersiz",
+            "risk_engine_blocks_new:KILL_SWITCH":         "Risk motoru sistemi durdurdu",
+            "risk_engine_blocks_new:RISK_REDUCE":         "Risk motoru yeni girişi kapadı",
+            "risk_engine_blocks_new:NO_POSITION_INCREASE":"Risk motoru ek pozisyona izin vermiyor",
+        }
+        reason = translate.get(first, first)
+        out.append(AgentInsight(
+            "OBSERVATION",
+            "Şu an açık pozisyonum yok — neyi bekliyorum?",
+            f"Engelleyici: {reason}. Bu koşul kalkana kadar paper trade açmıyorum.",
+            "", "👁", now_iso,
+        ))
+
+    # 6) Confirmed trigger sayısı — ek bağlam
+    confirmed = triggers.get("confirmed_triggers") or []
+    severity_high = triggers.get("trigger_severity") in ("ORANGE", "RED")
+    if severity_high and len(confirmed) >= 2 and not any(i.severity == "CRITICAL" for i in out):
+        out.append(AgentInsight(
+            "WARNING",
+            f"{len(confirmed)} kritik tetikleyici teyitlendi",
+            "Risk hesaba katmam gereken çoklu sert sinyal aktif; karar disiplini sıkı tutuluyor.",
+            "", "🚨", now_iso,
+        ))
+
+    # 7) Learning layer — prediction kaydı
+    pred_id = learning.get("prediction_id")
+    if pred_id and label:
+        out.append(AgentInsight(
+            "OBSERVATION",
+            f"Karar log'landı: {label}",
+            f"Bu karar {pred_id} kimliğiyle kayıt altında — sonuç ileride gözden geçirilecek.",
+            "", "📌", now_iso,
+        ))
+
+    return out
+
+
+def derive_paper_decision_label_safely(decision_payload: dict[str, Any]) -> str:
+    """Frontend'in PORTFÖY KARARI rozetinde göstereceği disiplinli label."""
+    if not isinstance(decision_payload, dict):
+        return ""
+    return str(decision_payload.get("decision_label") or "")
+
+
+__all__ = [
+    "AgentInsight",
+    "InsightSeverity",
+    "generate_insights",
+    "synthesize_paper_decision_insights",
+    "derive_paper_decision_label_safely",
+]

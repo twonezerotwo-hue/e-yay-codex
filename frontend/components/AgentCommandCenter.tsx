@@ -28,6 +28,7 @@ interface AgentInsight {
 interface InsightResponse {
   status: string;
   decision: string;
+  paper_decision_label?: string;  // disiplinli karar dili (0 pozisyon → KÜÇÜLT yok)
   generated_at: string;
   insights: AgentInsight[];
 }
@@ -156,7 +157,8 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
         const tData: TradingState     = await tRes.json();
         if (!cancelled) {
           setInsights(iData.insights || []);
-          setDecision(iData.decision || "");
+          // Disiplinli karar dili önce; yoksa regime report kararına düş
+          setDecision(iData.paper_decision_label || iData.decision || "");
           setInsightAt(iData.generated_at || "");
           setTrading(tData);
         }
@@ -296,8 +298,14 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
               <span className="text-[10px] font-mono text-eyay-faint">PORTFÖY KARARI</span>
               <span className={`text-xs font-mono font-black px-2 py-0.5 rounded border ${
                 decision === "AÇIL" ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
+                : decision === "KORU" ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
                 : decision === "KAPAT" ? "border-red-700 text-red-300 bg-red-950/30"
+                : decision === "İŞLEM YOK / SİSTEM DURDU" ? "border-red-700 text-red-300 bg-red-950/40"
                 : decision === "KÜÇÜLT" ? "border-orange-700 text-orange-300 bg-orange-950/30"
+                : decision === "POZİSYON ARTIRMA" ? "border-yellow-700 text-yellow-300 bg-yellow-950/25"
+                : decision === "İZLE" ? "border-blue-700 text-blue-300 bg-blue-950/25"
+                : decision === "YENİ RİSK AÇMA / BEKLE" ? "border-amber-700 text-amber-300 bg-amber-950/30"
+                : decision === "POZİSYON YOK · NÖTR İZLEME" ? "border-slate-700 text-slate-300 bg-slate-950/30"
                 : "border-amber-700 text-amber-300 bg-amber-950/30"
               }`}>
                 {decision || "—"}
