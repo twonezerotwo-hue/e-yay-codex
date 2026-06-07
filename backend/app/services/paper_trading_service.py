@@ -256,13 +256,19 @@ class Position:
     entry_at:    str
     size_usd:    float
     last_signal: str
-    stop_loss:   float = 0.0    # otomatik SL seviyesi
-    take_profit: float = 0.0    # otomatik TP seviyesi
+    stop_loss:   float = 0.0    # aktif SL seviyesi (trailing stop günceller)
+    take_profit: float = 0.0    # aktif TP seviyesi (TP2 = tam kapat)
     # ── Öğrenme için: pozisyon açılırken alınan sinyal snapshot'ı ──
     open_signal: dict[str, Any] = field(default_factory=dict)
     fingerprint: str = ""        # sinyal imzası (benzer durumları tanıma için)
     # ── SL/TP arkasındaki hikaye (timeframe + ATR + beklenen horizon) ──
     risk_plan:   dict[str, Any] = field(default_factory=dict)
+    # ── S1: Trailing Stop (ATR-based) ──
+    trailing_stop_active: bool = False   # Break-even veya daha iyi SL aktif
+    peak_favorable_price: float = 0.0   # LONG: görülen max fiyat / SHORT: min fiyat
+    # ── S2: Partial Take-Profit ──
+    partial_tp_taken: bool = False       # TP1 (%50 lot) realize edildi mi
+    original_size_usd: float = 0.0      # Partial TP öncesi lot (0 = alınmadı)
 
 
 @dataclass
@@ -387,6 +393,11 @@ def _load_state() -> TradingState:
             v.setdefault("stop_loss", 0.0)
             v.setdefault("take_profit", 0.0)
             v.setdefault("risk_plan", {})
+            # S1/S2: Trailing stop + partial TP alanları (backward compat)
+            v.setdefault("trailing_stop_active", False)
+            v.setdefault("peak_favorable_price", 0.0)
+            v.setdefault("partial_tp_taken", False)
+            v.setdefault("original_size_usd", 0.0)
             # Bilinmeyen alanları sessizce at (eski/yeni schema farkına dayanıklı)
             valid = {f.name for f in fields(Position)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
@@ -682,6 +693,215 @@ def _queue_pending_open(
             pair=pair, side=side, size_usd=size_usd, price=price,
             metadata={"execute_at": execute_at, "primary_tf": primary_tf},
         )
+
+
+# ── S1: Trailing Stop + Break-Even / S2: Partial Take-Profit ─────────────────
+
+def _get_atr_for_position(cur: "Position") -> float:
+    """Pozisyon açılışındaki ATR değerini risk_plan veya open_signal'dan çıkar."""
+    return float(
+        cur.risk_plan.get("atr_used")
+        or cur.open_signal.get("atr")
+        or 0.0
+    )
+
+
+def _close_open_position(
+    st: "TradingState",
+    cur: "Position",
+    pair: str,
+    price: float,
+    now_iso: str,
+    reason: str,
+) -> None:
+    """Açık pozisyonu kapat; Trade kaydı + realize_pnl + emit.
+
+    Sadece SL/TP/trailing kapatmaları için kullanılır.
+    Signal-reversal close'ları mevcut tick loop kodunu kullanmaya devam eder.
+    """
+    pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+    verdict = "WIN" if pnl_usd > 5.0 else ("LOSS" if pnl_usd < -5.0 else "BREAK_EVEN")
+    duration_min = int(
+        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+    )
+    trade = Trade(
+        id=len(st.trades) + 1,
+        pair=pair, side=cur.side,
+        entry_price=cur.entry_price, exit_price=price,
+        entry_at=cur.entry_at, exit_at=now_iso,
+        size_usd=cur.size_usd,
+        pnl_usd=round(pnl_usd, 2),
+        pnl_pct=round(pnl_pct, 2),
+        duration_min=duration_min,
+        reason=reason,
+        open_signal=cur.open_signal,
+        exit_signal={"price": price, "reason": reason},
+        verdict=verdict,
+        fingerprint=cur.fingerprint,
+        risk_plan=cur.risk_plan or {},
+    )
+    st.trades.append(trade)
+    st.realized_pnl_usd += pnl_usd
+    st.last_event = {
+        "type": "CLOSE", "pair": pair, "side": cur.side,
+        "pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2),
+        "price": price, "verdict": verdict, "reason": reason,
+    }
+    st.last_event_at = now_iso
+    del st.positions[pair]
+    _try_emit(
+        "paper_trade_closed", "TRADE_EVENT",
+        f"{cur.side} {pair} Kapatıldı — {reason}",
+        f"{cur.side} {pair} {reason} ile kapandı: PnL {pnl_usd:+,.2f} USD ({verdict})",
+        pair=pair, side=cur.side, size_usd=cur.size_usd, price=price, reason=reason,
+        metadata={"pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2), "verdict": verdict},
+    )
+
+
+def _realize_partial_tp(
+    st: "TradingState",
+    cur: "Position",
+    pair: str,
+    price: float,
+    now_iso: str,
+) -> None:
+    """TP1 eşiğinde lot'un %50'sini realize et; kalan %50 için SL = entry (break-even).
+
+    Çağrı şartı: cur.partial_tp_taken == False ve price TP1'i geçmiş.
+    """
+    half_size = cur.size_usd / 2.0
+    pnl_full, pnl_pct = _unrealized_pnl(cur, price)
+    pnl_half = pnl_full / 2.0
+    duration_min = int(
+        (datetime.fromisoformat(now_iso) - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+    )
+    trade = Trade(
+        id=len(st.trades) + 1,
+        pair=pair, side=cur.side,
+        entry_price=cur.entry_price, exit_price=price,
+        entry_at=cur.entry_at, exit_at=now_iso,
+        size_usd=round(half_size, 2),
+        pnl_usd=round(pnl_half, 2),
+        pnl_pct=round(pnl_pct, 2),
+        duration_min=duration_min,
+        reason="PARTIAL_TP1",
+        open_signal=cur.open_signal,
+        exit_signal={"price": price, "reason": "PARTIAL_TP1"},
+        verdict="WIN",
+        fingerprint=cur.fingerprint,
+        risk_plan=cur.risk_plan or {},
+    )
+    st.trades.append(trade)
+    st.realized_pnl_usd += pnl_half
+
+    # Pozisyonu yarıya indir; SL → entry (break-even garantisi)
+    if cur.original_size_usd == 0.0:
+        cur.original_size_usd = cur.size_usd
+    cur.size_usd = round(half_size, 2)
+    cur.partial_tp_taken = True
+    # SL en az break-even (entry) seviyesine çekil — ama daha iyi bir SL varsa koru
+    is_long = (cur.side == "LONG")
+    be_sl = cur.entry_price
+    if is_long:
+        cur.stop_loss = max(cur.stop_loss, be_sl)  # LONG: SL yukarı gidebilir
+    else:
+        cur.stop_loss = min(cur.stop_loss, be_sl) if cur.stop_loss > 0 else be_sl
+    cur.trailing_stop_active = True    # Break-even aktif
+
+    _try_emit(
+        "partial_tp1_taken", "TRADE_EVENT",
+        f"Kısmi Kâr — {pair}",
+        f"{cur.side} {pair} TP1 tetiklendi: %50 lot @ ${price:,.2f} · "
+        f"PnL {pnl_half:+,.2f} USD · Kalan: ${half_size:,.0f} SL=entry",
+        pair=pair, side=cur.side, price=price,
+        metadata={"pnl_half": round(pnl_half, 2), "remaining_size": half_size, "tp": "TP1"},
+    )
+
+
+def _apply_risk_management(
+    st: "TradingState",
+    cur: "Position",
+    pair: str,
+    price: float,
+    now_iso: str,
+) -> bool:
+    """SL / TP / Trailing Stop / Partial TP uygula.
+
+    Sıra:
+      1. Trailing stop güncelle (break-even @ entry+1×ATR, trail @ entry+2×ATR)
+      2. Partial TP al (TP1 = entry ± 1×ATR → %50 lot realize et)
+      3. SL tetiklendiyse kapat
+      4. TP tetiklendiyse (tam) kapat
+
+    Returns True → pozisyon kapatıldı, caller `continue` etmeli.
+    """
+    atr = _get_atr_for_position(cur)
+    entry = cur.entry_price
+    is_long = (cur.side == "LONG")
+
+    # ── 1. Trailing Stop Güncelle ──────────────────────────────────────────────
+    if atr > 0:
+        be_level   = entry + atr if is_long else entry - atr     # +1×ATR break-even
+        trail_level = entry + 2 * atr if is_long else entry - 2 * atr  # +2×ATR trail
+
+        if is_long:
+            # Peak fiyat takibi
+            cur.peak_favorable_price = max(cur.peak_favorable_price or price, price)
+
+            # Break-even eşiği geçildi → SL en azından entry'e çek
+            if price >= be_level and not cur.trailing_stop_active:
+                new_sl = max(cur.stop_loss, entry)
+                if new_sl > cur.stop_loss:
+                    cur.stop_loss = round(new_sl, 2)
+                cur.trailing_stop_active = True
+
+            # Trailing faz: SL → price - 1.5×ATR (kâr kilidi)
+            if price >= trail_level:
+                trail_sl = price - 1.5 * atr
+                if trail_sl > cur.stop_loss:
+                    cur.stop_loss = round(trail_sl, 2)
+        else:  # SHORT
+            cur.peak_favorable_price = min(
+                cur.peak_favorable_price if cur.peak_favorable_price > 0 else price, price
+            )
+
+            if price <= be_level and not cur.trailing_stop_active:
+                new_sl = min(cur.stop_loss, entry) if cur.stop_loss > 0 else entry
+                if cur.stop_loss == 0 or new_sl < cur.stop_loss:
+                    cur.stop_loss = round(new_sl, 2)
+                cur.trailing_stop_active = True
+
+            if price <= trail_level:
+                trail_sl = price + 1.5 * atr
+                if cur.stop_loss == 0 or trail_sl < cur.stop_loss:
+                    cur.stop_loss = round(trail_sl, 2)
+
+    # ── 2. Partial TP (TP1 = entry ± 1×ATR) ──────────────────────────────────
+    if atr > 0 and not cur.partial_tp_taken:
+        tp1 = (entry + atr) if is_long else (entry - atr)
+        tp1_hit = (is_long and price >= tp1) or (not is_long and price <= tp1)
+        if tp1_hit:
+            _realize_partial_tp(st, cur, pair, price, now_iso)
+            # cur.stop_loss artık entry → trailing da aktif
+
+    # ── 3. SL Kontrolü ────────────────────────────────────────────────────────
+    sl = cur.stop_loss
+    if sl > 0:
+        sl_hit = (is_long and price <= sl) or (not is_long and price >= sl)
+        if sl_hit:
+            reason = "TRAILING_SL" if cur.trailing_stop_active else "SL_HIT"
+            _close_open_position(st, cur, pair, price, now_iso, reason=reason)
+            return True
+
+    # ── 4. TP Kontrolü (kalan lot tam kapat) ─────────────────────────────────
+    tp = cur.take_profit
+    if tp > 0:
+        tp_hit = (is_long and price >= tp) or (not is_long and price <= tp)
+        if tp_hit:
+            _close_open_position(st, cur, pair, price, now_iso, reason="TP_HIT")
+            return True
+
+    return False
 
 
 def _open_position_from_pending(
@@ -1113,6 +1333,13 @@ def tick_consensus(
                         pending = None
 
             if cur is not None:
+                # ── S1/S2: SL / TP / Trailing Stop / Partial TP ──────────────
+                # Fiyat SL veya TP'ye dokunmuşsa otomatik kapat.
+                # Break-even + trailing stop güncelle.
+                # Partial TP1 (entry±ATR) tetiklendiyse %50 realize et.
+                if _apply_risk_management(st, cur, pair, price, now_iso):
+                    continue   # pozisyon kapatıldı → sonraki pair
+
                 if target == cur.side:
                     cur.last_signal = f"{final_direction}@{final_score:.1f}" if final_score is not None else "noop"
                     st.pending_orders.pop(pair, None)
