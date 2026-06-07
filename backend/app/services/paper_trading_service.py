@@ -173,6 +173,65 @@ def _calc_sl_tp(
         return round(entry + risk, 4), round(entry - reward, 4)
 
 
+def _build_risk_plan(
+    side: PositionSide,
+    entry: float,
+    pair: str,
+    atr: float | None,
+    *,
+    sl: float,
+    tp: float,
+) -> dict[str, Any]:
+    """SL/TP arkasındaki hikayeyi insan okunaklı yap.
+
+    timeframe    : technical_provider 1D (daily) kullanır
+    atr_period   : Wilder ATR(14) → 14 günlük ortalama gerçek aralık
+    sl_basis     : "ATR×2" veya "%X (atr fallback)"
+    horizon_hours: beklenen ortalama tutuş süresi (heuristic: ATR%/günlük→günlere göre)
+    """
+    if atr and atr > 0:
+        sl_basis = "2×ATR(14) · 1D"
+        tp_basis = "3×ATR(14) · 1D"
+        rr = 1.5  # 3R / 2R
+        # Horizon heuristic: günlük ortalama hareket ATR'a yakın → TP'ye varış için ~3-5 gün ortalama
+        # 1.5R = ~ 3-5 gün; LONG/SHORT için aynı dağılım. Saat: 72-120.
+        horizon_hours_low  = 48
+        horizon_hours_high = 144
+    else:
+        pct = _SL_PCT.get(pair, 0.04) * 100
+        sl_basis = f"sabit %{pct:.1f} (1D ATR yok)"
+        tp_basis = f"sabit %{pct * _TP_MULT:.1f} (RR 2:1)"
+        rr = _TP_MULT
+        horizon_hours_low  = 72
+        horizon_hours_high = 168
+
+    sl_pct = round(abs(sl - entry) / entry * 100, 2) if entry else None
+    tp_pct = round(abs(tp - entry) / entry * 100, 2) if entry else None
+
+    return {
+        "timeframe":         "1D",
+        "atr_period_bars":   14,
+        "atr_value":         (round(atr, 6) if atr else None),
+        "sl_basis":          sl_basis,
+        "tp_basis":          tp_basis,
+        "risk_reward":       rr,
+        "stop_loss_pct":     sl_pct,
+        "take_profit_pct":   tp_pct,
+        "expected_horizon_hours": {
+            "low":  horizon_hours_low,
+            "high": horizon_hours_high,
+        },
+        "explanation": (
+            f"SL ve TP, günlük (1D) mumlar üzerinde Wilder ATR(14) ile hesaplandı. "
+            f"SL=2×ATR, TP=3×ATR (RR 1.5). Beklenen tutuş: ~"
+            f"{horizon_hours_low}-{horizon_hours_high} saat."
+            if atr else
+            f"ATR verisi yok — sabit %{pct:.1f} SL ve RR {_TP_MULT}:1 kullanıldı. "
+            f"Beklenen tutuş: ~{horizon_hours_low}-{horizon_hours_high} saat."
+        ),
+    }
+
+
 @dataclass
 class Position:
     pair:        str
@@ -186,6 +245,8 @@ class Position:
     # ── Öğrenme için: pozisyon açılırken alınan sinyal snapshot'ı ──
     open_signal: dict[str, Any] = field(default_factory=dict)
     fingerprint: str = ""        # sinyal imzası (benzer durumları tanıma için)
+    # ── SL/TP arkasındaki hikaye (timeframe + ATR + beklenen horizon) ──
+    risk_plan:   dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -199,6 +260,8 @@ class PendingOpenOrder:
     last_signal: str
     open_signal: dict[str, Any] = field(default_factory=dict)
     fingerprint: str = ""
+    # ATR — sonradan pozisyon açılırken risk_plan hesaplaması için
+    atr_value: float = 0.0
 
 
 @dataclass
@@ -228,6 +291,8 @@ class Trade:
     exit_signal:  dict[str, Any] = field(default_factory=dict)
     verdict:      str = ""       # "WIN" | "LOSS" | "BREAK_EVEN"
     fingerprint:  str = ""       # benzer trade lookup için
+    # ── SL/TP arkasındaki hikaye — kapanmış trade için audit ──
+    risk_plan:    dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -369,6 +434,7 @@ def _queue_pending_open(
     signal_snapshot: dict[str, Any],
     fingerprint: str,
     now_dt: datetime,
+    atr_value: float = 0.0,
 ) -> None:
     requested_at = now_dt.isoformat()
     execute_at = (now_dt + timedelta(seconds=OPEN_CONFIRMATION_WINDOW_SECONDS)).isoformat()
@@ -382,6 +448,7 @@ def _queue_pending_open(
         last_signal=last_signal,
         open_signal=signal_snapshot,
         fingerprint=fingerprint,
+        atr_value=atr_value,
     )
     _try_emit(
         "pending_trade_created", "ACTION_REQUIRED",
@@ -398,6 +465,9 @@ def _open_position_from_pending(
     current_price: float,
     opened_at: str,
 ) -> None:
+    atr_val = pending.atr_value if pending.atr_value > 0 else None
+    sl, tp = _calc_sl_tp(pending.side, current_price, pending.pair, atr_val)
+    risk_plan = _build_risk_plan(pending.side, current_price, pending.pair, atr_val, sl=sl, tp=tp)
     st.positions[pending.pair] = Position(
         pair=pending.pair,
         side=pending.side,
@@ -407,6 +477,9 @@ def _open_position_from_pending(
         last_signal=pending.last_signal,
         open_signal=pending.open_signal,
         fingerprint=pending.fingerprint,
+        stop_loss=sl,
+        take_profit=tp,
+        risk_plan=risk_plan,
     )
     st.last_event = {
         "type": "OPEN",
@@ -414,6 +487,8 @@ def _open_position_from_pending(
         "side": pending.side,
         "price": current_price,
         "size_usd": pending.size_usd,
+        "stop_loss": sl,
+        "take_profit": tp,
         "fingerprint": pending.fingerprint,
     }
     st.last_event_at = opened_at
@@ -421,9 +496,17 @@ def _open_position_from_pending(
     _try_emit(
         "paper_trade_opened", "TRADE_EVENT",
         f"{pending.side} {pending.pair} Açıldı",
-        f"Paper pozisyon açıldı: {pending.side} {pending.pair} @ ${current_price:,.2f}",
+        (
+            f"Paper pozisyon açıldı: {pending.side} {pending.pair} @ ${current_price:,.2f}\n"
+            f"SL: ${sl:,.4f} ({risk_plan.get('stop_loss_pct')}% ) · "
+            f"TP: ${tp:,.4f} ({risk_plan.get('take_profit_pct')}% ) · "
+            f"TF: {risk_plan.get('timeframe')} · "
+            f"Horizon: {risk_plan.get('expected_horizon_hours', {}).get('low')}-"
+            f"{risk_plan.get('expected_horizon_hours', {}).get('high')}h"
+        ),
         pair=pending.pair, side=pending.side,
         size_usd=pending.size_usd, price=current_price,
+        metadata={"risk_plan": risk_plan, "stop_loss": sl, "take_profit": tp},
     )
 
 
@@ -559,6 +642,7 @@ def _tick_consensus_legacy(
                             "primary_tf":       sig.get("primary_tf"),
                         },
                         verdict=verdict, fingerprint=cur.fingerprint,
+                        risk_plan=cur.risk_plan or {},
                     )
                     st.trades.append(trade)
                     st.realized_pnl_usd += pnl_usd
@@ -575,6 +659,7 @@ def _tick_consensus_legacy(
                     if target in ("LONG", "SHORT"):
                         new_fp = build_signal_fingerprint(sig)
                         sl, tp = _calc_sl_tp(target, price, pair, atr_val)
+                        risk_plan = _build_risk_plan(target, price, pair, atr_val, sl=sl, tp=tp)
                         st.positions[pair] = Position(
                             pair=pair, side=target,
                             entry_price=price, entry_at=now_iso,
@@ -582,6 +667,7 @@ def _tick_consensus_legacy(
                             last_signal=f"{final_direction}@{final_score:.1f}",
                             stop_loss=sl, take_profit=tp,
                             open_signal=sig, fingerprint=new_fp,
+                            risk_plan=risk_plan,
                         )
                         st.last_event = {
                             "type": "OPEN", "pair": pair, "side": target,
@@ -658,6 +744,7 @@ def tick_consensus(
             final_direction = sig.get("final_direction")
             confluence = sig.get("confluence") or {}
             confluence_status = confluence.get("status") if isinstance(confluence, dict) else None
+            atr_val_pending = float(sig.get("atr") or 0.0)
 
             target, base_mult = _consensus_to_action(final_score, final_direction, confluence_status)
             price = current_prices.get(pair, 0.0)
@@ -755,6 +842,7 @@ def tick_consensus(
                         },
                         verdict=verdict,
                         fingerprint=cur.fingerprint,
+                        risk_plan=cur.risk_plan or {},
                     )
                     st.trades.append(trade)
                     st.realized_pnl_usd += pnl_usd
@@ -792,6 +880,7 @@ def tick_consensus(
                             signal_snapshot=sig,
                             fingerprint=signal_fingerprint,
                             now_dt=now_dt,
+                            atr_value=atr_val_pending,
                         )
                     else:
                         st.pending_orders.pop(pair, None)
@@ -808,6 +897,7 @@ def tick_consensus(
                     signal_snapshot=sig,
                     fingerprint=signal_fingerprint,
                     now_dt=now_dt,
+                    atr_value=atr_val_pending,
                 )
             elif target in ("LONG", "SHORT") and pending is None and pair in MARKET_HOURS_GATED_PAIRS:
                 _today = now_dt.date().isoformat()

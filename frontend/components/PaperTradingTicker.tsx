@@ -12,6 +12,19 @@ interface TradeEvent {
   pnl_pct?: number;
 }
 
+interface RiskPlan {
+  timeframe?: string;
+  atr_period_bars?: number;
+  atr_value?: number | null;
+  sl_basis?: string;
+  tp_basis?: string;
+  risk_reward?: number;
+  stop_loss_pct?: number;
+  take_profit_pct?: number;
+  expected_horizon_hours?: { low?: number; high?: number };
+  explanation?: string;
+}
+
 interface Position {
   pair: string;
   side: "LONG" | "SHORT";
@@ -21,6 +34,7 @@ interface Position {
   pnl_pct: number;
   stop_loss: number;
   take_profit: number;
+  risk_plan?: RiskPlan;
 }
 
 interface ChartPatternSummary {
@@ -380,6 +394,43 @@ export default function PaperTradingTicker() {
                                   TP {fmt2(p.take_profit)}
                                   <span className="opacity-70 ml-0.5">(+{pctFromEntry(p.take_profit)}%)</span>
                                 </span>
+                              )}
+                            </div>
+                          )}
+                          {/* Row 2b: Risk plan — timeframe + ATR + horizon */}
+                          {p.risk_plan && (p.risk_plan.timeframe || p.risk_plan.atr_value) && (
+                            <div
+                              className="flex flex-wrap items-center gap-2 text-[8px] text-eyay-faint border-t border-eyay-border/20 pt-1"
+                              title={p.risk_plan.explanation || ""}
+                            >
+                              {p.risk_plan.timeframe && (
+                                <span className="px-1 py-[1px] rounded bg-eyay-raised/60 border border-eyay-border/40">
+                                  TF: <span className="text-eyay-text font-bold">{p.risk_plan.timeframe}</span>
+                                </span>
+                              )}
+                              {p.risk_plan.atr_period_bars && (
+                                <span>
+                                  ATR({p.risk_plan.atr_period_bars})
+                                  {p.risk_plan.atr_value != null && (
+                                    <span className="opacity-70 ml-0.5">
+                                      ={typeof p.risk_plan.atr_value === "number" ? p.risk_plan.atr_value.toFixed(4) : p.risk_plan.atr_value}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {p.risk_plan.risk_reward && (
+                                <span>RR <span className="text-eyay-text">1:{p.risk_plan.risk_reward}</span></span>
+                              )}
+                              {p.risk_plan.expected_horizon_hours?.low != null && (
+                                <span>
+                                  ⏱ Beklenen tutuş:
+                                  <span className="text-eyay-text ml-0.5">
+                                    {p.risk_plan.expected_horizon_hours.low}-{p.risk_plan.expected_horizon_hours.high}s
+                                  </span>
+                                </span>
+                              )}
+                              {p.risk_plan.sl_basis && (
+                                <span className="opacity-70">· {p.risk_plan.sl_basis}</span>
                               )}
                             </div>
                           )}
