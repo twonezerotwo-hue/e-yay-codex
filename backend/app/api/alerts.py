@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from app.services.alert_event_service import VOICE_ALERT_TYPES, get_recent
+from app.services.alert_event_service import VOICE_ALERT_TYPES, get_recent, stats as alert_stats
 from app.services.telegram_alert_service import get_status as telegram_status
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -30,6 +30,11 @@ def get_recent_alerts(
         "voice_types": sorted(VOICE_ALERT_TYPES),
         "telegram":    telegram_status(),
     }
+
+
+@router.get("/stats")
+def get_alert_stats() -> dict:
+    return {"status": "ok", **alert_stats(), "telegram": telegram_status()}
 
 
 __all__ = ["router"]
