@@ -695,6 +695,71 @@ def _queue_pending_open(
         )
 
 
+# ── DEFENSIVE/CRISIS: sinyal doğrudan manual_ready kuyruğuna ─────────────────
+
+def _add_to_manual_ready_direct(
+    st: "TradingState",
+    pair: str,
+    side: "PositionSide",
+    price: float,
+    size_usd: float,
+    signal_snapshot: dict[str, Any],
+    atr_value: float,
+    fingerprint: str,
+    now_dt: datetime,
+    primary_tf: str,
+    last_signal: str,
+    risk_action: str,
+) -> None:
+    """DEFENSIVE / CRISIS rejimde yeni sinyal otomatik pending'e gitmez.
+
+    Sinyal doğrudan 'Açılmaya Hazır İşlemler' listesine alınır.
+    Kullanıcı 'Aç' deyince o anki piyasa fiyatından açılır.
+    Her tick'te silent_block + _refresh_manual_ready_with_live_signal
+    devreye girer — fiyat her zaman güncel kalır.
+    """
+    now_iso = now_dt.isoformat()
+
+    existing = st.manual_ready_trades.get(pair)
+    if existing is not None and existing.side == side and (
+        not primary_tf or existing.primary_tf == primary_tf
+    ):
+        # Aynı sinyal zaten var — sadece fiyat/sinyal güncelle, banner tekrarlama.
+        _refresh_manual_ready_with_live_signal(
+            st, pair,
+            price=price, signal_snapshot=signal_snapshot,
+            atr_value=atr_value, last_signal=last_signal,
+        )
+        return
+
+    # Yeni kayıt (veya yön/TF değişti → üzerine yaz)
+    st.manual_ready_trades[pair] = ManualReadyTrade(
+        pair=pair,
+        side=side,
+        requested_at=now_iso,
+        rejected_at=now_iso,
+        last_signal=last_signal,
+        size_usd=size_usd,
+        requested_price=price,
+        open_signal=signal_snapshot,
+        fingerprint=fingerprint,
+        atr_value=atr_value,
+        primary_tf=primary_tf,
+        original_requested_price=price,
+        last_refreshed_at=now_iso,
+    )
+    _try_emit(
+        "defensive_regime_manual_required", "INFO",
+        f"{side} {pair} · Manuel Onay Gerekli",
+        (
+            f"Rejim {risk_action} — {side} {pair} @ ${price:,.2f} otomatik açılmadı. "
+            f"'Açılmaya Hazır İşlemler' listesinde bekliyor."
+        ),
+        pair=pair, side=side,
+        metadata={"risk_action": risk_action, "price": price, "size_usd": size_usd},
+    )
+
+
 # ── S1: Trailing Stop + Break-Even / S2: Partial Take-Profit ─────────────────
 
 def _get_atr_for_position(cur: "Position") -> float:
@@ -1225,6 +1290,11 @@ def tick_consensus(
             )
             base_mult = decision.size_pct if decision.size_pct > 0.0 else raw_base_mult
 
+            # DEFENSIVE / CRISIS rejimde yeni pozisyon otomatik pending'e gitmiyor.
+            # Sinyal doğrudan manual_ready kuyruğuna alınır; kullanıcı onayladığında açılır.
+            # (Açık pozisyonu koruma / kapatma kararlarına müdahale etmez.)
+            _no_auto_open = decision.risk_action in ("NO_POSITION_INCREASE", "RISK_REDUCE")
+
             price = current_prices.get(pair, 0.0)
             if price <= 0:
                 continue
@@ -1416,39 +1486,52 @@ def tick_consensus(
                     )
 
                     if target in ("LONG", "SHORT") and _is_market_open(pair, now_dt):
-                        _queue_pending_open(
-                            st=st,
-                            pair=pair,
-                            side=target,
-                            price=price,
-                            size_usd=new_size,
-                            last_signal=f"{final_direction}@{final_score:.1f}" if final_score is not None else "pending",
-                            signal_snapshot=sig,
-                            fingerprint=signal_fingerprint,
-                            now_dt=now_dt,
-                            atr_value=atr_val_pending,
-                            primary_tf=current_primary_tf,
-                            is_recurring=is_recurring_signal,
+                        _last_sig = (
+                            f"{final_direction}@{final_score:.1f}"
+                            if final_score is not None else "pending"
                         )
+                        if _no_auto_open:
+                            _add_to_manual_ready_direct(
+                                st=st, pair=pair, side=target, price=price,
+                                size_usd=new_size, signal_snapshot=sig,
+                                atr_value=atr_val_pending, fingerprint=signal_fingerprint,
+                                now_dt=now_dt, primary_tf=current_primary_tf,
+                                last_signal=_last_sig, risk_action=decision.risk_action,
+                            )
+                        else:
+                            _queue_pending_open(
+                                st=st, pair=pair, side=target, price=price,
+                                size_usd=new_size, last_signal=_last_sig,
+                                signal_snapshot=sig, fingerprint=signal_fingerprint,
+                                now_dt=now_dt, atr_value=atr_val_pending,
+                                primary_tf=current_primary_tf, is_recurring=is_recurring_signal,
+                            )
                     else:
                         st.pending_orders.pop(pair, None)
                 continue
 
             if target in ("LONG", "SHORT") and pending is None and _is_market_open(pair, now_dt):
-                _queue_pending_open(
-                    st=st,
-                    pair=pair,
-                    side=target,
-                    price=price,
-                    size_usd=new_size,
-                    last_signal=f"{final_direction}@{final_score:.1f}" if final_score is not None else "pending",
-                    signal_snapshot=sig,
-                    fingerprint=signal_fingerprint,
-                    now_dt=now_dt,
-                    atr_value=atr_val_pending,
-                    primary_tf=current_primary_tf,
-                    is_recurring=is_recurring_signal,
+                _last_sig = (
+                    f"{final_direction}@{final_score:.1f}"
+                    if final_score is not None else "pending"
                 )
+                if _no_auto_open:
+                    # DEFENSIVE / CRISIS: otomatik 60s pending yok → manuel onay
+                    _add_to_manual_ready_direct(
+                        st=st, pair=pair, side=target, price=price,
+                        size_usd=new_size, signal_snapshot=sig,
+                        atr_value=atr_val_pending, fingerprint=signal_fingerprint,
+                        now_dt=now_dt, primary_tf=current_primary_tf,
+                        last_signal=_last_sig, risk_action=decision.risk_action,
+                    )
+                else:
+                    _queue_pending_open(
+                        st=st, pair=pair, side=target, price=price,
+                        size_usd=new_size, last_signal=_last_sig,
+                        signal_snapshot=sig, fingerprint=signal_fingerprint,
+                        now_dt=now_dt, atr_value=atr_val_pending,
+                        primary_tf=current_primary_tf, is_recurring=is_recurring_signal,
+                    )
             elif target in ("LONG", "SHORT") and pending is None and pair in MARKET_HOURS_GATED_PAIRS:
                 _today = now_dt.date().isoformat()
                 if _MARKET_CLOSE_WARNED.get(pair) != _today:
@@ -1801,6 +1884,45 @@ def reset_state() -> None:
         _save_state(TradingState())
 
 
+def reset_trades_only() -> None:
+    """İşlem geçmişini, pozisyonları ve sinyalleri sıfırla.
+
+    KORUNAN  : weight_adjustments, training_history (öğrenilmiş ağırlıklar).
+    SIFIRANAN: trades, positions, pending_orders, rejected_signals,
+               manual_ready_trades, realized_pnl_usd, last_event, tick snapshot.
+
+    last_trained_at_trade_count da sıfırlanır — eğitim aralığı sıfır trade'den
+    yeniden sayılmaya başlar; mevcut ağırlıklar ise bozulmadan korunur.
+
+    PAPER_SAFE / NO_EXECUTION
+    """
+    with _LOCK:
+        st = _load_state()
+        # Öğrenme → koru
+        saved_adjustments    = st.weight_adjustments
+        saved_history        = st.training_history
+        # Trade geçmişini sıfırla
+        st.trades            = []
+        st.positions         = {}
+        st.pending_orders    = {}
+        st.rejected_signals  = {}
+        st.manual_ready_trades = {}
+        st.realized_pnl_usd  = 0.0
+        st.last_event        = None
+        st.last_event_at     = None
+        st.last_tick_prices  = {}
+        st.last_tick_at      = None
+        st.last_tick_signals = {}
+        # Eğitim aralığını sıfırla (ağırlıklar bozulmaz)
+        st.last_trained_at_trade_count = 0
+        # Öğrenmeyi geri yaz
+        st.weight_adjustments = saved_adjustments
+        st.training_history   = saved_history
+        # Dedup seen-set temizle
+        _ATTRIBUTION_SEEN_IDS.clear()
+        _save_state(st)
+
+
 def force_close_position(pair: str, current_price: float, reason: str = "MANUEL") -> dict[str, Any]:
     """Kullanıcı talebiyle pozisyonu anlık fiyattan kapat (Manuel Kapat). PAPER_SAFE."""
     with _LOCK:
@@ -1865,7 +1987,7 @@ def force_close_position(pair: str, current_price: float, reason: str = "MANUEL"
 
 __all__ = [
     "tick", "tick_consensus", "get_snapshot", "reject_pending_open", "reset_state",
-    "force_close_position",
+    "reset_trades_only", "force_close_position",
     "force_open_manual_ready", "dismiss_manual_ready",
     "OPEN_CONFIRMATION_WINDOW_SECONDS", "_is_market_open",
     "TRADED_PAIRS", "STARTING_BALANCE", "POSITION_SIZE",

@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 
 # ── Eğitim parametreleri ──────────────────────────────────────────────────────
 
-MIN_TOTAL_TRADES        = 10   # toplam en az 10 kapalı trade
-MIN_REGIME_TRADES       = 5    # rejim başına en az 5
-TRAINING_INTERVAL       = 5    # her 5 yeni kapanışta tetik
+MIN_TOTAL_TRADES        = 30   # toplam en az 30 kapalı trade (5 istatistiksel gürültü)
+MIN_REGIME_TRADES       = 10   # rejim başına en az 10
+TRAINING_INTERVAL       = 20   # her 20 yeni kapanışta tetik
 MAX_ADJUSTMENT_PER_RUN  = 0.03  # tek tetikte modül başına max ±0.03 (3 puan)
 MAX_TOTAL_ADJUSTMENT    = 0.10  # toplam (her run'lar dahil) max ±0.10
 MIN_MODULE_WEIGHT       = 0.02  # her modül en az %2
