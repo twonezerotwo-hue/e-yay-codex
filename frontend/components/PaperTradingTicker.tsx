@@ -425,7 +425,7 @@ export default function PaperTradingTicker() {
                                 <span>
                                   ⏱ Beklenen tutuş:
                                   <span className="text-eyay-text ml-0.5">
-                                    {p.risk_plan.expected_horizon_hours.low}-{p.risk_plan.expected_horizon_hours.high}s
+                                    {p.risk_plan.expected_horizon_hours.low}-{p.risk_plan.expected_horizon_hours.high} saat
                                   </span>
                                 </span>
                               )}
@@ -434,10 +434,13 @@ export default function PaperTradingTicker() {
                               )}
                             </div>
                           )}
-                          {/* Row 3: Chart Pattern göstergesi */}
+                          {/* Row 3: Chart Pattern göstergesi (pattern_score: -100..+100, ≠ consensus) */}
                           {patterns[p.pair] && (
-                            <div className="flex items-center gap-1.5 text-[8px] pt-0.5 border-t border-eyay-border/30">
-                              <span className="text-eyay-faint">📊</span>
+                            <div
+                              className="flex items-center gap-1.5 text-[8px] pt-0.5 border-t border-eyay-border/30"
+                              title="Chart Pattern skoru -100..+100 aralığındadır. Consensus skoru (0-100) ile aynı değildir."
+                            >
+                              <span className="text-eyay-faint">📊 Pattern</span>
                               <span className={
                                 patterns[p.pair].bias === "BULLISH" ? "text-emerald-400 font-bold" :
                                 patterns[p.pair].bias === "BEARISH" ? "text-red-400 font-bold" :
@@ -445,6 +448,7 @@ export default function PaperTradingTicker() {
                               }>
                                 {patterns[p.pair].bias} {patterns[p.pair].consolidated_score >= 0 ? "+" : ""}
                                 {patterns[p.pair].consolidated_score.toFixed(1)}
+                                <span className="text-eyay-faint font-normal">/100</span>
                               </span>
                               {patterns[p.pair].active_patterns?.length > 0 && (
                                 <span className="text-eyay-faint truncate">
