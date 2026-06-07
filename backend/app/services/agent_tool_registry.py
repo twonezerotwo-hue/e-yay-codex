@@ -206,6 +206,13 @@ def _h_recent_evals(limit: int = 10) -> dict[str, Any]:
     return {"count": len(items), "items": items}
 
 
+def _h_read_chart(symbol: str, timeframes: list[str] | None = None) -> dict[str, Any]:
+    from app.services import agent_chart_reader_service as cr
+    tfs = timeframes if timeframes else ["1h", "4h", "1d"]
+    reading = cr.read_chart(symbol, timeframes=tfs)
+    return cr.reading_to_dict(reading)
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Schema'lar
 # ────────────────────────────────────────────────────────────────────────────
@@ -301,6 +308,27 @@ register(AgentTool(
     }),
     handler=_h_recent_evals,
     category="introspection",
+))
+
+register(AgentTool(
+    name="read_chart",
+    description=(
+        "Çoklu timeframe grafik okuma: 1h/4h/1d için trend, destek-direnç, ATR, "
+        "RSI(14), TF hizalama özeti. yfinance üzerinden anlık çeker."
+    ),
+    input_schema=_schema({
+        "symbol": {
+            "type": "string",
+            "description": "BTCUSD, XAUUSD, XAGUSD, XCUUSD, BRENT, SP500, DXY, VIX, ETHUSD vb.",
+        },
+        "timeframes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["1h", "4h", "1d", "1wk"]},
+            "description": "Varsayılan: [\"1h\",\"4h\",\"1d\"]",
+        },
+    }, required=["symbol"]),
+    handler=_h_read_chart,
+    category="analysis",
 ))
 
 

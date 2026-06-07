@@ -12,6 +12,7 @@ import logging
 from fastapi import FastAPI
 
 from app.api.agent_audit import router as agent_audit_router
+from app.api.agent_chart import router as agent_chart_router
 from app.api.agent_critique import router as agent_critique_router
 from app.api.agent_ensemble import router as agent_ensemble_router
 from app.api.agent_eval import router as agent_eval_router
@@ -54,6 +55,7 @@ app.include_router(ai_report_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(agent_insight_router, prefix=settings.api_prefix)
 app.include_router(agent_audit_router, prefix=settings.api_prefix)
+app.include_router(agent_chart_router, prefix=settings.api_prefix)
 app.include_router(agent_critique_router, prefix=settings.api_prefix)
 app.include_router(agent_eval_router, prefix=settings.api_prefix)
 app.include_router(agent_tools_router, prefix=settings.api_prefix)

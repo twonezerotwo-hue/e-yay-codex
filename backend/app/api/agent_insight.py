@@ -199,6 +199,16 @@ def get_agent_insight() -> dict:
             "snapshot_id":  snapshot_id,
             "contract_version": snapshot_entry["contract_version"],
             "decision":   report.decision,
+            # Karar hangi TF'lerde okunmuş bir kanıt setiyle alındı?
+            "decision_timeframe": {
+                "primary":     "1D",
+                "secondary":   ["4H (in-day swing)", "1H (kısa ufuk teyit)"],
+                "indicators":  ["ATR(14)", "swing high/low", "RSI(14)", "EMA(20)"],
+                "explanation": (
+                    "Karar deterministik regime motorundan; teknik kanıtlar 1D mumlardan, "
+                    "agent isterse 1H/4H'i `read_chart` aracıyla ek olarak okur."
+                ),
+            },
             "insights":   [dataclasses.asdict(i) for i in insights],
             "validation": validation.to_dict(),
             "confidence": confidence.to_dict(),
