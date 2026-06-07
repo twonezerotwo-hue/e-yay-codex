@@ -14,7 +14,7 @@ Hesaplamalar:
   6. Hacim oranı        — Mevcut hacim / 20-bar ortalaması
 
 Çıktı: TechnicalInsight per asset — DynamicLevels + skor (0-100)
-Cache : 5 dakika TTL (aynı süreçte)
+Cache : 3 dakika TTL (aynı süreçte) — _CACHE_TTL ile senkron
 Execution: OFF / NO_EXECUTION / PAPER_SAFE
 """
 from __future__ import annotations
@@ -518,7 +518,7 @@ def _process_ticker(
 class TechnicalProvider:
     """
     Tüm yapılandırılmış varlıklar için OHLCV bazlı teknik analiz üretir.
-    Önbellekleme: 5 dk TTL.
+    Önbellekleme: 3 dk TTL (yfinance soft-limit dostu).
     """
 
     def compute(

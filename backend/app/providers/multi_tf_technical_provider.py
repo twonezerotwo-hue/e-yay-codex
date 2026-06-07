@@ -46,10 +46,11 @@ TIMEFRAMES: dict[str, dict] = {
 
 # Hangi varlıklar için multi-TF çekilecek?
 MTF_ASSETS: dict[str, dict] = {
-    "BTCUSD": {"ticker": "BTC-USD", "mult": 1.0},
-    "XAUUSD": {"ticker": "GC=F",    "mult": 1.0},
-    "XAGUSD": {"ticker": "SI=F",    "mult": 1.0},
-    "BRENT":  {"ticker": "BZ=F",    "mult": 1.0},
+    "BTCUSD":  {"ticker": "BTC-USD", "mult": 1.0},
+    "XAUUSD":  {"ticker": "GC=F",    "mult": 1.0},
+    "XAGUSD":  {"ticker": "SI=F",    "mult": 1.0},
+    "XCUUSD":  {"ticker": "HG=F",    "mult": 2204.623},  # USD/lb → USD/MT
+    "BRENT":   {"ticker": "BZ=F",    "mult": 1.0},
 }
 
 # Cache — (now, {asset_code: {tf: TechnicalInsight}})

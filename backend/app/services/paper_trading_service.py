@@ -159,11 +159,21 @@ def _calc_sl_tp(
     pair: str,
     atr: float | None = None,
 ) -> tuple[float, float]:
-    """ATR varsa 2×ATR SL / 3×ATR TP, yoksa sabit yüzde kullan."""
+    """ATR varsa per-asset profilden gelen X×ATR SL / Y×ATR TP, yoksa sabit yüzde.
+
+    Per-asset profile (asset_parameter_profile.ASSET_PROFILES):
+      - BTCUSD: SL=1.5×ATR, TP=2.5×ATR (yüksek vol için sıkı)
+      - XAU/XCU/BRENT: SL=2.5×ATR, TP=3.0..3.5×ATR (gap riski)
+      - default: SL=2.0×ATR, TP=3.0×ATR (eski davranış)
+    """
+    from app.services.asset_parameter_profile import get_param
+    sl_mult = float(get_param(pair, "sl_atr_mult", 2.0) or 2.0)
+    tp_mult = float(get_param(pair, "tp_atr_mult", 3.0) or 3.0)
+
     sl_pct = _SL_PCT.get(pair, 0.04)
     if atr and atr > 0:
-        risk   = 2.0 * atr
-        reward = 3.0 * atr
+        risk   = sl_mult * atr
+        reward = tp_mult * atr
     else:
         risk   = entry * sl_pct
         reward = entry * sl_pct * _TP_MULT
@@ -186,24 +196,28 @@ def _build_risk_plan(
 
     timeframe    : technical_provider 1D (daily) kullanır
     atr_period   : Wilder ATR(14) → 14 günlük ortalama gerçek aralık
-    sl_basis     : "ATR×2" veya "%X (atr fallback)"
-    horizon_hours: beklenen ortalama tutuş süresi (heuristic: ATR%/günlük→günlere göre)
+    sl_basis     : "ATR×N · 1D" veya "%X (atr fallback)" — per-asset profile
+    horizon_hours: beklenen ortalama tutuş süresi — per-asset profile
     """
+    from app.services.asset_parameter_profile import get_param
+    sl_mult = float(get_param(pair, "sl_atr_mult", 2.0) or 2.0)
+    tp_mult = float(get_param(pair, "tp_atr_mult", 3.0) or 3.0)
+    hh_low  = int(get_param(pair, "horizon_hours_low",  48) or 48)
+    hh_high = int(get_param(pair, "horizon_hours_high", 144) or 144)
+
     if atr and atr > 0:
-        sl_basis = "2×ATR(14) · 1D"
-        tp_basis = "3×ATR(14) · 1D"
-        rr = 1.5  # 3R / 2R
-        # Horizon heuristic: günlük ortalama hareket ATR'a yakın → TP'ye varış için ~3-5 gün ortalama
-        # 1.5R = ~ 3-5 gün; LONG/SHORT için aynı dağılım. Saat: 72-120.
-        horizon_hours_low  = 48
-        horizon_hours_high = 144
+        sl_basis = f"{sl_mult:g}×ATR(14) · 1D"
+        tp_basis = f"{tp_mult:g}×ATR(14) · 1D"
+        rr = round(tp_mult / sl_mult, 2) if sl_mult > 0 else 1.5
+        horizon_hours_low  = hh_low
+        horizon_hours_high = hh_high
     else:
         pct = _SL_PCT.get(pair, 0.04) * 100
         sl_basis = f"sabit %{pct:.1f} (1D ATR yok)"
         tp_basis = f"sabit %{pct * _TP_MULT:.1f} (RR 2:1)"
         rr = _TP_MULT
-        horizon_hours_low  = 72
-        horizon_hours_high = 168
+        horizon_hours_low  = max(hh_low + 24, 72)
+        horizon_hours_high = max(hh_high + 24, 168)
 
     sl_pct = round(abs(sl - entry) / entry * 100, 2) if entry else None
     tp_pct = round(abs(tp - entry) / entry * 100, 2) if entry else None
@@ -221,10 +235,12 @@ def _build_risk_plan(
             "low":  horizon_hours_low,
             "high": horizon_hours_high,
         },
+        "asset_profile":     pair,
         "explanation": (
             f"SL ve TP, günlük (1D) mumlar üzerinde Wilder ATR(14) ile hesaplandı. "
-            f"SL=2×ATR, TP=3×ATR (RR 1.5). Beklenen tutuş: ~"
-            f"{horizon_hours_low}-{horizon_hours_high} saat."
+            f"SL={sl_mult:g}×ATR, TP={tp_mult:g}×ATR (RR {rr}). "
+            f"Beklenen tutuş: ~{horizon_hours_low}-{horizon_hours_high} saat. "
+            f"(Profil: {pair})"
             if atr else
             f"ATR verisi yok — sabit %{pct:.1f} SL ve RR {_TP_MULT}:1 kullanıldı. "
             f"Beklenen tutuş: ~{horizon_hours_low}-{horizon_hours_high} saat."
@@ -385,6 +401,31 @@ def _load_state() -> TradingState:
         return TradingState()
 
 
+# Signal attribution — _save_state'da yeni kapanmış trade'leri otomatik kaydet.
+# Her _save_state'da set'e bakar, yeni trade.id varsa signal_attribution_service'e gönderir.
+# Tüm close path'lere ayrı kanca eklemekten kaçınmak için tek noktada toparlandı.
+_ATTRIBUTION_SEEN_IDS: set[int] = set()
+
+
+def _emit_attributions(st: TradingState) -> None:
+    """st.trades'i tara, henüz attribution kaydedilmemiş olanları gönder."""
+    try:
+        from app.services import signal_attribution_service as sas  # lazy import → circular önle
+    except Exception:
+        return
+    for t in st.trades:
+        tid = getattr(t, "id", None)
+        if not isinstance(tid, int) or tid in _ATTRIBUTION_SEEN_IDS:
+            continue
+        try:
+            sas.record_trade(t)
+        except Exception:
+            # Attribution best-effort — paper trading akışını bozmaz
+            pass
+        finally:
+            _ATTRIBUTION_SEEN_IDS.add(tid)
+
+
 def _save_state(st: TradingState) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -407,6 +448,8 @@ def _save_state(st: TradingState) -> None:
     tmp_path = _STATE_PATH.with_suffix(_STATE_PATH.suffix + ".tmp")
     tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp_path.replace(_STATE_PATH)
+    # Persist sonrası yeni trade'ler için attribution emit (best-effort, hata yutulur)
+    _emit_attributions(st)
 
 
 # ── PnL helpers ───────────────────────────────────────────────────────────────
@@ -1152,6 +1195,8 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
 def reset_state() -> None:
     """Tüm trading state'i sıfırla — sadece debug için."""
     with _LOCK:
+        # Attribution seen-set'i de sıfırla → eski trade.id'ler tekrar emit'lenebilir
+        _ATTRIBUTION_SEEN_IDS.clear()
         _save_state(TradingState())
 
 

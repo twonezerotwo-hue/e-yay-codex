@@ -178,6 +178,8 @@ def _build_all_patterns() -> dict:
             bias = "NEUTRAL"
         summary[pair] = {
             "consolidated_score": consolidated,
+            "score_range": "signed_neg100_pos100",  # consensus 0..100 ile karıştırma uyarısı
+            "bias_thresholds": {"bullish_at": 25.0, "bearish_at": -25.0},
             "bias": bias,
             "active_patterns": active_patterns,
             "per_tf": tf_dict,

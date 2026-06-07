@@ -51,6 +51,10 @@ class ChartPatternInsight:
     distance_to_resistance_atr: float
     pattern_score: float           # -100 (strong bearish) ... +100 (strong bullish)
     reason: str                    # insan-okur özet
+    # ── Pattern confirmation (P2): prior bar paternlerinin current bar teyit/iptal durumu
+    confirmation_status: str = "n/a"   # "confirmed" | "invalidated" | "pending" | "n/a"
+    confirmed_patterns: tuple[CandlestickPattern, ...] = ()
+    invalidated_patterns: tuple[CandlestickPattern, ...] = ()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -353,6 +357,81 @@ def _aggregate_pattern_score(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Pattern Confirmation — prior-bar paternlerinin current-bar teyit/iptal durumu
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _check_followthrough(
+    prev_pattern: CandlestickPattern,
+    pattern_bar_low: float,
+    pattern_bar_high: float,
+    last_o: float,
+    last_h: float,
+    last_l: float,
+    last_c: float,
+) -> str:
+    """
+    Bir önceki bar'da yakalanan paternin, mevcut bar tarafından teyit / iptal
+    edilip edilmediğini söyler.
+
+    Bullish pattern (hammer, engulfing_bullish):
+        invalidated → last_c < pattern_bar_low (level kırıldı)
+        confirmed   → last_c > pattern_bar_high (üst sınırın üstünde kapanış)
+        pending     → arada
+    Bearish pattern (shooting_star, engulfing_bearish):
+        invalidated → last_c > pattern_bar_high
+        confirmed   → last_c < pattern_bar_low
+        pending     → arada
+    """
+    if prev_pattern.bias == "bullish":
+        if last_c < pattern_bar_low:
+            return "invalidated"
+        if last_c > pattern_bar_high:
+            return "confirmed"
+        # Follow-through soft: yeşil kapanış pattern'in üstünde
+        if last_c > last_o and last_c > (pattern_bar_low + pattern_bar_high) / 2:
+            return "confirmed"
+        return "pending"
+    if prev_pattern.bias == "bearish":
+        if last_c > pattern_bar_high:
+            return "invalidated"
+        if last_c < pattern_bar_low:
+            return "confirmed"
+        if last_c < last_o and last_c < (pattern_bar_low + pattern_bar_high) / 2:
+            return "confirmed"
+        return "pending"
+    return "n/a"
+
+
+def _detect_prior_bar_patterns(
+    o: np.ndarray, h: np.ndarray, l: np.ndarray, c: np.ndarray,
+) -> list[CandlestickPattern]:
+    """Önceki bar'a (offset=-1) bakarak aynı detektörleri çalıştır.
+
+    Trick: detektörlere son barı kırpılmış array veriyoruz; onlar yine [-1]'e
+    bakacak → bizim için bir önceki bar olacak.
+    """
+    if len(c) < 3:
+        return []
+    detectors = (
+        _detect_hammer,
+        _detect_shooting_star,
+        _detect_engulfing,
+        # doji/inside_bar/marubozu burada confirmation için anlamlı değil
+    )
+    found: list[CandlestickPattern] = []
+    o2, h2, l2, c2 = o[:-1], h[:-1], l[:-1], c[:-1]
+    for det in detectors:
+        p = det(o2, h2, l2, c2)
+        if p is not None:
+            # bar_offset'ı -1 olarak işaretle (prior bar)
+            found.append(CandlestickPattern(
+                name=p.name, bias=p.bias, strength=p.strength,
+                bar_offset=-1, note=p.note,
+            ))
+    return found
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Ana entry point — OHLCV input alır, ChartPatternInsight üretir
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -386,7 +465,7 @@ def analyze_chart_patterns(
         return None
 
     try:
-        # 1. Candlestick pattern tarama
+        # 1. Candlestick pattern tarama (current bar)
         detectors = [
             _detect_doji,
             _detect_hammer,
@@ -400,6 +479,35 @@ def analyze_chart_patterns(
             p = detector(open_, high, low, close)
             if p is not None:
                 patterns.append(p)
+
+        # 1b. Pattern confirmation — bir önceki bar paternleri, current bar ile teyit/iptal
+        confirmed: list[CandlestickPattern] = []
+        invalidated: list[CandlestickPattern] = []
+        confirmation_status = "n/a"
+        try:
+            prior_patterns = _detect_prior_bar_patterns(open_, high, low, close)
+            if prior_patterns and len(close) >= 2:
+                pat_low  = float(low[-2])
+                pat_high = float(high[-2])
+                last_o = float(open_[-1]); last_h = float(high[-1])
+                last_l = float(low[-1]);   last_c = float(close[-1])
+                for pp in prior_patterns:
+                    status = _check_followthrough(
+                        pp, pat_low, pat_high, last_o, last_h, last_l, last_c
+                    )
+                    if status == "confirmed":
+                        confirmed.append(pp)
+                    elif status == "invalidated":
+                        invalidated.append(pp)
+                # Birleşik durum: confirmed varsa confirmed; yoksa invalidated; yoksa pending
+                if confirmed:
+                    confirmation_status = "confirmed"
+                elif invalidated:
+                    confirmation_status = "invalidated"
+                elif prior_patterns:
+                    confirmation_status = "pending"
+        except Exception as exc:
+            logger.debug("Pattern confirmation atlandı %s [%s]: %s", asset_code, timeframe, exc)
 
         # 2. Trend yapısı
         trend, trend_strength = _classify_trend(high, low, lookback=30)
@@ -415,6 +523,19 @@ def analyze_chart_patterns(
             patterns, trend, trend_strength, near_sup, near_res
         )
 
+        # 5. Confirmation boost / penalty (eski skoru fazla bozmamak için ±%15 tavan)
+        if confirmed:
+            boost = min(15.0, 5.0 * len(confirmed))
+            # Confirmed bullish ise pozitif, bearish ise negatif yön
+            net_bias = sum(1 if p.bias == "bullish" else -1 for p in confirmed)
+            score = max(-100.0, min(100.0, score + boost * (1 if net_bias > 0 else -1 if net_bias < 0 else 0)))
+            reason += f" · CONFIRMED (+{boost:.0f})"
+        elif invalidated:
+            penalty = min(10.0, 4.0 * len(invalidated))
+            net_bias = sum(1 if p.bias == "bullish" else -1 for p in invalidated)
+            score = max(-100.0, min(100.0, score - penalty * (1 if net_bias > 0 else -1 if net_bias < 0 else 0)))
+            reason += f" · INVALIDATED (-{penalty:.0f})"
+
         return ChartPatternInsight(
             asset_code=asset_code,
             timeframe=timeframe,
@@ -427,6 +548,9 @@ def analyze_chart_patterns(
             distance_to_resistance_atr=round(dist_res, 2),
             pattern_score=score,
             reason=reason,
+            confirmation_status=confirmation_status,
+            confirmed_patterns=tuple(confirmed),
+            invalidated_patterns=tuple(invalidated),
         )
     except Exception as exc:
         logger.warning("Chart pattern analizi hatası %s [%s]: %s", asset_code, timeframe, exc)
