@@ -302,6 +302,14 @@ class ManualReadyTrade:
     İşlemler" bölümünde görünür. Kullanıcı `Aç` derse anlık fiyattan açılır,
     `Sil` derse listeden düşer. Yeni bir TF'den sinyal gelirse otomatik
     silinmez — ek olarak 60sn pending banner'ı gönderilir (yinelenen sinyal).
+
+    Fiyat alanları:
+      • original_requested_price — reddedildiği anki donmuş fiyat (referans)
+      • requested_price — son tick'te güncellenen taze fiyat (silent block
+        her tickte refresh eder); 'Aç' butonu bu fiyattan değil, anlık
+        last_tick_prices'tan açar
+      • open_signal / atr_value — silent block'ta her tick refresh edilir
+        ki SL/TP hesabı taze olsun
     """
     pair: str
     side: PositionSide
@@ -314,6 +322,8 @@ class ManualReadyTrade:
     fingerprint: str = ""
     atr_value: float = 0.0
     primary_tf: str = ""
+    original_requested_price: float = 0.0   # ilk önerildiğindeki fiyat (donmuş)
+    last_refreshed_at: str = ""             # son güncelleme ts
 
 
 @dataclass
@@ -406,6 +416,8 @@ def _load_state() -> TradingState:
             v.setdefault("fingerprint", "")
             v.setdefault("atr_value", 0.0)
             v.setdefault("primary_tf", "")
+            v.setdefault("original_requested_price", v.get("requested_price", 0.0))
+            v.setdefault("last_refreshed_at", v.get("rejected_at", ""))
             valid = {f.name for f in fields(ManualReadyTrade)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
             manual_ready_trades[k] = ManualReadyTrade(**v)
@@ -592,6 +604,35 @@ def _is_recurring_signal(
     if mr is None:
         return False
     return (mr.side != target) or (bool(primary_tf) and mr.primary_tf != primary_tf)
+
+
+def _refresh_manual_ready_with_live_signal(
+    st: TradingState,
+    pair: str,
+    *,
+    price: float,
+    signal_snapshot: dict[str, Any],
+    atr_value: float,
+    last_signal: str,
+) -> None:
+    """Silent-block her tick'inde manual_ready[pair] entry'sini taze fiyat,
+    sinyal snapshot'ı ve ATR ile günceller. original_requested_price korunur
+    (kullanıcı reddettiği fiyat değişmez).
+
+    Kullanıcı 'Aç' deyince:
+      - requested_price (güncel) UI'da görünür
+      - open_signal + atr_value taze → SL/TP fresh ATR'den hesaplanır
+      - Asıl açılış yine state.last_tick_prices'tan yapılır
+        (force_open_manual_ready içinde)
+    """
+    mr = st.manual_ready_trades.get(pair)
+    if mr is None or price <= 0:
+        return
+    mr.requested_price   = price
+    mr.atr_value         = atr_value if atr_value > 0 else mr.atr_value
+    mr.open_signal       = signal_snapshot or mr.open_signal
+    mr.last_signal       = last_signal or mr.last_signal
+    mr.last_refreshed_at = _utc_now().isoformat()
 
 
 def _queue_pending_open(
@@ -960,6 +1001,17 @@ def tick_consensus(
             if not is_recurring_signal and _should_silent_block(
                 st, pair, target, current_primary_tf,
             ):
+                # Silent block: yeni pending açma. AMA manual_ready entry'sini
+                # taze fiyat + ATR + sinyal ile revize et — kullanıcı "Aç"
+                # deyince güncel piyasa fiyatından + taze SL/TP açılsın.
+                _refresh_manual_ready_with_live_signal(
+                    st, pair,
+                    price=price,
+                    signal_snapshot=sig,
+                    atr_value=atr_val_pending,
+                    last_signal=(f"{final_direction}@{final_score:.1f}"
+                                 if final_score is not None else "pending"),
+                )
                 target = None
             else:
                 # Rejection eskimiş olabilir (yön/TF tamamen değişti) → temizle.
@@ -1256,7 +1308,9 @@ def reject_pending_open(pair: str) -> bool:
             rejected_at=rejected_at,
             primary_tf=pending.primary_tf,
         )
-        # Manuel açılabilir olarak hazırda tut
+        # Manuel açılabilir olarak hazırda tut. original_requested_price
+        # reddedildiği fiyatı dondurur (referans); requested_price ileride
+        # silent_block tarafından her tick taze fiyata revize edilir.
         st.manual_ready_trades[pair] = ManualReadyTrade(
             pair=pair,
             side=pending.side,
@@ -1269,6 +1323,8 @@ def reject_pending_open(pair: str) -> bool:
             fingerprint=pending.fingerprint,
             atr_value=pending.atr_value,
             primary_tf=pending.primary_tf,
+            original_requested_price=pending.requested_price,
+            last_refreshed_at=rejected_at,
         )
         _save_state(st)
         pending_side = pending.side

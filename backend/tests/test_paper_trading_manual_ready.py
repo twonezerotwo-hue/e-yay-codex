@@ -293,6 +293,103 @@ def test_snapshot_exposes_manual_ready(fresh_state):
 
 # ── 9. PendingOpenOrder.is_recurring bayrağı kaydedilip okunur ─────────────
 
+# ── 11. Silent block manual_ready'yi taze fiyat ile günceller ──────────────
+
+def test_silent_block_refreshes_manual_ready_price(fresh_state):
+    """Tick'te aynı sinyal sessizce engellense bile manual_ready entry'sinin
+    requested_price + atr_value taze değerlere güncellenir, kullanıcı 'Aç'
+    deyince güncel fiyattan + taze SL/TP'den açılması için."""
+    st = pts._load_state()
+    st.manual_ready_trades["BTCUSD"] = ManualReadyTrade(
+        pair="BTCUSD", side="LONG",
+        requested_at="t1", rejected_at="t2",
+        last_signal="BULLISH@65",
+        size_usd=25000.0,
+        requested_price=61800.0,
+        original_requested_price=61800.0,
+        open_signal={"final_score": 65.0, "primary_tf": "1d"},
+        fingerprint="fp_a",
+        atr_value=1200.0,
+        primary_tf="1d",
+    )
+    st.rejected_signals["BTCUSD"] = RejectedOpenSignal(
+        pair="BTCUSD", side="LONG", fingerprint="fp_a",
+        rejected_at="t2", primary_tf="1d",
+    )
+    pts._save_state(st)
+
+    # Yeni tick: fiyat $60000'a düştü, ATR de değişti, daha yüksek skor
+    new_sig = {
+        "symbol": "BTCUSD", "final_score": 78.0, "final_direction": "bullish",
+        "confluence": {"status": "aligned"}, "raw_regime": "DEFENSIVE",
+        "primary_tf": "1d", "base": {"contributions": {"fundamental": {"weighted_score": 35}}},
+        "atr": 1500.0,
+    }
+    sigs = {"BTCUSD": new_sig, "XAUUSD": {}, "XAGUSD": {}, "BRENT": {}}
+    prices = {"BTCUSD": 60000.0, "XAUUSD": 4500, "XAGUSD": 50, "BRENT": 90}
+
+    st_after = pts.tick_consensus(sigs, prices)
+
+    # Pending açılmadı (silent block)
+    assert "BTCUSD" not in st_after.pending_orders
+
+    # Manual_ready entry'si TAZE fiyat + ATR ile güncellenmiş olmalı
+    mr = st_after.manual_ready_trades["BTCUSD"]
+    assert mr.requested_price == 60000.0, "Silent block fiyatı revize etmeli"
+    assert mr.atr_value == 1500.0, "ATR yeni değerle güncellenmeli"
+    assert mr.open_signal.get("final_score") == 78.0, "Sinyal snapshot taze olmalı"
+    # Orijinal reddedildiği fiyat KORUNMUŞ olmalı
+    assert mr.original_requested_price == 61800.0
+    assert mr.last_refreshed_at, "last_refreshed_at doldurulmalı"
+
+
+def test_force_open_uses_current_price_not_original(fresh_state):
+    """force_open_manual_ready anlık fiyatı (last_tick_prices) kullanır,
+    reddedildiği orijinal fiyatı değil."""
+    st = pts._load_state()
+    st.manual_ready_trades["BTCUSD"] = ManualReadyTrade(
+        pair="BTCUSD", side="LONG",
+        requested_at="t1", rejected_at="t2",
+        last_signal="BULLISH@65", size_usd=25000.0,
+        requested_price=60000.0,            # silent block refresh'lediği taze
+        original_requested_price=61800.0,   # reddedildiği donmuş
+        fingerprint="fp_a", atr_value=1500.0, primary_tf="1d",
+    )
+    st.last_tick_prices = {"BTCUSD": 59500.0}  # şu anki canlı
+    pts._save_state(st)
+
+    # current_price parametresi geçilmez → last_tick_prices kullanılır
+    result = pts.force_open_manual_ready("BTCUSD")
+    assert result["status"] == "opened"
+    assert result["price"] == 59500.0, "En taze tick fiyatı kullanılmalı"
+
+    st2 = pts._load_state()
+    assert st2.positions["BTCUSD"].entry_price == 59500.0
+
+
+def test_reject_records_original_price(fresh_state):
+    """Reddet sırasında original_requested_price doldurulur."""
+    st = pts._load_state()
+    pending = PendingOpenOrder(
+        pair="BTCUSD", side="LONG",
+        requested_at="t1",
+        execute_at="t2",
+        requested_price=61800.0, size_usd=25000.0,
+        last_signal="BULLISH@65",
+        open_signal={"final_score": 65.0},
+        fingerprint="fp_a", atr_value=1200.0, primary_tf="1d",
+    )
+    st.pending_orders["BTCUSD"] = pending
+    pts._save_state(st)
+
+    pts.reject_pending_open("BTCUSD")
+
+    st2 = pts._load_state()
+    mr = st2.manual_ready_trades["BTCUSD"]
+    assert mr.original_requested_price == 61800.0
+    assert mr.requested_price == 61800.0  # ilk redden hemen sonra eşit
+
+
 def test_pending_recurring_flag_persists(fresh_state):
     st = pts._load_state()
     pending = _seed_pending()

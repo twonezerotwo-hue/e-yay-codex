@@ -63,8 +63,10 @@ interface ManualReadyTrade {
   rejected_at: string;
   last_signal: string;
   size_usd: number;
-  requested_price: number;
-  current_price?: number;
+  requested_price: number;             // her tick refresh edilen taze fiyat
+  original_requested_price?: number;   // reddedildiği anki donmuş fiyat
+  current_price?: number;              // last_tick_prices'tan
+  last_refreshed_at?: string;
   market_open?: boolean;
   primary_tf?: string;
   fingerprint?: string;
@@ -576,47 +578,75 @@ export default function PaperTradingTicker() {
                   <p className="text-[9px] font-mono text-violet-300 uppercase tracking-wider">
                     Açılmaya Hazır İşlemler ({manualReadyTrades.length})
                   </p>
-                  {manualReadyTrades.map((mr) => (
-                    <div
-                      key={`mr-${mr.pair}-${mr.rejected_at}`}
-                      className="flex items-center justify-between text-[10px] font-mono bg-violet-950/20 border border-violet-900/40 rounded px-2 py-1"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-bold text-violet-300">
-                          {mr.side} {mr.pair}
-                          {mr.primary_tf && (
-                            <span className="text-eyay-faint ml-1 text-[9px]">· TF {mr.primary_tf}</span>
-                          )}
-                        </p>
-                        <p className="text-eyay-faint">
-                          {mr.last_signal} · son ${(mr.current_price ?? mr.requested_price).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                        </p>
+                  {manualReadyTrades.map((mr) => {
+                    // Taze fiyat = current_price (last tick) > requested_price (silent-block refresh) > original
+                    const livePrice = mr.current_price ?? mr.requested_price;
+                    const orig      = mr.original_requested_price ?? mr.requested_price;
+                    // Delta orijinal fiyata göre — kullanıcının reddettiği seviyeyle
+                    // şimdiki seviye farkı; LONG için negatif delta = daha iyi giriş.
+                    const delta     = livePrice - orig;
+                    const deltaPct  = orig > 0 ? (delta / orig) * 100 : 0;
+                    const better    = (mr.side === "LONG" && delta < 0) || (mr.side === "SHORT" && delta > 0);
+                    const deltaCls  = better
+                      ? "text-emerald-400"
+                      : (Math.abs(deltaPct) < 0.05 ? "text-eyay-faint" : "text-amber-300");
+                    const sign      = delta >= 0 ? "+" : "−";
+                    return (
+                      <div
+                        key={`mr-${mr.pair}-${mr.rejected_at}`}
+                        className="flex items-center justify-between text-[10px] font-mono bg-violet-950/20 border border-violet-900/40 rounded px-2 py-1 gap-2"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-violet-300 flex items-baseline gap-1.5 flex-wrap">
+                            <span>{mr.side} {mr.pair}</span>
+                            {mr.primary_tf && (
+                              <span className="text-eyay-faint text-[9px] font-normal">TF {mr.primary_tf}</span>
+                            )}
+                            <span className="text-eyay-dim text-[9px] font-normal">· {mr.last_signal}</span>
+                          </p>
+                          <p className="flex items-baseline gap-1.5 mt-0.5">
+                            <span className="text-eyay-faint text-[9px]">şu an</span>
+                            <span className="text-violet-200 font-bold text-[11px]">
+                              ${livePrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+                            </span>
+                            {Math.abs(deltaPct) >= 0.01 && (
+                              <span className={`text-[9px] ${deltaCls}`}>
+                                {sign}${Math.abs(delta).toLocaleString("en-US", { maximumFractionDigits: 2 })} ({sign}{Math.abs(deltaPct).toFixed(2)}%)
+                              </span>
+                            )}
+                            <span className="text-eyay-faint/70 text-[9px]" title={`Reddedildiği fiyat: $${orig.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}>
+                              vs ${orig.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void openManualReady(mr.pair);
+                            }}
+                            className="px-2 py-1 rounded border border-emerald-700/60 text-emerald-300 hover:bg-emerald-950/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={mr.market_open === false
+                              ? "Piyasa kapalı"
+                              : `Anlık fiyat $${livePrice.toLocaleString("en-US", { maximumFractionDigits: 2 })} ile aç`}
+                            disabled={mr.market_open === false}
+                          >
+                            Aç @ ${livePrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void dismissManualReady(mr.pair);
+                            }}
+                            className="px-2 py-1 rounded border border-eyay-border text-eyay-dim hover:bg-eyay-raised/40"
+                            title="Listeden çıkar"
+                          >
+                            Sil
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void openManualReady(mr.pair);
-                          }}
-                          className="px-2 py-1 rounded border border-emerald-700/60 text-emerald-300 hover:bg-emerald-950/30"
-                          title={mr.market_open === false ? "Piyasa kapalı" : "Anlık fiyattan aç"}
-                          disabled={mr.market_open === false}
-                        >
-                          Aç
-                        </button>
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void dismissManualReady(mr.pair);
-                          }}
-                          className="px-2 py-1 rounded border border-eyay-border text-eyay-dim hover:bg-eyay-raised/40"
-                          title="Listeden çıkar"
-                        >
-                          Sil
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
