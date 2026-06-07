@@ -108,8 +108,21 @@ def get_agent_insight() -> dict:
 
     # ── Core snapshot contract (Item 3) ──────────────────────────────────
     # Pipeline çıktısını dondur; agent/critic/audit aynı snapshot'a referans verir.
+    # Eval anchor: karar anı fiyatları snapshot'a koy → ileride
+    # agent_eval_service realized delta'yı hesaplayabilsin.
+    anchor_prices: dict[str, float] = {}
+    for s in snapshots:
+        try:
+            sym = getattr(s, "asset_symbol", None) or getattr(s, "symbol", None)
+            val = getattr(s, "value", None) or getattr(s, "price", None)
+            if sym and val is not None:
+                anchor_prices[str(sym)] = float(val)
+        except Exception:
+            continue
+
     evidence_payload: dict = {
         "snapshots":  [getattr(s, "asset_symbol", None) for s in snapshots],
+        "prices":     anchor_prices,
         "news_count": len(news),
         "tech_keys":  sorted(list(tech_insights.keys())) if isinstance(tech_insights, dict) else [],
         "decision":   getattr(report, "decision", None),
@@ -191,6 +204,21 @@ def get_agent_insight() -> dict:
             "confidence": confidence.to_dict(),
         }
     response = guard_response(response, source="agent.insight")
+
+    # ── Memory write (Sprint 7) ──────────────────────────────────────────
+    try:
+        from app.services import agent_memory_service
+        if response.get("status") == "ok":
+            agent_memory_service.remember(
+                category="decision",
+                text=f"{response.get('decision') or '?'} · {len(response.get('insights', []))} insight",
+                regime=getattr(getattr(report, "macro_layer", None), "regime", None),
+                snapshot_id=snapshot_id,
+                confidence_pct=confidence.confidence_pct if hasattr(confidence, "confidence_pct") else None,
+                tags=["agent.insight"],
+            )
+    except Exception:
+        pass
 
     # ── Audit trail (Item 12) ────────────────────────────────────────────
     try:

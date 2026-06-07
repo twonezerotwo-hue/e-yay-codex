@@ -13,7 +13,13 @@ from fastapi import FastAPI
 
 from app.api.agent_audit import router as agent_audit_router
 from app.api.agent_critique import router as agent_critique_router
+from app.api.agent_ensemble import router as agent_ensemble_router
+from app.api.agent_eval import router as agent_eval_router
 from app.api.agent_insight import router as agent_insight_router
+from app.api.agent_memory import router as agent_memory_router
+from app.api.agent_persona import router as agent_persona_router
+from app.api.agent_stream import router as agent_stream_router
+from app.api.agent_tools import router as agent_tools_router
 from app.api.ai_report import router as ai_report_router
 from app.api.alerts import router as alerts_router
 from app.api.ceo_report import router as ceo_report_router
@@ -49,6 +55,12 @@ app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(agent_insight_router, prefix=settings.api_prefix)
 app.include_router(agent_audit_router, prefix=settings.api_prefix)
 app.include_router(agent_critique_router, prefix=settings.api_prefix)
+app.include_router(agent_eval_router, prefix=settings.api_prefix)
+app.include_router(agent_tools_router, prefix=settings.api_prefix)
+app.include_router(agent_memory_router, prefix=settings.api_prefix)
+app.include_router(agent_stream_router, prefix=settings.api_prefix)
+app.include_router(agent_persona_router, prefix=settings.api_prefix)
+app.include_router(agent_ensemble_router, prefix=settings.api_prefix)
 app.include_router(paper_trading_router, prefix=settings.api_prefix)
 app.include_router(consensus_router, prefix=settings.api_prefix)
 app.include_router(core_snapshots_router, prefix=settings.api_prefix)

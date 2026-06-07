@@ -33,6 +33,24 @@ _COUNTER = 0
 _LOG_PATH = Path(__file__).resolve().parents[2] / "data" / "agent_audit.log"
 
 
+_SLIM_KEYS = {"status", "decision", "verdict", "has_report", "insights", "synthesis", "agreement"}
+
+
+def _slim_output(payload: Any) -> dict[str, Any] | None:
+    """Output payload'tan eval'a yarayacak küçük metni süz (büyük listeleri at)."""
+    if not isinstance(payload, dict):
+        return None
+    out: dict[str, Any] = {}
+    for k in _SLIM_KEYS:
+        if k in payload:
+            v = payload[k]
+            if isinstance(v, (str, int, float, bool)) or v is None:
+                out[k] = v
+            elif isinstance(v, list):
+                out[k] = len(v)  # listeyi sayıya indir
+    return out or None
+
+
 def _hash(payload: Any) -> str:
     """Stabil JSON hash — payload'un kimliğini sabitler."""
     try:
@@ -77,6 +95,8 @@ def record(
             "confidence":       confidence,
             "duration_ms":      round(duration_ms, 1) if duration_ms is not None else None,
             "extra":            extra or {},
+            # Eval harness için: output'un düşük kardinaliteli alanlarını sakla
+            "output_payload":   _slim_output(output_payload),
         }
         with _LOCK:
             _COUNTER += 1
