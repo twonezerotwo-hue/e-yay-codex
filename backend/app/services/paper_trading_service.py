@@ -509,32 +509,72 @@ def _unrealized_pnl(p: Position, current_price: float) -> tuple[float, float]:
     return pct * p.size_usd, pct * 100.0
 
 
-def _clear_rejected_signal_if_changed(
+def _should_silent_block(
     st: TradingState,
     pair: str,
     target: PositionSide | Literal["CLOSE"] | None,
-    fingerprint: str,
-    primary_tf: str = "",
+    primary_tf: str,
 ) -> bool:
-    """Aynı (side, fingerprint, primary_tf) üçlüsünde rejection sürer.
+    """Bu sinyali sessizce engelle (banner gönderme, pending açma).
 
-    Returns True → sinyal sessizce engellenmeli (kullanıcıyı rahatsız etme).
-    False → ya rejection yok ya da farklı sinyal/TF → engel kaldırılır.
+    True dönerse: aynı (pair, side, primary_tf) ya zaten reddedilmiş ya da
+    'manual_ready' kuyruğunda bekliyor. Fingerprint'in skor/modül oynamasıyla
+    değişmesi BLOCK'u kaldırmaz — kullanıcı aynı sinyalden tekrar rahatsız
+    edilmez.
     """
-    rejected = st.rejected_signals.get(pair)
-    if rejected is None:
+    if target not in ("LONG", "SHORT"):
         return False
 
+    def _tf_match(a: str, b: str) -> bool:
+        return (not a) or (not b) or (a == b)
+
+    rejected = st.rejected_signals.get(pair)
     if (
-        target in ("LONG", "SHORT")
+        rejected is not None
         and rejected.side == target
-        and rejected.fingerprint == fingerprint
-        and (not rejected.primary_tf or not primary_tf or rejected.primary_tf == primary_tf)
+        and _tf_match(rejected.primary_tf, primary_tf)
     ):
         return True
 
-    del st.rejected_signals[pair]
+    mr = st.manual_ready_trades.get(pair)
+    if (
+        mr is not None
+        and mr.side == target
+        and _tf_match(mr.primary_tf, primary_tf)
+    ):
+        return True
+
     return False
+
+
+def _purge_stale_rejection_if_needed(
+    st: TradingState,
+    pair: str,
+    target: PositionSide | Literal["CLOSE"] | None,
+    primary_tf: str,
+) -> None:
+    """Sinyal artık alakasız (yön / TF değişti veya target=None) ve aynı pair
+    için 'manual_ready' yoksa eski rejection'ı temizle ki gelecekteki sinyal
+    serbestçe karar verebilsin.
+
+    Manual_ready varken rejection KORUNUR — silent block çiftler arası tutarlı
+    olsun. Kullanıcı 'Aç' veya 'Sil' diyene kadar block aktif kalır.
+    """
+    rejected = st.rejected_signals.get(pair)
+    if rejected is None:
+        return
+    # Manual ready aynı pair için duruyorsa rejection'ı koru.
+    if pair in st.manual_ready_trades:
+        return
+    # Aynı side+TF ile hâlâ alakalıysa koru — silent block sürmeli.
+    if (
+        target in ("LONG", "SHORT")
+        and rejected.side == target
+        and (not rejected.primary_tf or not primary_tf or rejected.primary_tf == primary_tf)
+    ):
+        return
+    # Yön/TF değişti veya sinyal kayboldu → eski rejection alakasız, temizle.
+    del st.rejected_signals[pair]
 
 
 def _is_recurring_signal(
@@ -637,8 +677,9 @@ def _open_position_from_pending(
     }
     st.last_event_at = opened_at
     st.pending_orders.pop(pending.pair, None)
-    # Otomatik açıldı: manual_ready'den de düş (aynı pair için zaten geçerli değil)
+    # Otomatik açıldı: hem manual_ready hem rejection alakasız → temizle.
     st.manual_ready_trades.pop(pending.pair, None)
+    st.rejected_signals.pop(pending.pair, None)
     _try_emit(
         "paper_trade_opened", "TRADE_EVENT",
         f"{pending.side} {pending.pair} Açıldı",
@@ -913,10 +954,16 @@ def tick_consensus(
             # → silent block'u bypass et, yeni 60sn pending'i 'recurring' bayrağıyla kur.
             is_recurring_signal = _is_recurring_signal(st, pair, target, current_primary_tf)
 
-            if not is_recurring_signal and _clear_rejected_signal_if_changed(
-                st, pair, target, signal_fingerprint, current_primary_tf,
+            # Aynı (pair, side, primary_tf) zaten reddedilmiş ya da manual_ready'de
+            # → SESSIZ block. Fingerprint kayması (skor/modül oynaması) block'u
+            # kaldırmaz. Banner gönderilmez, pending açılmaz.
+            if not is_recurring_signal and _should_silent_block(
+                st, pair, target, current_primary_tf,
             ):
                 target = None
+            else:
+                # Rejection eskimiş olabilir (yön/TF tamamen değişti) → temizle.
+                _purge_stale_rejection_if_needed(st, pair, target, current_primary_tf)
 
             new_size = round(POSITION_SIZE * final_size_mult, 2)
             cur = st.positions.get(pair)

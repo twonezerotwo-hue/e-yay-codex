@@ -25,7 +25,8 @@ from app.services.paper_trading_service import (
     RejectedOpenSignal,
     TradingState,
     _is_recurring_signal,
-    _clear_rejected_signal_if_changed,
+    _purge_stale_rejection_if_needed,
+    _should_silent_block,
 )
 
 
@@ -78,7 +79,7 @@ def test_reject_moves_pending_to_manual_ready(fresh_state):
     assert st2.rejected_signals["BTCUSD"].primary_tf == "1H"
 
 
-# ── 2. Aynı sinyal sessiz block ─────────────────────────────────────────────
+# ── 2. Aynı (pair, side, primary_tf) sessiz block — fingerprint kaymasından bağımsız
 
 def test_same_signal_silent_block(fresh_state):
     st = TradingState()
@@ -87,13 +88,40 @@ def test_same_signal_silent_block(fresh_state):
         fingerprint="fp_a", rejected_at="2026-06-07T00:00:00Z",
         primary_tf="1H",
     )
-    blocked = _clear_rejected_signal_if_changed(st, "BTCUSD", "LONG", "fp_a", "1H")
-    assert blocked is True, "Aynı side+fp+tf → sessiz block"
+    blocked = _should_silent_block(st, "BTCUSD", "LONG", "1H")
+    assert blocked is True, "Aynı side+TF → sessiz block"
     # rejected_signals hâlâ duruyor
     assert "BTCUSD" in st.rejected_signals
 
 
-# ── 3. Farklı primary_tf → block YOK, yinelenen olur ───────────────────────
+def test_silent_block_survives_fingerprint_drift(fresh_state):
+    """En kritik test: fingerprint değişse bile (skor 60→61, modül kayması)
+    aynı pair+side+TF kombinasyonu sessizce engellenmeli."""
+    st = TradingState()
+    st.rejected_signals["BTCUSD"] = RejectedOpenSignal(
+        pair="BTCUSD", side="LONG",
+        fingerprint="btc|risk_on|bullish|60|aligned|touche",
+        rejected_at="ts", primary_tf="1d",
+    )
+    # Aynı pair+side+TF ama TAMAMEN farklı fingerprint
+    blocked = _should_silent_block(st, "BTCUSD", "LONG", "1d")
+    assert blocked is True, "Fingerprint farklı olsa da sessiz block sürmeli"
+
+
+def test_silent_block_via_manual_ready(fresh_state):
+    """manual_ready varsa rejected_signals olmasa bile sessiz block aktif."""
+    st = TradingState()
+    st.manual_ready_trades["BTCUSD"] = ManualReadyTrade(
+        pair="BTCUSD", side="LONG",
+        requested_at="t1", rejected_at="t2",
+        last_signal="BULLISH@65", size_usd=25000.0, requested_price=60000.0,
+        primary_tf="1d", fingerprint="fp_x",
+    )
+    # rejected_signals YOK ama manual_ready var
+    assert _should_silent_block(st, "BTCUSD", "LONG", "1d") is True
+
+
+# ── 3. Farklı primary_tf → silent block YOK, yinelenen olur ───────────────
 
 def test_different_tf_clears_block(fresh_state):
     st = TradingState()
@@ -101,10 +129,29 @@ def test_different_tf_clears_block(fresh_state):
         pair="BTCUSD", side="LONG",
         fingerprint="fp_a", rejected_at="ts", primary_tf="1H",
     )
-    blocked = _clear_rejected_signal_if_changed(st, "BTCUSD", "LONG", "fp_a", "4H")
-    assert blocked is False, "Farklı TF → block kalkmalı"
-    # ve rejection temizlenir
+    # 4H farklı TF
+    assert _should_silent_block(st, "BTCUSD", "LONG", "4H") is False
+    # Purge: manual_ready yok + farklı TF → temizlenir
+    _purge_stale_rejection_if_needed(st, "BTCUSD", "LONG", "4H")
     assert "BTCUSD" not in st.rejected_signals
+
+
+def test_purge_preserves_rejection_while_manual_ready_exists(fresh_state):
+    """manual_ready aktifken rejection korunur — block çiftleri tutarlı kalır."""
+    st = TradingState()
+    st.rejected_signals["BTCUSD"] = RejectedOpenSignal(
+        pair="BTCUSD", side="LONG", fingerprint="fp_a",
+        rejected_at="ts", primary_tf="1H",
+    )
+    st.manual_ready_trades["BTCUSD"] = ManualReadyTrade(
+        pair="BTCUSD", side="LONG",
+        requested_at="t1", rejected_at="t2",
+        last_signal="x", size_usd=25000.0, requested_price=60000.0,
+        primary_tf="1H",
+    )
+    # Farklı TF + manual_ready var → rejection KORUNUR (silent block tutarlı)
+    _purge_stale_rejection_if_needed(st, "BTCUSD", "LONG", "4H")
+    assert "BTCUSD" in st.rejected_signals
 
 
 # ── 4. _is_recurring_signal: TF veya side mismatch ──────────────────────────
