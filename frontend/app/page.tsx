@@ -16,6 +16,7 @@ import AIChatPanel from "@/components/AIChatPanel";
 import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
 import PaperTradingTicker from "@/components/PaperTradingTicker";
+import PaperDecisionCenter from "@/components/PaperDecisionCenter";
 import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
 // Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
@@ -96,6 +97,9 @@ export default async function HomePage() {
               ownerActions={data.report.owner_actions ?? []}
               flipConditions={data.report.flip_conditions ?? []}
             />
+
+            {/* 2.5 ── PAPER TRADING KARAR MERKEZİ — tüm karar zinciri tek panelde */}
+            <PaperDecisionCenter />
 
             {/* 3 ── AI Yorumu  +  AI Sohbet (yan yana) */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-2 items-start">

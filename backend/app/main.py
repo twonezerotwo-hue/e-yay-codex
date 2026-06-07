@@ -33,6 +33,7 @@ from app.api.core_snapshots import router as core_snapshots_router
 from app.api.health import router as health_router
 from app.api.paper_trading import router as paper_trading_router
 from app.api.market_strategist import router as market_strategist_router
+from app.api.paper_decision import router as paper_decision_router
 from app.api.signal_attribution import router as signal_attribution_router
 from app.api.regime_report import router as regime_report_router
 from app.api.snapshot_replay import router as snapshot_replay_router
@@ -120,6 +121,7 @@ app.include_router(agent_ensemble_router, prefix=settings.api_prefix)
 app.include_router(paper_trading_router, prefix=settings.api_prefix)
 app.include_router(signal_attribution_router, prefix=settings.api_prefix)
 app.include_router(market_strategist_router, prefix=settings.api_prefix)
+app.include_router(paper_decision_router, prefix=settings.api_prefix)
 app.include_router(consensus_router, prefix=settings.api_prefix)
 app.include_router(core_snapshots_router, prefix=settings.api_prefix)
 app.include_router(core_jobs_router, prefix=settings.api_prefix)
