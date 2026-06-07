@@ -202,7 +202,23 @@ _SYS_PROMPT = (
 )
 
 
-def _call_groq_model(prompt: str, model: str) -> tuple[str, str] | None:
+def _build_system_prompt(persona_key: str | None, regime: str | None) -> tuple[str, float]:
+    """Persona modülünden sistem promptu üret. Eski _SYS_PROMPT'a fallback."""
+    try:
+        from app.services.agent_persona import build_system_prompt, temperature_for
+        sp = build_system_prompt(persona_key=persona_key, regime=regime)
+        return sp, temperature_for(persona_key)
+    except Exception:
+        return _SYS_PROMPT, 0.5
+
+
+def _call_groq_model(
+    prompt: str,
+    model: str,
+    *,
+    persona_key: str | None = None,
+    regime: str | None = None,
+) -> tuple[str, str] | None:
     """Groq'tan belirli bir modelle JSON cevabı al."""
     api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
@@ -210,13 +226,14 @@ def _call_groq_model(prompt: str, model: str) -> tuple[str, str] | None:
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key, base_url=_GROQ_BASE_URL, timeout=60.0)
+        system_prompt, temp = _build_system_prompt(persona_key, regime)
         resp = client.chat.completions.create(
             model=model,
             max_tokens=2500,
-            temperature=0.5,
+            temperature=temp,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": _SYS_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
         )
@@ -228,19 +245,29 @@ def _call_groq_model(prompt: str, model: str) -> tuple[str, str] | None:
         return None
 
 
-def _call_groq(prompt: str) -> tuple[str, str] | None:
+def _call_groq(
+    prompt: str,
+    *,
+    persona_key: str | None = None,
+    regime: str | None = None,
+) -> tuple[str, str] | None:
     """
     Çoklu Groq model fallback:
     1) llama-3.3-70b-versatile (yüksek kalite)
     2) llama-3.1-8b-instant   (ayrı TPD kotası, ucuz yedek)
     """
-    result = _call_groq_model(prompt, _GROQ_MODEL)
+    result = _call_groq_model(prompt, _GROQ_MODEL, persona_key=persona_key, regime=regime)
     if result is not None:
         return result
-    return _call_groq_model(prompt, _GROQ_BACKUP_MODEL)
+    return _call_groq_model(prompt, _GROQ_BACKUP_MODEL, persona_key=persona_key, regime=regime)
 
 
-def _call_claude(prompt: str) -> tuple[str, str] | None:
+def _call_claude(
+    prompt: str,
+    *,
+    persona_key: str | None = None,
+    regime: str | None = None,
+) -> tuple[str, str] | None:
     """Claude fallback. (raw, model_used) veya None."""
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -248,9 +275,11 @@ def _call_claude(prompt: str) -> tuple[str, str] | None:
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
+        system_prompt, _ = _build_system_prompt(persona_key, regime)
         response = client.messages.create(
             model=_CLAUDE_MODEL,
             max_tokens=2000,
+            system=system_prompt,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = ""
@@ -276,6 +305,7 @@ def generate_ai_report(
     *,
     rotation: CapitalRotation | None = None,
     force_refresh: bool = False,
+    persona_key: str | None = None,
 ) -> AIAnalystReport:
     import json
     from datetime import UTC, datetime
@@ -308,12 +338,13 @@ def generate_ai_report(
         learning_block=learning_block,
     )
 
+    regime_for_prompt = (macro or {}).get("regime")
     # 1) Groq dene (primary)
-    result = _call_groq(prompt)
+    result = _call_groq(prompt, persona_key=persona_key, regime=regime_for_prompt)
 
     # 2) Claude'a düş
     if result is None:
-        result = _call_claude(prompt)
+        result = _call_claude(prompt, persona_key=persona_key, regime=regime_for_prompt)
 
     if result is None:
         # Son çare: 2 saatlik stale cache varsa onu kullan

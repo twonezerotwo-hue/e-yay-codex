@@ -73,6 +73,7 @@ def _to_dict(obj: object) -> object:
 @router.get("/current")
 def get_ai_report(
     force_refresh: bool = Query(default=False, description="Önbelleği yoksay, yeni rapor üret"),
+    persona: str | None = Query(default=None, description="Persona key (analyst|risk_officer|macro_strategist|narrator)"),
 ) -> JSONResponse:
     """
     Piyasa katmanları + jeopolitik haberleri okuyup Claude ile Türkçe analiz üretir.
@@ -144,6 +145,7 @@ def get_ai_report(
         geo_news=geo_news,
         rotation=rotation,
         force_refresh=force_refresh,
+        persona_key=persona,
     )
 
     # ── Self-validation + confidence + audit ─────────────────────────────
