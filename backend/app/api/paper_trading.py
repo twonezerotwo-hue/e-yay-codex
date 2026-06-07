@@ -108,8 +108,27 @@ def _run_tick_pipeline() -> dict[str, Any]:
             report, rotation, mtf, trained_adjustments=trained_adjustments,
         )
 
-        # Consensus tick — pozisyon aç/kapat + last_tick_prices'ı state'e yazar
-        pts.tick_consensus(sigs, prices)
+        # Veri kalitesi — tick'ten ÖNCE hesapla; aggregator DQS gate için kullanır.
+        # NO_DATA (boş snapshot) → tick_dqs=None → gate pasif (veri yoksa engelleme).
+        # Sadece gerçek veri varken score < MIN_DQS ise KILL_SWITCH tetiklenir.
+        try:
+            from app.services.data_quality_service import get_data_quality_summary
+            asset_snapshots_early = {
+                str(snap.asset_symbol): snap
+                for snap in raw_snapshots
+                if hasattr(snap, "fallback_used")
+            }
+            dq_early = get_data_quality_summary(asset_snapshots_early)
+            _qs = dq_early.get("quality_score")
+            _has_data = dq_early.get("total", 0) > 0
+            # quality_score=0 + total=0 → NO_DATA → gate bypass (tick_dqs=None)
+            tick_dqs: int | None = int(_qs) if (_has_data and _qs is not None and _qs > 0) else None
+        except Exception:
+            dq_early = {"quality_score": None, "decision": "UNKNOWN"}
+            tick_dqs = None
+
+        # Consensus tick — aggregator (multi-TF + rejim + DQS) ile güçlendirilmiş
+        pts.tick_consensus(sigs, prices, dqs_score=tick_dqs)
 
         # Auto-weight training (her 5 yeni kapanışta)
         from app.services.auto_weight_trainer import maybe_retrain
@@ -119,17 +138,8 @@ def _run_tick_pipeline() -> dict[str, Any]:
             if training_result["status"] == "trained":
                 pts._save_state(state)
 
-        # Veri kalite
-        from app.services.data_quality_service import get_data_quality_summary
-        try:
-            asset_snapshots = {
-                str(snap.asset_symbol): snap
-                for snap in raw_snapshots
-                if hasattr(snap, "fallback_used")
-            }
-            data_quality = get_data_quality_summary(asset_snapshots)
-        except Exception:
-            data_quality = {"quality_score": None, "decision": "UNKNOWN"}
+        # Veri kalitesi — tick öncesi hesaplandı; sonucu yeniden kullan
+        data_quality = dq_early if tick_dqs is not None else {"quality_score": None, "decision": "UNKNOWN"}
 
         return {
             "status": "ok",

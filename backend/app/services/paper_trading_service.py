@@ -950,16 +950,26 @@ def _maybe_warn_daily_loss(st: TradingState, now_dt: datetime) -> None:
 def tick_consensus(
     consensus_signals: dict[str, dict[str, Any]],
     current_prices: dict[str, float],
+    *,
+    dqs_score: int | None = None,
+    kill_switch: bool = False,
+    trigger_engine: dict[str, Any] | None = None,
 ) -> TradingState:
     """
     Multi-TF consensus skoruna göre pozisyon aç/kapat.
 
     Yeni açılışlar 60 saniyelik bekleyen onay penceresine girer.
     Kullanıcı reddederse aynı fingerprint tekrar açılmaz; sinyal değişince engel kalkar.
+
+    Ek parametreler (opsiyonel):
+      dqs_score     — Veri kalite skoru (0-100). < MIN_DQS → KILL_SWITCH.
+      kill_switch   — Risk engine kill aktifse True → tüm yeni tradeler bloke.
+      trigger_engine— Trigger engine çıktısı → ilerleyen sprintte auto_close için.
     """
     from app.services.learning_engine import (
         build_signal_fingerprint, should_avoid_or_boost,
     )
+    from app.services.agent_decision_aggregator import aggregate_agent_decision
 
     with _LOCK:
         st = _load_state()
@@ -975,7 +985,26 @@ def tick_consensus(
             atr_val_pending = float(sig.get("atr") or 0.0)
             current_primary_tf = str(sig.get("primary_tf") or "")
 
-            target, base_mult = _consensus_to_action(final_score, final_direction, confluence_status)
+            # Ham aksiyon — mevcut skor eşiği + confluence mantığı korunuyor
+            raw_target, raw_base_mult = _consensus_to_action(
+                final_score, final_direction, confluence_status,
+            )
+
+            # Çok katmanlı agent kararı:
+            #   multi-TF uyum + rejim sizing + DQS gate + trigger auto-close
+            decision = aggregate_agent_decision(
+                sig, pair,
+                base_mult_from_score=raw_base_mult,
+                dqs_score=dqs_score,
+                kill_switch=kill_switch,
+                trigger_engine=trigger_engine,
+            )
+            # Aggregator blokladıysa side=None, bloklamamışsa ham yönü onaylar
+            target = decision.side if decision.side is not None else (
+                raw_target if not decision.block_reason else None
+            )
+            base_mult = decision.size_pct if decision.size_pct > 0.0 else raw_base_mult
+
             price = current_prices.get(pair, 0.0)
             if price <= 0:
                 continue
@@ -1020,6 +1049,44 @@ def tick_consensus(
             new_size = round(POSITION_SIZE * final_size_mult, 2)
             cur = st.positions.get(pair)
             pending = st.pending_orders.get(pair)
+
+            # ── Trigger auto-close (acil kapatma) ────────────────────────────
+            # Kritik piyasa olayında (RED trigger) açık pozisyon hemen kapat;
+            # yeni trade açılmaz. trigger_engine None ise hiç tetiklenmez.
+            if decision.auto_close and cur is not None:
+                pnl_usd, pnl_pct = _unrealized_pnl(cur, price)
+                verdict = "WIN" if pnl_usd > 5.0 else ("LOSS" if pnl_usd < -5.0 else "BREAK_EVEN")
+                duration_min = int(
+                    (now_dt - datetime.fromisoformat(cur.entry_at)).total_seconds() / 60
+                )
+                trade = Trade(
+                    id=len(st.trades) + 1,
+                    pair=pair, side=cur.side,
+                    entry_price=cur.entry_price, exit_price=price,
+                    entry_at=cur.entry_at, exit_at=now_iso,
+                    size_usd=cur.size_usd,
+                    pnl_usd=round(pnl_usd, 2),
+                    pnl_pct=round(pnl_pct, 2),
+                    duration_min=duration_min,
+                    reason=f"AUTO_CLOSE: {decision.auto_close_reason}",
+                    open_signal=cur.open_signal, exit_signal={},
+                    verdict=verdict, fingerprint=cur.fingerprint,
+                    risk_plan=cur.risk_plan or {},
+                )
+                st.trades.append(trade)
+                st.realized_pnl_usd += pnl_usd
+                del st.positions[pair]
+                st.pending_orders.pop(pair, None)
+                _try_emit(
+                    "auto_close_critical_trigger", "CRITICAL",
+                    f"ACİL KAPATMA — {pair}",
+                    f"{cur.side} {pair} kritik tetikleyici nedeniyle kapatıldı. "
+                    f"PnL {pnl_usd:+,.2f} USD · {decision.auto_close_reason}",
+                    pair=pair, side=cur.side, size_usd=cur.size_usd, price=price,
+                    metadata={"pnl_usd": round(pnl_usd, 2), "verdict": verdict,
+                               "trigger": decision.auto_close_reason},
+                )
+                continue
 
             if pending is not None:
                 if cur is not None or target != pending.side or pending.fingerprint != signal_fingerprint:
