@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -331,26 +331,38 @@ def _load_state() -> TradingState:
             v.setdefault("fingerprint", "")
             v.setdefault("stop_loss", 0.0)
             v.setdefault("take_profit", 0.0)
+            v.setdefault("risk_plan", {})
+            # Bilinmeyen alanları sessizce at (eski/yeni schema farkına dayanıklı)
+            valid = {f.name for f in fields(Position)}
+            v = {kk: vv for kk, vv in v.items() if kk in valid}
             positions[k] = Position(**v)
 
         pending_orders = {}
         for k, v in raw.get("pending_orders", {}).items():
             v.setdefault("open_signal", {})
             v.setdefault("fingerprint", "")
+            v.setdefault("atr_value", 0.0)
+            valid = {f.name for f in fields(PendingOpenOrder)}
+            v = {kk: vv for kk, vv in v.items() if kk in valid}
             pending_orders[k] = PendingOpenOrder(**v)
 
         rejected_signals = {}
         for k, v in raw.get("rejected_signals", {}).items():
+            valid = {f.name for f in fields(RejectedOpenSignal)}
+            v = {kk: vv for kk, vv in v.items() if kk in valid}
             rejected_signals[k] = RejectedOpenSignal(**v)
 
         # Trade — eski format
         trades = []
+        valid_trade = {f.name for f in fields(Trade)}
         for t in raw.get("trades", []):
             t.setdefault("open_signal", {})
             t.setdefault("exit_signal", {})
             t.setdefault("verdict", "")
             t.setdefault("fingerprint", "")
-            trades.append(Trade(**t))
+            t.setdefault("risk_plan", {})
+            t2 = {kk: vv for kk, vv in t.items() if kk in valid_trade}
+            trades.append(Trade(**t2))
 
         st = TradingState(
             starting_balance=raw.get("starting_balance", STARTING_BALANCE),
@@ -391,7 +403,10 @@ def _save_state(st: TradingState) -> None:
         "last_tick_at":     st.last_tick_at,
         "last_tick_signals": st.last_tick_signals,
     }
-    _STATE_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Atomic write — kısmen yazılmış dosyayı önler (crash/Ctrl-C safe)
+    tmp_path = _STATE_PATH.with_suffix(_STATE_PATH.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(_STATE_PATH)
 
 
 # ── PnL helpers ───────────────────────────────────────────────────────────────

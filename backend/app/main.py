@@ -8,6 +8,7 @@ load_dotenv(_ENV_FILE, override=True)
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -44,36 +45,9 @@ settings = get_settings()
 configure_logging(settings.log_level)
 _log = logging.getLogger(__name__)
 
-app = FastAPI(title=settings.app_name)
-app.add_middleware(RequestIDMiddleware)
-register_exception_handlers(app)
-app.include_router(health_router)
-app.include_router(alerts_router, prefix=settings.api_prefix)
-app.include_router(ceo_report_router, prefix=settings.api_prefix)
-app.include_router(regime_report_router, prefix=settings.api_prefix)
-app.include_router(ai_report_router, prefix=settings.api_prefix)
-app.include_router(chat_router, prefix=settings.api_prefix)
-app.include_router(agent_insight_router, prefix=settings.api_prefix)
-app.include_router(agent_audit_router, prefix=settings.api_prefix)
-app.include_router(agent_chart_router, prefix=settings.api_prefix)
-app.include_router(agent_critique_router, prefix=settings.api_prefix)
-app.include_router(agent_eval_router, prefix=settings.api_prefix)
-app.include_router(agent_tools_router, prefix=settings.api_prefix)
-app.include_router(agent_memory_router, prefix=settings.api_prefix)
-app.include_router(agent_stream_router, prefix=settings.api_prefix)
-app.include_router(agent_persona_router, prefix=settings.api_prefix)
-app.include_router(agent_ensemble_router, prefix=settings.api_prefix)
-app.include_router(paper_trading_router, prefix=settings.api_prefix)
-app.include_router(consensus_router, prefix=settings.api_prefix)
-app.include_router(core_snapshots_router, prefix=settings.api_prefix)
-app.include_router(core_jobs_router, prefix=settings.api_prefix)
-app.include_router(chart_patterns_router, prefix=settings.api_prefix)
-app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
-
 
 # ── Background tick scheduler — Sprint 1 / Item 1 ────────────────────────────
 # GET /trading/state read-only oldu; tick'i bu background task tutuyor.
-
 _TICK_INTERVAL_SECONDS = 30
 _tick_task: asyncio.Task | None = None
 
@@ -101,25 +75,52 @@ async def _periodic_tick_loop() -> None:
             raise
 
 
-@app.on_event("startup")
-async def _startup() -> None:
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Startup
     log_startup_boundary()
     global _tick_task
     _tick_task = asyncio.create_task(_periodic_tick_loop())
     _log.info("background_tick scheduler started · interval=%ss", _TICK_INTERVAL_SECONDS)
+    try:
+        yield
+    finally:
+        # Shutdown
+        if _tick_task is not None:
+            _tick_task.cancel()
+            try:
+                await _tick_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            _tick_task = None
+            _log.info("background_tick scheduler stopped")
 
 
-@app.on_event("shutdown")
-async def _shutdown() -> None:
-    global _tick_task
-    if _tick_task is not None:
-        _tick_task.cancel()
-        try:
-            await _tick_task
-        except (asyncio.CancelledError, Exception):
-            pass
-        _tick_task = None
-        _log.info("background_tick scheduler stopped")
+app = FastAPI(title=settings.app_name, lifespan=_lifespan)
+app.add_middleware(RequestIDMiddleware)
+register_exception_handlers(app)
+app.include_router(health_router)
+app.include_router(alerts_router, prefix=settings.api_prefix)
+app.include_router(ceo_report_router, prefix=settings.api_prefix)
+app.include_router(regime_report_router, prefix=settings.api_prefix)
+app.include_router(ai_report_router, prefix=settings.api_prefix)
+app.include_router(chat_router, prefix=settings.api_prefix)
+app.include_router(agent_insight_router, prefix=settings.api_prefix)
+app.include_router(agent_audit_router, prefix=settings.api_prefix)
+app.include_router(agent_chart_router, prefix=settings.api_prefix)
+app.include_router(agent_critique_router, prefix=settings.api_prefix)
+app.include_router(agent_eval_router, prefix=settings.api_prefix)
+app.include_router(agent_tools_router, prefix=settings.api_prefix)
+app.include_router(agent_memory_router, prefix=settings.api_prefix)
+app.include_router(agent_stream_router, prefix=settings.api_prefix)
+app.include_router(agent_persona_router, prefix=settings.api_prefix)
+app.include_router(agent_ensemble_router, prefix=settings.api_prefix)
+app.include_router(paper_trading_router, prefix=settings.api_prefix)
+app.include_router(consensus_router, prefix=settings.api_prefix)
+app.include_router(core_snapshots_router, prefix=settings.api_prefix)
+app.include_router(core_jobs_router, prefix=settings.api_prefix)
+app.include_router(chart_patterns_router, prefix=settings.api_prefix)
+app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
 
 
 __all__ = [name for name in globals() if not name.startswith('_')]

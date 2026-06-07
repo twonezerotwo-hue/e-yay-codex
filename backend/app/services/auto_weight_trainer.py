@@ -236,7 +236,6 @@ def get_effective_weights(
     Aksi halde baseline + delta + floor + normalize.
     """
     from app.services.regime_weights_engine import (
-        get_weights_for_regime,
         map_regime_to_weight_key,
     )
     weight_key, _ = map_regime_to_weight_key(raw_regime)

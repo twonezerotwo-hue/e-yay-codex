@@ -44,3 +44,17 @@ pythonpath = [
     ".",            # backend/
     "..",           # repo root (registry modülü için)
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# Aktif kurallar — F (pyflakes), E (pycodestyle errors), W (warnings)
+select = ["F", "E", "W"]
+# Stil hataları (runtime'a etkisi yok): tek satır multi-statement, top-of-file
+# import, lambda/I/l/O parametre adları, satır uzunluğu. CI'yı bloklamasınlar.
+ignore = ["E402", "E701", "E702", "E741", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401", "F841"]

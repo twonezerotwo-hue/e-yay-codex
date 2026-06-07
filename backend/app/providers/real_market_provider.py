@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
 from typing import Optional
 
-from app.domain import AssetCategory, AssetCode, SourceTier, get_asset_definition
+from app.domain import AssetCode, SourceTier, get_asset_definition
 from app.providers.base import MarketProvider, MarketProviderPayload
 from app.providers.mock_market_provider import MOCK_ASSET_VALUES
 

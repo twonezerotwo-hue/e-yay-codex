@@ -78,19 +78,6 @@ def _build_prompt(
     learning_block: str = "",
 ) -> str:
 
-    # ── Makro ────────────────────────────────────────────────────────────────
-    macro_line = (
-        f"DXY={macro.get('dxy_signal','?')} | Brent={macro.get('energy_signal','?')} "
-        f"| Yield={macro.get('yield_curve_signal','?')} | M2={macro.get('m2_signal','?')} "
-        f"| Rejim={macro.get('regime','?')} güven=%{macro.get('confidence_pct','?')}"
-    )
-    appetite_line = (
-        f"İştah={appetite.get('status','?')} | Kredi={appetite.get('credit_signal','?')} "
-        f"| BTC.D={appetite.get('btc_dominance_signal','?')} "
-        f"| USDT.D={appetite.get('usdt_dominance_signal','?')} "
-        f"| SafeHaven={appetite.get('safe_haven_signal','?')}"
-    )
-
     # ── Asset tablosu — değer + delta + durum ───────────────────────────────
     def _fmt(a: dict) -> str:
         v = a.get("value")

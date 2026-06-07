@@ -71,7 +71,6 @@ class EventCalendarService:
         except Exception:  # noqa: BLE001
             return ()
 
-        importance_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2}
         events: list[CatalystEvent] = []
 
         for ev in raw_events:

@@ -21,7 +21,9 @@ client = TestClient(app)
 def _set_tmp_state(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(pts, "_STATE_PATH", tmp_path / "paper_trading_state.json")
     pts.reset_state()
-    monkeypatch.setattr(paper_trading, "_RESPONSE_CACHE", None)
+    # Eski _RESPONSE_CACHE backward-compat — kaldırıldı, monkey-patch sessiz geçsin
+    if hasattr(paper_trading, "_RESPONSE_CACHE"):
+        monkeypatch.setattr(paper_trading, "_RESPONSE_CACHE", None)
 
 
 def _consensus_signal(
@@ -155,7 +157,8 @@ def test_trading_state_endpoint_exposes_pending_orders_and_reject_flow(monkeypat
             pair: {"1h": SimpleNamespace(current_price=price)}
             for pair, price in prices.items()
         }
-        return report, rotation, mtf
+        raw_snapshots = ()  # pipeline'a 4. tuple eklendi — snapshot evidence için
+        return report, rotation, mtf, raw_snapshots
 
     def fake_build_full_signal(asset, report, rotation, mtf, trained_adjustments=None):
         if asset == "XAUUSD":
@@ -164,6 +167,10 @@ def test_trading_state_endpoint_exposes_pending_orders_and_reject_flow(monkeypat
 
     monkeypatch.setattr(paper_trading, "_build_pipeline", fake_build_pipeline)
     monkeypatch.setattr(paper_trading, "_build_full_signal", fake_build_full_signal)
+
+    # GET artık read-only — pipeline tick'i POST /trading/tick ile tetiklenir.
+    tick_response = client.post("/api/v1/trading/tick")
+    assert tick_response.status_code == 200
 
     response = client.get("/api/v1/trading/state")
     body = response.json()

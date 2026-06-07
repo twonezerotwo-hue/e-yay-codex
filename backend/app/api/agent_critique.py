@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.agent_insight import get_agent_insight
-from app.services import agent_audit_log, core_snapshot_cache, multi_agent_critique
+from app.services import agent_audit_log, multi_agent_critique
 from app.services.agent_output_guard import guard_response
 
 router = APIRouter(prefix="/agent", tags=["agent-critique"])

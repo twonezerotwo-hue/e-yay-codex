@@ -19,8 +19,8 @@ from typing import Any, Literal
 from app.domain import AssetCode
 from app.domain.market_snapshot import MarketSnapshot
 from app.providers.news_provider import NewsHeadline
-from app.providers.technical_provider import DynamicLevels, TechnicalInsight
-from app.services.event_calendar_service import CatalystEvent, EventCalendarService
+from app.providers.technical_provider import TechnicalInsight
+from app.services.event_calendar_service import CatalystEvent
 
 # ---------------------------------------------------------------------------
 # YAML threshold loader — config/thresholds.yaml tek kaynak
@@ -685,7 +685,7 @@ def _build_asset_signals(
     if btc is None or btc_status == "VERİ_YOK":
         _btc_act: AssetActionType = "NEUTRAL"; _btc_trig = ""
     elif btc_status == "CONFIRMED":
-        _btc_act = "LONG"; _btc_trig = f"Teyitler güçlü — pozisyon kurulabilir"
+        _btc_act = "LONG"; _btc_trig = "Teyitler güçlü — pozisyon kurulabilir"
     elif btc_status == "PENDING":
         _btc_act = "LONG_AWAIT"; _btc_trig = f"${_fmt(dyn_btc_strong, 0)} üzeri kapanış + D.>%55"
     elif btc_status == "BLOCKING":
@@ -1572,11 +1572,8 @@ def _build_owner_actions(
     brent = _sig("BRENT")
     hyg   = _sig("HYG")
     vix   = _sig("VIX")
-    dxy   = _sig("DXY")
     silver= _sig("XAGUSD")
     copper= _sig("XCUUSD")
-
-    unmet = [c.signal for c in checklist if not c.met]
 
     if decision == "BEKLE":
         step1 = "Yeni pozisyon açma — sistem teyit toplama modunda."
@@ -1659,14 +1656,12 @@ def _build_flip_conditions(
     vix    = _sig("VIX")
     silver = _sig("XAGUSD")
     copper = _sig("XCUUSD")
-    us10y  = _sig("US10Y")
 
     # Dinamik teknik seviyeler — statik sabitlerden daha güncel
     _btc_ti   = _tm.get("BTCUSD")
     _brent_ti = _tm.get("BRENT")
     flip_btc_support  = _btc_ti.levels.support      if _btc_ti   else _BTC_WATCH
     flip_btc_stoploss = _btc_ti.levels.stop_loss     if _btc_ti   else _BTC_WEAK
-    flip_btc_resist   = _btc_ti.levels.resistance    if _btc_ti   else _BTC_STRONG
     flip_brent_high   = _brent_ti.levels.resistance  if _brent_ti else _BRENT_HIGH
     flip_brent_warn   = _brent_ti.levels.support     if _brent_ti else _BRENT_WARN
 
@@ -1723,7 +1718,7 @@ def _build_flip_conditions(
             conditions=(
                 f"BTC ${flip_btc_stoploss:,.0f} stop altına kalıcı kırılış{_p(btc)}",
                 f"HYG ${int(_HYG_BREAKING)} altına düşüş{_p(hyg)}",
-                f"Makro DEFENSIVE'e dönüş (birden fazla bloklama)",
+                "Makro DEFENSIVE'e dönüş (birden fazla bloklama)",
                 f"Brent ${flip_brent_high:,.0f} üstünde kalıcı yerleşme{_p(brent)}",
                 f"VIX {int(_VIX_FEAR)} üstünde kapanış{_p(vix, prefix='')}",
             ),
@@ -1740,7 +1735,7 @@ def _build_flip_conditions(
                 f"HYG ${int(_HYG_HEALTHY)} üstüne toparlanma{_p(hyg)}",
                 f"VIX {int(_VIX_ELEVATED)} altına kalıcı düşüş{_p(vix, prefix='')}",
                 f"Brent ${int(_BRENT_WARN)} altına geri çekilme{_p(brent)}",
-                f"Makro TRANSITIONING'e dönüş",
+                "Makro TRANSITIONING'e dönüş",
             ),
         )
         to_kapat = FlipCondition(
@@ -1748,11 +1743,11 @@ def _build_flip_conditions(
             label="Kriz Tetikleyicileri",
             icon="down",
             conditions=(
-                f"3+ sinyal BLOCKING durumuna girmesi",
+                "3+ sinyal BLOCKING durumuna girmesi",
                 f"HYG ${int(_HYG_BREAKING)} altına düşüş{_p(hyg)}",
                 f"VIX {int(_VIX_PANIC)} üstüne çıkış{_p(vix, prefix='')}",
                 f"BTC ${int(_BTC_WEAK):,} altına kalıcı kırılış{_p(btc)}",
-                f"Makro CRISIS'e geçiş",
+                "Makro CRISIS'e geçiş",
             ),
         )
         return (to_bekle, to_kapat)
@@ -1765,9 +1760,9 @@ def _build_flip_conditions(
             conditions=(
                 f"VIX {int(_VIX_ELEVATED)} altına kalıcı dönüş{_p(vix, prefix='')}",
                 f"HYG ${int(_HYG_HEALTHY)} üstüne toparlanma{_p(hyg)}",
-                f"Bloklama sayısının 2'ye düşmesi",
+                "Bloklama sayısının 2'ye düşmesi",
                 f"BTC ${int(_BTC_WATCH):,} üstünde tutunma{_p(btc)}",
-                f"Makro DEFENSIVE'e gerileme (CRISIS çözülüyor)",
+                "Makro DEFENSIVE'e gerileme (CRISIS çözülüyor)",
             ),
         )
         stay = FlipCondition(
@@ -1779,7 +1774,7 @@ def _build_flip_conditions(
                 f"HYG ${int(_HYG_BREAKING)} altında kalması{_p(hyg)}",
                 f"BTC ${int(_BTC_WEAK):,} altında kalması{_p(btc)}",
                 f"DXY {int(_DXY_STRONG)} üstünde güçlü kalması{_p(dxy, prefix='')}",
-                f"Kredi spread genişlemeye devam ediyorsa",
+                "Kredi spread genişlemeye devam ediyorsa",
             ),
         )
         return (to_kucult, stay)
@@ -1863,7 +1858,6 @@ def _build_scenarios(
     btc_sig   = next((s for s in signals if s.asset_code == "BTCUSD"),   None)
     brent_sig = next((s for s in signals if s.asset_code == "BRENT"),    None)
     dxy_sig   = next((s for s in signals if s.asset_code == "DXY"),      None)
-    vix_sig   = next((s for s in signals if s.asset_code == "VIX"),      None)
     hyg_sig   = next((s for s in signals if s.asset_code == "HYG"),      None)
 
     btc_price   = btc_sig.value   if btc_sig   and btc_sig.value   is not None else None
@@ -1968,13 +1962,6 @@ def _build_scenarios(
         btc_bull_chip = f"BTC >${int(_btc_bull_target):,}"
     else:
         btc_bull_chip  = f"BTC >${int(btc_price * 1.20):,}"  if btc_price  else "BTC ↑ %20"
-
-    # BTC destek seviyesi izleme eşiği
-    if _btc_ti:
-        _btc_sup = _btc_ti.levels.support
-        btc_watch_chip = f"BTC >${int(_btc_sup):,} (destek)"
-    else:
-        btc_watch_chip = f"BTC >${int(_BTC_WATCH):,}"
 
     # Brent: ATR-bazlı dinamik eşikler
     if _brent_ti:

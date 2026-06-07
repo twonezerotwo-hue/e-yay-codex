@@ -10,12 +10,19 @@ PAPER_SAFE / NO_EXECUTION.
 from __future__ import annotations
 
 import logging
+import threading
+import time as _time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+# Cache: (ticker, tf_label) → (df, ts_monotonic)
+_CACHE: dict[tuple[str, str], tuple[Any, float]] = {}
+_CACHE_LOCK = threading.Lock()
+_CACHE_TTL_SECONDS = 180.0  # 3 dakika — yfinance soft limit + UI snappy
 
 
 _TF_PRESETS: dict[str, tuple[str, str]] = {
@@ -129,10 +136,20 @@ def _resample_to_4h(df):
 
 
 def _fetch_ohlcv(ticker: str, tf_label: str):
-    """yfinance'tan OHLCV çek, 4h ise resample. None döner hata olursa."""
-    import yfinance as yf
+    """yfinance'tan OHLCV çek, 4h ise resample. None döner hata olursa.
+
+    3 dk'lık in-process cache — peş peşe kart flip'leri tek istek atar.
+    """
     if tf_label not in _TF_PRESETS:
         return None
+    key = (ticker, tf_label)
+    now = _time.monotonic()
+    with _CACHE_LOCK:
+        cached = _CACHE.get(key)
+        if cached is not None and (now - cached[1]) < _CACHE_TTL_SECONDS:
+            return cached[0]
+
+    import yfinance as yf
     interval, period = _TF_PRESETS[tf_label]
     try:
         df = yf.download(ticker, period=period, interval=interval, auto_adjust=True, progress=False)
@@ -145,6 +162,12 @@ def _fetch_ohlcv(ticker: str, tf_label: str):
         df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     if tf_label == "4h":
         df = _resample_to_4h(df)
+    with _CACHE_LOCK:
+        _CACHE[key] = (df, now)
+        # Cache büyüklüğü cap — 100'den fazlaysa en eskiyi at
+        if len(_CACHE) > 100:
+            oldest = min(_CACHE.items(), key=lambda kv: kv[1][1])[0]
+            _CACHE.pop(oldest, None)
     return df
 
 

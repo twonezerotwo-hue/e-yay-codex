@@ -303,7 +303,7 @@ def generate_insights(report: Any, rotation: Any | None = None) -> list[AgentIns
         if triggers:
             insights.append(AgentInsight(
                 "OBSERVATION",
-                f"Buradan dönüş için ne olmalı?",
+                "Buradan dönüş için ne olmalı?",
                 f"Karar {report.decision} — dönüş senaryosu için gereken tetikleyiciler: "
                 + " · ".join(f"({i+1}) {t}" for i, t in enumerate(triggers[:3])) + ".",
                 "", "🔄", iso_now,

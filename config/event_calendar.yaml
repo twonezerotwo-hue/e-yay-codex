@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
 # E-YAY BrainChain — Olay Takvimi (Catalyst Calendar)
-# Son güncelleme: 2026-06-01 07:06 UTC
+# Son güncelleme: 2026-06-07 06:00 UTC
 # OTOMATİK: scripts/update_event_calendar.py  (her Pazar 09:00)
 # Manuel eklenti: _source: manual ekle
 # BLS 2026 tarihleri HARDCODED — kaynak: bls.gov/schedule/2026/
@@ -221,6 +221,16 @@ events:
     importance: "MEDIUM"
     expectation: "08:30 ET — BLS resmi takvim"
     market_impact: "Yüksek gelirse enflasyon beklentileri yükselir"
+
+  # ─── 2026-12 ──────────────────────────────────────────────────
+
+  - id: "nfp_2026_12"
+    date: "2026-12-04"
+    name: "ABD İstihdam / NFP (Kasım 2026)"
+    category: "MACRO"
+    importance: "HIGH"
+    expectation: "08:30 ET — BLS resmi takvim"
+    market_impact: "Güçlü → Fed kesmez DXY↑ | Zayıf → resesyon korkusu risk-off"
 
   # ─── 2027-08 ──────────────────────────────────────────────────
 

@@ -32,6 +32,14 @@ EXPECTED_ASSET_SYMBOLS = (
     "BTCXAUK",
     "XAUUSDK",
     "XAGUSDK",
+    "VIX",
+    "REAL_YIELD",
+    "HY_SPREAD",
+    "ETHUSD",
+    "IWM",
+    "LQD",
+    "SMH",
+    "XLF",
 )
 
 

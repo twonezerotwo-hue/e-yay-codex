@@ -802,7 +802,7 @@ def agent_chat_stream(messages: list[dict]) -> Generator[str, None, None]:
                     payload = {"provider": "claude", "status": "fallback", "reason": str(exc_8b)[:120]}
                     yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
                     yield from _claude_chat_stream(messages)
-                except Exception as exc_cl:
+                except Exception:
                     err = (
                         "Tüm sağlayıcılar şu an dolu. Groq 8b dakika başına token limiti aştı. "
                         "Lütfen 30-60 saniye sonra tekrar dene."

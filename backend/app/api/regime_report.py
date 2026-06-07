@@ -66,7 +66,6 @@ class _FakeSession:
 
 
 def _serialize_report(report: object) -> dict:
-    from dataclasses import asdict
     import dataclasses
 
     def _convert(obj: object) -> object:
