@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { AssetImpact, NewsHeadline, Sentiment } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -37,6 +38,9 @@ const GEO_PRIORITY: Record<string, number> = {
 
 export default function NewsPanel({ headlines }: { headlines: NewsHeadline[] }) {
   const { t } = useLanguage();
+  // Mount sonrası "TAZE" sayacı — SSR hidrasyon mismatch'i için boş gösterilir.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   if (headlines.length === 0) {
     return (
@@ -69,7 +73,7 @@ export default function NewsPanel({ headlines }: { headlines: NewsHeadline[] }) 
           <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.news.title}</p>
         </div>
         <div className="flex items-center gap-2">
-          {(() => {
+          {mounted && (() => {
             const oneHourAgo = Date.now() - 3_600_000;
             const fresh = headlines.filter(h => {
               try { return new Date(h.published_at).getTime() > oneHourAgo; }
@@ -180,9 +184,9 @@ function AssetImpactChips({ impacts }: { impacts: AssetImpact[] }) {
   );
 }
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, nowMs: number = Date.now()): string {
   try {
-    const diffMs  = Date.now() - new Date(iso).getTime();
+    const diffMs  = nowMs - new Date(iso).getTime();
     const diffMin = Math.floor(diffMs / 60_000);
     if (diffMin <  2)  return "şimdi";
     if (diffMin < 60)  return `${diffMin}dk`;
@@ -194,9 +198,9 @@ function relativeTime(iso: string): string {
   }
 }
 
-function ageColor(iso: string): string {
+function ageColor(iso: string, nowMs: number = Date.now()): string {
   try {
-    const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
+    const h = (nowMs - new Date(iso).getTime()) / 3_600_000;
     if (h < 1)  return "text-emerald-400";
     if (h < 6)  return "text-eyay-dim";
     if (h < 24) return "text-eyay-faint";
@@ -208,8 +212,18 @@ function ageColor(iso: string): string {
 
 function HeadlineRow({ h }: { h: NewsHeadline }) {
   const s   = SENTIMENT[h.sentiment];
-  const age = relativeTime(h.published_at);
-  const ageCls = ageColor(h.published_at);
+  // SSR ile client time'ı eşleşmediği için hidrasyon mismatch oluyordu
+  // ("18dk" vs "19dk"). Mount sonrası hesapla; SSR çıktısı boş → mismatch yok.
+  const [mounted, setMounted] = useState(false);
+  const [now,     setNow]     = useState(0);
+  useEffect(() => {
+    setMounted(true);
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const age    = mounted ? relativeTime(h.published_at, now) : "";
+  const ageCls = mounted ? ageColor(h.published_at, now) : "text-eyay-faint";
   const display = (h.title_tr && h.title_tr.trim()) || h.title;
   const isTranslated = display !== h.title;
 
