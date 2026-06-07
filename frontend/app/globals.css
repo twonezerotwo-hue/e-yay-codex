@@ -28,3 +28,12 @@
   50%       { opacity: 0.4; }
 }
 .pulse-red { animation: soft-pulse 1.8s ease-in-out infinite; }
+
+/* 3D flip utilities — AssetGrid CommandCard için */
+.backface-hidden {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}

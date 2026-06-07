@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AssetSignal, AssetActionType, SignalStatus, TechnicalInsight } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+import MiniChart, { type ChartTFView } from "./MiniChart";
 
 // ---------------------------------------------------------------------------
 // 5 Komut Sinyali — büyük kartlar
@@ -140,6 +141,17 @@ function DeltaBadge({ delta, size = "md" }: { delta: number | null; size?: "sm" 
 // Primary Command Card — büyük
 // ---------------------------------------------------------------------------
 
+interface ChartReading {
+  asset_code: string;
+  ticker: string;
+  primary_tf: string;
+  alignment: string;
+  alignment_pct: number;
+  summary: string;
+  timeframes: ChartTFView[];
+  error?: string | null;
+}
+
 function CommandCard({
   signal, icon, statusLabel, techInsight,
 }: {
@@ -149,66 +161,206 @@ function CommandCard({
   techInsight?: TechnicalInsight;
 }) {
   const st = STATUS_STYLE[signal.status];
+  const [flipped, setFlipped] = useState(false);
+  const [reading, setReading] = useState<ChartReading | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [activeTf, setActiveTf] = useState<string>("1d");
+  const [err, setErr] = useState<string | null>(null);
+
+  // İlk flip'te chart fetch et
+  useEffect(() => {
+    if (!flipped || reading) return;
+    let cancel = false;
+    setLoading(true);
+    setErr(null);
+    fetch(`/api/backend/agent/chart/${signal.asset_code}?timeframes=1h,4h,1d`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(d => {
+        if (cancel) return;
+        const r2 = d?.reading as ChartReading | undefined;
+        if (!r2 || !r2.timeframes?.length) {
+          setErr(d?.reading?.summary || "Veri yok");
+          setLoading(false);
+          return;
+        }
+        setReading(r2);
+        setActiveTf(r2.primary_tf || r2.timeframes[0].timeframe);
+        setLoading(false);
+      })
+      .catch(e => {
+        if (cancel) return;
+        setErr(String(e).slice(0, 140));
+        setLoading(false);
+      });
+    return () => { cancel = true; };
+  }, [flipped, reading, signal.asset_code]);
+
+  const view = reading?.timeframes?.find(v => v.timeframe === activeTf) || reading?.timeframes?.[0];
+
+  const cardBaseCls = `border ${st.cardBorder} ${st.cardBg} rounded-xl flex flex-col gap-2 absolute inset-0 backface-hidden`;
+
   return (
-    <div className={`border ${st.cardBorder} ${st.cardBg} rounded-xl p-3.5 flex flex-col gap-2 transition-all duration-200 hover:brightness-110`}>
-      <div className="flex items-start justify-between gap-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-sm leading-none">{icon}</span>
-          <p className="font-mono font-bold text-xs text-eyay-text tracking-wide truncate">
-            {signal.asset_code}
+    <div className="relative" style={{ perspective: "1000px", minHeight: "260px" }}>
+      <div
+        className="relative w-full h-full transition-transform duration-500"
+        style={{
+          transformStyle: "preserve-3d",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+          minHeight: "260px",
+        }}
+      >
+        {/* ── ÖN YÜZ ─────────────────────────────────────────────────────────── */}
+        <div
+          className={`${cardBaseCls} p-3.5 cursor-pointer transition-all duration-200 hover:brightness-110`}
+          style={{ backfaceVisibility: "hidden" }}
+          onClick={() => setFlipped(true)}
+          role="button"
+          tabIndex={0}
+          aria-label={`${signal.asset_code} kartını çevir`}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFlipped(true); } }}
+        >
+          <div className="flex items-start justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm leading-none">{icon}</span>
+              <p className="font-mono font-bold text-xs text-eyay-text tracking-wide truncate">
+                {signal.asset_code}
+              </p>
+            </div>
+            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-semibold shrink-0 ${st.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.dot} ${st.dotAnim ?? ""}`} />
+              {statusLabel}
+            </div>
+          </div>
+
+          {signal.value !== null ? (
+            <div className="flex flex-col gap-0.5">
+              {techInsight && (() => {
+                const broken = signal.value >= techInsight.levels.resistance;
+                return (
+                  <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-emerald-400" : "text-eyay-faint/50"}`}>
+                    R {formatPrice(techInsight.levels.resistance, signal.unit)}{broken ? " ↑" : ""}
+                  </p>
+                );
+              })()}
+              <div>
+                <p className={`font-mono font-black text-xl leading-none ${st.priceColor}`}>
+                  {formatPrice(signal.value, signal.unit)}
+                </p>
+                <p className="text-[9px] font-mono text-eyay-faint mt-0.5">{signal.unit}</p>
+              </div>
+              {techInsight && (() => {
+                const broken = signal.value <= techInsight.levels.support;
+                return (
+                  <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-red-400" : "text-eyay-faint/50"}`}>
+                    S {formatPrice(techInsight.levels.support, signal.unit)}{broken ? " ↓" : ""}
+                  </p>
+                );
+              })()}
+            </div>
+          ) : (
+            <p className="text-xs text-eyay-faint font-mono">—</p>
+          )}
+
+          <div className="flex items-center justify-between gap-1">
+            <DeltaBadge delta={signal.delta_7d_pct} size="md" />
+            {signal.asset_action && signal.asset_action !== "NEUTRAL" && (
+              <ActionChip action={signal.asset_action} trigger={signal.action_trigger} />
+            )}
+          </div>
+
+          {signal.action_trigger && signal.asset_action && signal.asset_action !== "NEUTRAL" && (
+            <p className="text-[9px] text-eyay-faint/70 font-mono leading-snug italic">
+              {signal.action_trigger}
+            </p>
+          )}
+
+          <p className="text-[10px] text-eyay-dim leading-snug line-clamp-2 border-t border-white/5 pt-2">
+            {signal.reason.replace(/\s*\[S:[^\]]+\]/g, "")}
+          </p>
+
+          <p className="text-[9px] text-eyay-faint/60 italic text-center mt-auto">
+            ⤺ grafiği görmek için tıkla
           </p>
         </div>
-        <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9px] font-semibold shrink-0 ${st.badge}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${st.dot} ${st.dotAnim ?? ""}`} />
-          {statusLabel}
-        </div>
-      </div>
 
-      {signal.value !== null ? (
-        <div className="flex flex-col gap-0.5">
-          {techInsight && (() => {
-            const broken = signal.value >= techInsight.levels.resistance;
-            return (
-              <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-emerald-400" : "text-eyay-faint/50"}`}>
-                R {formatPrice(techInsight.levels.resistance, signal.unit)}{broken ? " ↑" : ""}
-              </p>
-            );
-          })()}
-          <div>
-            <p className={`font-mono font-black text-xl leading-none ${st.priceColor}`}>
-              {formatPrice(signal.value, signal.unit)}
-            </p>
-            <p className="text-[9px] font-mono text-eyay-faint mt-0.5">{signal.unit}</p>
+        {/* ── ARKA YÜZ ───────────────────────────────────────────────────────── */}
+        <div
+          className={`${cardBaseCls} p-2.5 cursor-pointer`}
+          style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
+          onClick={() => setFlipped(false)}
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm">{icon}</span>
+              <p className="font-mono font-bold text-xs text-eyay-text">{signal.asset_code}</p>
+            </div>
+            <span className="text-[9px] text-eyay-faint/70">↺ kapat</span>
           </div>
-          {techInsight && (() => {
-            const broken = signal.value <= techInsight.levels.support;
-            return (
-              <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-red-400" : "text-eyay-faint/50"}`}>
-                S {formatPrice(techInsight.levels.support, signal.unit)}{broken ? " ↓" : ""}
-              </p>
-            );
-          })()}
+
+          {/* TF seçici */}
+          {reading?.timeframes?.length ? (
+            <div className="flex items-center gap-1 text-[9px] font-mono">
+              {reading.timeframes.map(v => (
+                <button
+                  key={v.timeframe}
+                  onClick={(e) => { e.stopPropagation(); setActiveTf(v.timeframe); }}
+                  className={`px-1.5 py-0.5 rounded border ${
+                    activeTf === v.timeframe
+                      ? "border-emerald-700/70 bg-emerald-950/40 text-emerald-200"
+                      : "border-eyay-border/40 text-eyay-faint hover:text-eyay-text"
+                  }`}
+                >
+                  {v.timeframe.toUpperCase()}
+                </button>
+              ))}
+              {reading.primary_tf && (
+                <span className="text-[8px] text-eyay-faint ml-auto">primary: {reading.primary_tf.toUpperCase()}</span>
+              )}
+            </div>
+          ) : null}
+
+          {/* Chart */}
+          <div className="flex-1 flex items-center justify-center min-h-[110px]">
+            {loading && <p className="text-[10px] text-eyay-faint animate-pulse">grafik yükleniyor…</p>}
+            {err && !loading && <p className="text-[10px] text-red-400 text-center px-2">{err}</p>}
+            {!loading && !err && view && (
+              <MiniChart view={view} width={280} height={130} />
+            )}
+          </div>
+
+          {/* Detay satırı */}
+          {view && !loading && !err && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[8px] font-mono text-eyay-faint">
+              <span>trend <span className={
+                view.trend === "BULLISH" ? "text-emerald-400 font-bold" :
+                view.trend === "BEARISH" ? "text-red-400 font-bold" :
+                "text-eyay-text"
+              }>{view.trend}</span></span>
+              <span>ATR <span className="text-eyay-text">{view.atr_pct.toFixed(2)}%</span></span>
+              {view.rsi_14 != null && (
+                <span>RSI <span className={
+                  view.rsi_14 > 70 ? "text-orange-400" :
+                  view.rsi_14 < 30 ? "text-sky-400" :
+                  "text-eyay-text"
+                }>{view.rsi_14.toFixed(1)}</span></span>
+              )}
+              {view.distance_to_support_pct != null && (
+                <span>→ S {view.distance_to_support_pct.toFixed(2)}%</span>
+              )}
+              {view.distance_to_resistance_pct != null && (
+                <span>→ R {view.distance_to_resistance_pct.toFixed(2)}%</span>
+              )}
+              <span>bars {view.bars_used}</span>
+            </div>
+          )}
+
+          {reading && !loading && !err && (
+            <p className="text-[9px] text-eyay-dim leading-tight border-t border-white/5 pt-1">
+              {reading.summary}
+            </p>
+          )}
         </div>
-      ) : (
-        <p className="text-xs text-eyay-faint font-mono">—</p>
-      )}
-
-      <div className="flex items-center justify-between gap-1">
-        <DeltaBadge delta={signal.delta_7d_pct} size="md" />
-        {signal.asset_action && signal.asset_action !== "NEUTRAL" && (
-          <ActionChip action={signal.asset_action} trigger={signal.action_trigger} />
-        )}
       </div>
-
-      {signal.action_trigger && signal.asset_action && signal.asset_action !== "NEUTRAL" && (
-        <p className="text-[9px] text-eyay-faint/70 font-mono leading-snug italic">
-          {signal.action_trigger}
-        </p>
-      )}
-
-      <p className="text-[10px] text-eyay-dim leading-snug line-clamp-2 border-t border-white/5 pt-2">
-        {signal.reason.replace(/\s*\[S:[^\]]+\]/g, "")}
-      </p>
     </div>
   );
 }
