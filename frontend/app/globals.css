@@ -37,3 +37,68 @@
 .preserve-3d {
   transform-style: preserve-3d;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Profesyonel haber + harita animasyonları (CSS-only, no library)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Yeni haber soft glow */
+@keyframes news-soft-glow {
+  0%   { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.45); }
+  60%  { box-shadow: 0 0 0 10px rgba(96, 165, 250, 0);  }
+  100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);     }
+}
+.news-glow { animation: news-soft-glow 2.4s ease-out 1; }
+
+/* Kritik haber border pulse (RED) */
+@keyframes critical-border {
+  0%, 100% { border-color: rgba(239, 68, 68, 0.55); }
+  50%      { border-color: rgba(239, 68, 68, 1);     }
+}
+.news-critical-border { animation: critical-border 2.2s ease-in-out infinite; }
+
+/* Orange dikkat border pulse */
+@keyframes high-border {
+  0%, 100% { border-color: rgba(251, 146, 60, 0.40); }
+  50%      { border-color: rgba(251, 146, 60, 0.85); }
+}
+.news-high-border { animation: high-border 3s ease-in-out infinite; }
+
+/* Severity badge mini pulse */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.08); opacity: 0.92; }
+}
+.severity-badge-pulse { animation: badge-pulse 2s ease-in-out infinite; }
+
+/* Harita marker — severity-renkli, çift halka */
+@keyframes map-marker-pulse {
+  0%   { transform: scale(0.85); opacity: 0.85; }
+  70%  { transform: scale(2.4);  opacity: 0;    }
+  100% { transform: scale(2.4);  opacity: 0;    }
+}
+.map-marker-ring {
+  transform-origin: center;
+  animation: map-marker-pulse 2.1s cubic-bezier(0, 0.55, 0.45, 1) infinite;
+}
+.map-marker-ring-slow {
+  transform-origin: center;
+  animation: map-marker-pulse 3.4s cubic-bezier(0, 0.55, 0.45, 1) infinite;
+}
+
+/* Seçili marker (highlight) */
+@keyframes map-marker-selected {
+  0%, 100% { filter: drop-shadow(0 0 4px currentColor); }
+  50%      { filter: drop-shadow(0 0 10px currentColor); }
+}
+.map-marker-selected { animation: map-marker-selected 1.6s ease-in-out infinite; }
+
+/* News ticker yatay kaydırma */
+@keyframes news-ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.news-ticker-track {
+  animation: news-ticker-scroll 60s linear infinite;
+}
+.news-ticker-track:hover { animation-play-state: paused; }

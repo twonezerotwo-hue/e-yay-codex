@@ -82,7 +82,7 @@ const TR = {
   catalyst: {
     title:    "Olay Takvimi",
     events:   (n: number) => `${n} etkinlik`,
-    footer:   "yakından uzağa · PAPER_SAFE",
+    footer:   "yakından uzağa · Analiz modu",
     today:    "BUGÜN",
     tomorrow: "YARIN",
     importance: { CRITICAL: "KRİTİK", HIGH: "YÜKSEK", MEDIUM: "ORTA" } as Record<string, string>,
@@ -90,7 +90,7 @@ const TR = {
   scenario: {
     title:    "Senaryo",
     dominant: "Baskın:",
-    footer:   "PAPER_SAFE · olasılıklar sinyal durumundan türetilir",
+    footer:   "Analiz modu · olasılıklar sinyal durumundan türetilir",
     labelMap: { "Boğa": "Boğa", "Baz": "Baz", "Ayı": "Ayı" } as Record<string, string>,
   },
   confirmation: { title: "Teyit Listesi" },
@@ -129,7 +129,7 @@ const TR = {
     structure:    "Yapı",
     levels:       "Destek / Direnç",
     score:        "Skor",
-    footer:       "Wilder ATR(14) · Swing H/L · RSI(14) · MACD · 1D zaman dilimi · PAPER_SAFE",
+    footer:       "Wilder ATR(14) · Swing H/L · RSI(14) · MACD · 1D zaman dilimi · Analiz modu",
   },
 };
 
@@ -210,7 +210,7 @@ const EN: typeof TR = {
   catalyst: {
     title:    "Event Calendar",
     events:   (n: number) => `${n} events`,
-    footer:   "near to far · PAPER_SAFE",
+    footer:   "near to far · Analysis mode",
     today:    "TODAY",
     tomorrow: "TOMORROW",
     importance: { CRITICAL: "CRITICAL", HIGH: "HIGH", MEDIUM: "MEDIUM" },
@@ -218,7 +218,7 @@ const EN: typeof TR = {
   scenario: {
     title:    "Scenario",
     dominant: "Dominant:",
-    footer:   "PAPER_SAFE · probabilities derived from signal state",
+    footer:   "Analysis mode · probabilities derived from signal state",
     labelMap: { "Boğa": "Bull", "Baz": "Base", "Ayı": "Bear" },
   },
   confirmation: { title: "Confirmation List" },
@@ -257,7 +257,7 @@ const EN: typeof TR = {
     structure:    "Structure",
     levels:       "Support / Resistance",
     score:        "Score",
-    footer:       "Wilder ATR(14) · Swing H/L · RSI(14) · MACD · 1D timeframe · PAPER_SAFE",
+    footer:       "Wilder ATR(14) · Swing H/L · RSI(14) · MACD · 1D timeframe · Analysis mode",
   },
 };
 

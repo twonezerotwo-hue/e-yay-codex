@@ -679,7 +679,7 @@ export default function PaperTradingTicker() {
 
               <div className="flex items-center justify-between pt-1 border-t border-eyay-border/40">
                 <p className="text-[8px] font-mono text-eyay-faint/50">
-                  Agent · 4 parite · PAPER_SAFE
+                  Agent · 4 parite · Analiz modu
                 </p>
                 <div className="flex items-center gap-1.5">
                   {/* Ses toggle */}

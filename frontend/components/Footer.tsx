@@ -7,7 +7,7 @@ export default function Footer() {
   return (
     <div className="py-3 border-t border-eyay-border text-center">
       <p className="text-xs text-eyay-faint">
-        E-YAY BrainChain · PAPER_SAFE · NO_EXECUTION
+        E-YAY BrainChain · Analiz modu · Canlı emir gönderimi kapalı
         <span className="mx-2 text-eyay-border">·</span>
         {t.footer.text}
       </p>

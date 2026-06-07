@@ -306,13 +306,22 @@ def generate_ai_report(
 
     groq_key = os.environ.get("GROQ_API_KEY", "")
     claude_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    # ── Kullanıcıya gösterilen mesaj her zaman generic. Detay backend log'unda.
+    _USER_FRIENDLY_UNAVAILABLE = (
+        "AI analiz katmanı geçici olarak kullanılamıyor. "
+        "Veri ve risk motoru çalışmaya devam ediyor."
+    )
     if not groq_key and not claude_key:
+        import logging
+        logging.getLogger(__name__).warning(
+            "ai_analyst: API key bulunamadı (GROQ_API_KEY / ANTHROPIC_API_KEY ikisi de boş)."
+        )
         return AIAnalystReport(
             generated_at=now_iso, model="(none)", cached=False,
             narrative="", key_signals=[],
-            verdict="GROQ_API_KEY veya ANTHROPIC_API_KEY tanımlı değil.",
+            verdict=_USER_FRIENDLY_UNAVAILABLE,
             confidence_note="",
-            error="No API key configured.",
+            error=_USER_FRIENDLY_UNAVAILABLE,
         )
 
     # Geçmiş raporları yükle → öğrenme bloğu
@@ -341,14 +350,16 @@ def generate_ai_report(
             import dataclasses
             return dataclasses.replace(
                 stale,
-                confidence_note=stale.confidence_note + " (stale — Groq token limiti)",
+                confidence_note=(stale.confidence_note + " · Önbellekten gösteriliyor"),
             )
+        # Hiçbir provider çalışmadı; tam detay backend log'unda zaten yazılı.
+        # Kullanıcıya generic mesaj — ham 'invalid x-api-key' vs gösterme.
         return AIAnalystReport(
             generated_at=now_iso, model="(failed)", cached=False,
             narrative="", key_signals=[],
-            verdict="Her iki sağlayıcı da başarısız (Groq + Claude).",
+            verdict=_USER_FRIENDLY_UNAVAILABLE,
             confidence_note="",
-            error="Both providers failed.",
+            error=_USER_FRIENDLY_UNAVAILABLE,
         )
 
     raw, model_used = result
@@ -361,12 +372,14 @@ def generate_ai_report(
                 raw = raw[s:e]
         data = json.loads(raw)
     except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("ai_analyst: JSON parse error: %s", exc)
         return AIAnalystReport(
             generated_at=now_iso, model=model_used, cached=False,
             narrative="", key_signals=[],
-            verdict="Rapor JSON ayrıştırılamadı.",
+            verdict=_USER_FRIENDLY_UNAVAILABLE,
             confidence_note="",
-            error=f"JSON parse error: {exc}",
+            error=_USER_FRIENDLY_UNAVAILABLE,
         )
 
     report = AIAnalystReport(

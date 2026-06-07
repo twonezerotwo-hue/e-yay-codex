@@ -353,7 +353,7 @@ export default function AIChatPanel() {
             </span>
           )}
           <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5 py-0.5">
-            PAPER_SAFE
+            Analiz modu
           </span>
           <span className={`text-eyay-faint text-sm transition-transform duration-200 ${open ? "rotate-180" : ""}`}>
             ▾
@@ -467,7 +467,7 @@ export default function AIChatPanel() {
             </div>
 
             <p className="text-[8px] text-eyay-faint/40 font-mono px-1">
-              groq (llama-3.3-70b) → claude (opus-4-7) fallback · 5 araç · PAPER_SAFE
+              groq (llama-3.3-70b) → claude (opus-4-7) fallback · 5 araç · canlı emir gönderimi kapalı
             </p>
           </div>
         </div>

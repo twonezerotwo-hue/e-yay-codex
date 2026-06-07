@@ -308,7 +308,7 @@ export default function CapitalFlowWidget({
         </div>
 
         <p className="text-[8px] text-eyay-faint/40 font-mono">
-          yfinance OHLCV 30g · çapraz oran trendleri · log-getiri korelasyonu · PAPER_SAFE
+          yfinance OHLCV 30g · çapraz oran trendleri · log-getiri korelasyonu · Analiz modu
         </p>
       </div>
     </div>

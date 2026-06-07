@@ -28,37 +28,32 @@ function Skeleton() {
 
 // ─── Hata ────────────────────────────────────────────────────────────────────
 
+/**
+ * AI rapor hata kutusu — her zaman tek, profesyonel mesaj.
+ *
+ * Ham backend hatası (örn. "invalid x-api-key", "ANTHROPIC_API_KEY") kullanıcıya
+ * gösterilmez; backend bunu zaten generic mesaja sanitize ediyor, ama frontend
+ * de ikinci kapı olarak savunma yapar — gelecekte başka kanaldan ham mesaj
+ * sızarsa burada da yakalanır.
+ */
 function ErrorBox({ message }: { message: string }) {
-  const { t, lang } = useLanguage();
-  const isNoKey = message.includes("ANTHROPIC_API_KEY");
-  const [p0, p1, p2] = t.ai.noKeyParts;
+  const { lang } = useLanguage();
+  const isRawTechnical =
+    /api[\s_-]?key|x-api-key|401|403|unauthorized|invalid|forbidden/i.test(message);
+  const display = isRawTechnical
+    ? (lang === "tr"
+        ? "AI analiz katmanı geçici olarak kullanılamıyor. Veri ve risk motoru çalışmaya devam ediyor."
+        : "AI analysis layer is temporarily unavailable. Data and risk engine continue to operate.")
+    : message;
 
   return (
-    <div className="rounded-xl border border-yellow-800/50 bg-yellow-950/20 px-5 py-4 flex items-start gap-3">
-      <span className="text-yellow-500 text-base mt-0.5 shrink-0">⚠</span>
+    <div className="rounded-xl border border-amber-800/40 bg-amber-950/15 px-5 py-4 flex items-start gap-3">
+      <span className="text-amber-400 text-base mt-0.5 shrink-0">ℹ</span>
       <div className="space-y-1">
-        <p className="font-mono text-xs text-yellow-400 font-semibold">{t.ai.errorTitle}</p>
-        {isNoKey ? (
-          lang === "tr" ? (
-            <p className="font-mono text-xs text-eyay-dim">
-              {p0}{" "}
-              <code className="text-eyay-blue bg-eyay-surface px-1 rounded">backend/.env</code>{" "}
-              {p1}{" "}
-              <code className="text-eyay-blue bg-eyay-surface px-1 rounded">ANTHROPIC_API_KEY=sk-ant-...</code>{" "}
-              {p2}
-            </p>
-          ) : (
-            <p className="font-mono text-xs text-eyay-dim">
-              {p0}{" "}
-              <code className="text-eyay-blue bg-eyay-surface px-1 rounded">ANTHROPIC_API_KEY=sk-ant-...</code>{" "}
-              {p1}{" "}
-              <code className="text-eyay-blue bg-eyay-surface px-1 rounded">backend/.env</code>
-              {p2 && <>{" "}{p2}</>}
-            </p>
-          )
-        ) : (
-          <p className="font-mono text-xs text-eyay-dim">{message}</p>
-        )}
+        <p className="font-mono text-xs text-amber-300 font-semibold tracking-wider">
+          {lang === "tr" ? "AI YORUMU GEÇİCİ OLARAK YOK" : "AI ANALYSIS TEMPORARILY OFFLINE"}
+        </p>
+        <p className="font-mono text-xs text-eyay-dim leading-relaxed">{display}</p>
       </div>
     </div>
   );
@@ -112,8 +107,8 @@ export default function AIAnalystReportPanel({ report, error, geoNewsCount }: Pr
             )}
           </span>
         </div>
-        <span className="font-mono text-[10px] border border-red-900 text-red-500 bg-red-950/60 rounded px-2 py-0.5">
-          PAPER_SAFE · NO_EXECUTION
+        <span className="font-mono text-[10px] border border-eyay-blue/40 text-eyay-blue bg-eyay-blue/10 rounded px-2 py-0.5">
+          Analiz modu · Canlı emir gönderimi kapalı
         </span>
       </div>
 

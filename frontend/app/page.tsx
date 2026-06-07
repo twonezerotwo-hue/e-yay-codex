@@ -8,6 +8,7 @@ import AsymmetryCard from "@/components/AsymmetryCard";
 import CatalystSidebar from "@/components/CatalystSidebar";
 import ConfirmationStrip from "@/components/ConfirmationStrip";
 import NewsPanel from "@/components/NewsPanel";
+import GlobalEventPanel from "@/components/GlobalEventPanel";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ActionCenter from "@/components/ActionCenter";
@@ -139,7 +140,10 @@ export default async function HomePage() {
               <AsymmetryCard asymmetry={data.report.asymmetry} />
             </div>
 
-            {/* 5 ── Haberler */}
+            {/* 5 ── Global Event Map (harita + son dakika + karar etkisi) */}
+            <GlobalEventPanel headlines={data.report.news_headlines} />
+
+            {/* 6 ── Klasik haber paneli (geriye uyumlu, severity-based sıralama) */}
             <NewsPanel headlines={data.report.news_headlines} />
 
             <Footer />

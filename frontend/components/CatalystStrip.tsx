@@ -151,7 +151,7 @@ export default function CatalystStrip({ catalysts }: CatalystStripProps) {
       {/* Footer hint */}
       <div className="px-4 py-2 border-t border-eyay-border/50 bg-eyay-bg/30">
         <p className="text-[9px] font-mono text-eyay-faint text-center tracking-wide">
-          PAPER_SAFE · Sadece analiz — tarihler değişebilir, teyit ediniz
+          Analiz modu · Sadece analiz — tarihler değişebilir, teyit ediniz
         </p>
       </div>
     </div>
