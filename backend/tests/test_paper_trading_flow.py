@@ -31,7 +31,11 @@ def _consensus_signal(
     *,
     score: float = 75.0,
     direction: str = "bullish",
-    regime: str = "CRISIS",
+    # Default OFFENSIVE — bu testler 60s pending akışını test ediyor.
+    # DEFENSIVE/CRISIS rejimde sinyal doğrudan manual_ready'ye gider
+    # (agent_decision_aggregator NO_POSITION_INCREASE/RISK_REDUCE kuralı),
+    # pending açılmaz. Pending-bazlı senaryolar için OFFENSIVE varsayılan.
+    regime: str = "OFFENSIVE",
     confluence_status: str = "aligned",
     dominant_module: str = "fundamental",
 ) -> dict[str, object]:
@@ -157,7 +161,11 @@ def test_trading_state_endpoint_exposes_pending_orders_and_reject_flow(monkeypat
             pair: {"1h": SimpleNamespace(current_price=price)}
             for pair, price in prices.items()
         }
-        raw_snapshots = ()  # pipeline'a 4. tuple eklendi — snapshot evidence için
+        # Sahte snapshot — DQS gate "veri var" görsün. Boş tuple olursa
+        # PR'ın 'NO_DATA → KILL_SWITCH' kuralı pending açılmasını engeller.
+        raw_snapshots = tuple(
+            SimpleNamespace(asset_symbol=pair, fallback_used=False) for pair in prices
+        )
         return report, rotation, mtf, raw_snapshots
 
     def fake_build_full_signal(asset, report, rotation, mtf, trained_adjustments=None):

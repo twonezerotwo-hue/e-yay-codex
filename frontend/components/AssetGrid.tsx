@@ -433,7 +433,9 @@ export default function AssetGrid({
 
   const primaryCodes   = new Set(PRIMARY_SIGNALS.map(c => c.code));
   const secondaryCodes = new Set(SECONDARY_SIGNALS.map(c => c.code));
-  const allKnownCodes  = new Set([...primaryCodes, ...secondaryCodes]);
+  // Array.from kullan — Set spread için tsconfig target es2015+ gerekir,
+  // mevcut config Next 14 default'unda yer almıyor.
+  const allKnownCodes  = new Set([...Array.from(primaryCodes), ...Array.from(secondaryCodes)]);
 
   const primaryItems = PRIMARY_SIGNALS
     .map(c => ({ ...c, signal: byCode[c.code] }))
