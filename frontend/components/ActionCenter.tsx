@@ -140,7 +140,7 @@ export default function ActionCenter({ decision, ownerActions, flipConditions }:
 
           <div className="px-3 py-1 border-t border-white/5 bg-black/20">
             <p className="text-[8px] font-mono text-eyay-faint tracking-wider">
-              PAPER_SAFE · NO_EXECUTION
+              Analiz modu · Canlı emir gönderimi kapalı
             </p>
           </div>
         </div>

@@ -210,8 +210,17 @@ function ageColor(iso: string, nowMs: number = Date.now()): string {
   }
 }
 
+// Severity → kart kenarı + animasyon (geriye uyumlu — alan yoksa boş)
+const SEVERITY_BORDER: Record<string, string> = {
+  RED:    "border-red-900/60 news-critical-border",
+  ORANGE: "border-orange-900/50 news-high-border",
+  YELLOW: "border-yellow-900/40",
+  BLUE:   "border-blue-900/30",
+};
+
 function HeadlineRow({ h }: { h: NewsHeadline }) {
   const s   = SENTIMENT[h.sentiment];
+  const sevBorder = h.severity ? SEVERITY_BORDER[h.severity] : "";
   // SSR ile client time'ı eşleşmediği için hidrasyon mismatch oluyordu
   // ("18dk" vs "19dk"). Mount sonrası hesapla; SSR çıktısı boş → mismatch yok.
   const [mounted, setMounted] = useState(false);
@@ -232,7 +241,7 @@ function HeadlineRow({ h }: { h: NewsHeadline }) {
       href={h.url || "#"}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-start gap-3 p-3 rounded-xl bg-eyay-raised border border-eyay-border hover:border-eyay-muted transition-colors group"
+      className={`flex items-start gap-3 p-3 rounded-xl bg-eyay-raised border hover:border-eyay-muted transition-colors group ${sevBorder || "border-eyay-border"}`}
     >
       <span className={`font-mono font-bold text-xs mt-0.5 shrink-0 w-5 text-center ${s.color}`}>
         {s.icon}
@@ -250,6 +259,27 @@ function HeadlineRow({ h }: { h: NewsHeadline }) {
           {age && (
             <span className={`font-mono text-[9px] ${ageCls}`}>{age}</span>
           )}
+          {/* Severity rozeti — eski mantığa ek, etiketle */}
+          {h.severity && (
+            <span className={`text-[9px] font-mono font-bold px-1 py-px rounded border ${
+              h.severity === "RED"    ? "text-red-300    border-red-800/60    bg-red-950/40"    :
+              h.severity === "ORANGE" ? "text-orange-300 border-orange-800/60 bg-orange-950/40" :
+              h.severity === "YELLOW" ? "text-yellow-300 border-yellow-800/60 bg-yellow-950/30" :
+                                        "text-blue-300   border-blue-800/60   bg-blue-950/30"
+            }`}>
+              {h.severity}
+            </span>
+          )}
+          {/* Claim status — varsa */}
+          {h.claim_status && h.claim_status !== "CONTEXT_ONLY" && (
+            <span className={`text-[9px] font-mono px-1 py-px rounded border ${
+              h.claim_status === "VERIFIED"   ? "text-emerald-300 border-emerald-800/60 bg-emerald-950/30" :
+              h.claim_status === "PARTIAL"    ? "text-amber-300   border-amber-800/60   bg-amber-950/30"   :
+                                                 "text-rose-300    border-rose-800/60    bg-rose-950/30"
+            }`}>
+              {h.claim_status}
+            </span>
+          )}
           {h.tags.slice(0, 2).map(tag => (
             <span
               key={tag}
@@ -261,6 +291,12 @@ function HeadlineRow({ h }: { h: NewsHeadline }) {
         </div>
         {h.asset_impact && h.asset_impact.length > 0 && (
           <AssetImpactChips impacts={h.asset_impact} />
+        )}
+        {/* Decision impact — tek satır */}
+        {h.decision_impact && (
+          <p className="text-[10px] text-eyay-dim/90 mt-1.5 leading-relaxed italic">
+            ⚑ {h.decision_impact}
+          </p>
         )}
       </div>
     </a>

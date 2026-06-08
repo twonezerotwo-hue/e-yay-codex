@@ -560,7 +560,7 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
           <div className="pt-2 border-t border-eyay-border/40">
             <p className="text-[10px] font-mono text-eyay-faint text-center leading-relaxed">
               🤖 Agent canlı izleme · 15 sn'de bir tazelenir · saf analiz (Groq'a istek yok)<br />
-              PAPER_SAFE · NO_EXECUTION · tüm gerçek kararlar insana aittir
+              Analiz modu · Canlı emir gönderimi kapalı · tüm gerçek kararlar insana aittir
             </p>
           </div>
         </div>

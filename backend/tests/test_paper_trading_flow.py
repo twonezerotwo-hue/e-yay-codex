@@ -162,7 +162,7 @@ def test_trading_state_endpoint_exposes_pending_orders_and_reject_flow(monkeypat
             for pair, price in prices.items()
         }
         # Sahte snapshot — DQS gate "veri var" görsün. Boş tuple olursa
-        # PR'ın 'NO_DATA → KILL_SWITCH' kuralı pending açılmasını engeller.
+        # 'NO_DATA → KILL_SWITCH' kuralı pending açılmasını engeller.
         raw_snapshots = tuple(
             SimpleNamespace(asset_symbol=pair, fallback_used=False) for pair in prices
         )

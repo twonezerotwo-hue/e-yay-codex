@@ -163,6 +163,16 @@ export interface CapitalRotation {
   error: string | null;
 }
 
+export type NewsSeverity   = "RED" | "ORANGE" | "YELLOW" | "BLUE";
+export type ClaimStatus    = "VERIFIED" | "PARTIAL" | "UNVERIFIED" | "CONTEXT_ONLY";
+
+export interface NewsLocation {
+  name: string;
+  lat: number;
+  lon: number;
+  region_code?: string;
+}
+
 export interface NewsHeadline {
   title: string;
   title_tr?: string;     // AI ile Türkçe çevirisi — boşsa orijinal kullanılır
@@ -173,6 +183,12 @@ export interface NewsHeadline {
   sentiment: Sentiment;
   tags: string[];
   asset_impact?: AssetImpact[];
+  // ── Profesyonel haber alanları (backend tarafından doldurulur, opsiyonel) ─
+  severity?: NewsSeverity;
+  claim_status?: ClaimStatus;
+  decision_impact?: string;
+  location?: NewsLocation | null;
+  event_id?: string;
 }
 
 export interface RegimeReport {

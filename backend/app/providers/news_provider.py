@@ -29,6 +29,15 @@ class AssetImpact:
 
 
 @dataclass(frozen=True)
+class NewsLocation:
+    """Haberin coğrafi referansı — harita panelinde marker için."""
+    name: str          # "Strait of Hormuz", "Iran", "USA", vb.
+    lat: float
+    lon: float
+    region_code: str = ""   # ISO 3166-1 alpha-2 veya 'CHOKE_HORMUZ', 'CHOKE_SUEZ', vb.
+
+
+@dataclass(frozen=True)
 class NewsHeadline:
     title: str
     source: str
@@ -39,6 +48,12 @@ class NewsHeadline:
     tags: tuple[str, ...]
     asset_impact: tuple[AssetImpact, ...] = ()  # kural tabanlı varlık etkisi
     title_tr: str = ""          # AI ile Türkçe çevirisi (boşsa orijinal kullanılır)
+    # ── Profesyonel haber alanları (geriye uyumlu, default boş) ──
+    severity: str = ""          # "RED" | "ORANGE" | "YELLOW" | "BLUE" — kart rengi
+    claim_status: str = ""      # "VERIFIED" | "PARTIAL" | "UNVERIFIED" | "CONTEXT_ONLY"
+    decision_impact: str = ""   # 1 satır: Risk/Paper engine bunu nasıl yorumladı
+    location: NewsLocation | None = None
+    event_id: str = ""          # stable hash — frontend marker eşleştirme için
 
 
 # ---------------------------------------------------------------------------

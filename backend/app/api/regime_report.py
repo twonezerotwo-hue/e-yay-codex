@@ -153,6 +153,22 @@ def get_current_regime_report(
         delta_map=delta_map,
         tech_insights=tech_insights,
     )
+
+    # ── Haberi zenginleştir: severity / claim_status / decision_impact /
+    #     location / event_id alanlarını doldur (geriye uyumlu).
+    #     Karar metni varsa decision_impact yorumuna katılır.
+    try:
+        from app.services.news_enrichment_service import enrich_headlines
+        enriched_news = enrich_headlines(
+            report.news_headlines,
+            regime_decision=getattr(report, "decision", None),
+        )
+        import dataclasses as _dc
+        report = _dc.replace(report, news_headlines=enriched_news)
+    except Exception:  # noqa: BLE001
+        # Enrich başarısızsa eski format korunur — UI geriye uyumlu render eder.
+        pass
+
     serialized = _serialize_report(report)
 
     # ── Modül sağlık skorları ──────────────────────────────────────────────
