@@ -27,12 +27,14 @@ interface ProviderInfo {
 // ---------------------------------------------------------------------------
 
 const STARTERS = [
-  "Genel piyasa durumu nedir? Ne bekliyoruz?",
-  "BTC için teknik seviyeler nerede?",
-  "Sermaye şu an nereye akıyor?",
-  "Önümüzdeki hafta hangi kritik olaylar var?",
-  "Altın ile petrol korelasyonu ne diyor?",
-  "Mevcut rejimde en güçlü sinyal hangisi?",
+  // ── Senaryo / Katalizör soruları (Mod 2) ──────────────────────────────────
+  "Brent, gümüş ve BTC aynı anda yükselsin için hangi katalizörler gerekir? Trump, İsrail, İran, OPEC ne açıklamalı?",
+  "Altın yeni bir bacak yapsın için Trump, Fed ve Çin tarafından ne çıkmalı?",
+  "BTC kırılım için Trump'ın hangi açıklamasını izlemeliyim? DXY tarafında ne olmalı?",
+  "Petrol yukarı kırılım senaryosu: İran, İsrail ve OPEC tarafından hangi başlıklar gelmeli?",
+  // ── Veri soruları (Mod 1) ──────────────────────────────────────────────────
+  "Genel piyasa rejimi ne, nasıl bir karar uygun?",
+  "Şu an en güçlü sinyalimiz hangi varlıkta?",
 ];
 
 // ---------------------------------------------------------------------------
@@ -340,7 +342,7 @@ export default function AIChatPanel() {
               Piyasa Stratejisti
             </p>
             <p className="text-sm font-semibold text-eyay-text mt-0.5">
-              Canlı verilerle senaryo analizi
+              Senaryo + katalizör analizi · jeopolitik akıl yürütme
             </p>
           </div>
         </div>
@@ -369,8 +371,10 @@ export default function AIChatPanel() {
             {/* Boş durum — örnek sorular */}
             {messages.length === 0 && !streaming && !loading && (
               <div className="space-y-4">
-                <p className="text-[10px] text-eyay-faint text-center font-mono py-2">
-                  Stratejist canlı verilerle çalışır — sorduğun şeye göre ihtiyaç duyduğu veriyi kendisi çeker.
+                <p className="text-[10px] text-eyay-faint text-center font-mono py-2 leading-relaxed">
+                  Senaryo soruları için <span className="text-eyay-blue">aktör bazlı katalizör haritası</span> üretir
+                  <br />
+                  (Trump · İsrail · İran · OPEC · Çin · Fed) — kamuya açık akıl yürütme, içerden bilgi yok
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {STARTERS.map((s, i) => (
@@ -434,7 +438,7 @@ export default function AIChatPanel() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Soru sor veya senaryo anlat… (Enter göndermek için)"
+                placeholder="Senaryo sor: 'BTC + altın beraber yükselsin için Trump/Fed/Çin ne açıklamalı?' (Enter göndermek için)"
                 rows={2}
                 disabled={loading}
                 className={`

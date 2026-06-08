@@ -121,8 +121,14 @@ def _run_tick_pipeline() -> dict[str, Any]:
             dq_early = get_data_quality_summary(asset_snapshots_early)
             _qs = dq_early.get("quality_score")
             _has_data = dq_early.get("total", 0) > 0
-            # quality_score=0 + total=0 → NO_DATA → gate bypass (tick_dqs=None)
-            tick_dqs: int | None = int(_qs) if (_has_data and _qs is not None and _qs > 0) else None
+            # Snapshot boş (NO_DATA) → kalite bilinmiyor → KILL_SWITCH (yeni trade yok)
+            # NOT: unit testler tick_consensus'u doğrudan çağırır (dqs_score=None), etkilenmez.
+            if not _has_data:
+                tick_dqs: int | None = 0        # boş snapshot → block
+            elif _qs is not None and _qs > 0:
+                tick_dqs = int(_qs)             # gerçek skor
+            else:
+                tick_dqs = None                 # skor hesaplanamadı → gate pasif
         except Exception:
             dq_early = {"quality_score": None, "decision": "UNKNOWN"}
             tick_dqs = None
@@ -243,6 +249,18 @@ def reset() -> dict:
     pts.reset_state()
     _invalidate_caches()
     return {"status": "reset"}
+
+
+@router.post("/reset-trades", dependencies=[Depends(require_paper_safe)])
+def reset_trades() -> dict:
+    """İşlem geçmişini, pozisyonları ve sinyalleri sıfırla.
+
+    Öğrenilmiş ağırlıklar (weight_adjustments, training_history) KORUNUR.
+    trades, positions, pending_orders, realized_pnl, tick snapshot sıfırlanır.
+    """
+    pts.reset_trades_only()
+    _invalidate_caches()
+    return {"status": "trades_reset", "message": "İşlem geçmişi temizlendi, öğrenmeler korundu"}
 
 
 @router.post("/pending/{pair}/reject", dependencies=[Depends(require_paper_safe)])

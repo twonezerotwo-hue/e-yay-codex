@@ -123,13 +123,18 @@ function alertVoiceText(alert: AlertEvent): string {
 const POLL_MS = 15_000;
 
 export default function PaperTradingTicker() {
-  const [state,     setState]    = useState<TradingState | null>(null);
-  const [expanded,  setExpanded] = useState(false);
-  const [banner,    setBanner]   = useState<TradeEvent | null>(null);
-  const [agentOpen, setAgentOpen] = useState(false);
-  const [closing,   setClosing]  = useState<string | null>(null);
-  const [patterns,  setPatterns] = useState<Record<string, ChartPatternSummary>>({});
-  const [nowMs,     setNowMs]    = useState(Date.now());
+  const [state,        setState]       = useState<TradingState | null>(null);
+  const [expanded,     setExpanded]    = useState(false);
+  const [banner,       setBanner]      = useState<TradeEvent | null>(null);
+  const [agentOpen,    setAgentOpen]   = useState(false);
+  const [closing,      setClosing]     = useState<string | null>(null);
+  const [patterns,     setPatterns]    = useState<Record<string, ChartPatternSummary>>({});
+  const [nowMs,        setNowMs]       = useState(Date.now());
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("eyay-sound") !== "off";
+  });
+  const [resetConfirm, setResetConfirm] = useState(false);
   const lastEventAtRef  = useRef<string | null>(null);
   const lastAlertIdRef  = useRef<number>(0);   // sesli uyarı dedup
 
@@ -226,6 +231,7 @@ export default function PaperTradingTicker() {
   }, []);
 
   function speakAlert(alert: AlertEvent) {
+    if (!soundEnabled) return;                             // ses kapalıysa çıkış
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const text = alertVoiceText(alert);
     const utt = new SpeechSynthesisUtterance(text);
@@ -237,6 +243,27 @@ export default function PaperTradingTicker() {
       utt.rate = 0.9;
     }
     window.speechSynthesis.speak(utt);
+  }
+
+  function toggleSound() {
+    setSoundEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem("eyay-sound", next ? "on" : "off");
+      if (!next && typeof window !== "undefined") {
+        window.speechSynthesis?.cancel();   // devam eden konuşmayı kes
+      }
+      return next;
+    });
+  }
+
+  async function resetTrades() {
+    try {
+      await fetch("/api/backend/trading/reset-trades", { method: "POST", cache: "no-store" });
+      const res = await fetch("/api/backend/trading/state", { cache: "no-store" });
+      if (res.ok) setState(await res.json());
+    } catch { /* sessiz */ } finally {
+      setResetConfirm(false);
+    }
   }
 
   async function handleManualClose(pair: string) {
@@ -650,9 +677,52 @@ export default function PaperTradingTicker() {
                 </div>
               )}
 
-              <p className="text-[8px] font-mono text-eyay-faint/50 pt-1 border-t border-eyay-border/40">
-                Agent sinyalleri · 4 parite (BTC/XAU/XAG/BRENT) · PAPER_SAFE
-              </p>
+              <div className="flex items-center justify-between pt-1 border-t border-eyay-border/40">
+                <p className="text-[8px] font-mono text-eyay-faint/50">
+                  Agent · 4 parite · PAPER_SAFE
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {/* Ses toggle */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleSound(); }}
+                    title={soundEnabled ? "Sesli uyarıyı kapat" : "Sesli uyarıyı aç"}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono border transition-colors ${
+                      soundEnabled
+                        ? "border-eyay-blue/40 text-eyay-blue hover:bg-eyay-blue/10"
+                        : "border-eyay-border text-eyay-faint hover:bg-eyay-raised/40"
+                    }`}
+                  >
+                    {soundEnabled ? "🔔 Ses Açık" : "🔕 Ses Kapalı"}
+                  </button>
+
+                  {/* Log temizle (çift tıklama onay) */}
+                  {resetConfirm ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] font-mono text-amber-400">Emin misin?</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); void resetTrades(); }}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono border border-red-600/60 text-red-400 hover:bg-red-950/30"
+                      >
+                        Evet, Temizle
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setResetConfirm(false); }}
+                        className="px-2 py-0.5 rounded text-[10px] font-mono border border-eyay-border text-eyay-dim hover:bg-eyay-raised/40"
+                      >
+                        İptal
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setResetConfirm(true); }}
+                      title="İşlem geçmişini sıfırla (öğrenmeler korunur)"
+                      className="px-2 py-0.5 rounded text-[10px] font-mono border border-eyay-border text-eyay-faint hover:border-red-600/40 hover:text-red-400 transition-colors"
+                    >
+                      Log Temizle
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>

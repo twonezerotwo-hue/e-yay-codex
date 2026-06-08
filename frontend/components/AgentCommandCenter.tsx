@@ -58,6 +58,24 @@ interface Trade {
   duration_min: number;
 }
 
+interface TFSignal {
+  direction?: string;
+  final_direction?: string;
+  score?: number;
+  final_score?: number;
+}
+
+interface ConsensusSignal {
+  symbol?: string;
+  final_score?: number;
+  final_direction?: string;
+  raw_regime?: string;
+  primary_tf?: string;
+  confluence?: { status?: string } | string;
+  tf_signals?: Record<string, TFSignal>;
+  atr?: number;
+}
+
 interface TradingState {
   starting_balance: number;
   equity: number;
@@ -65,9 +83,14 @@ interface TradingState {
   unrealized_pnl_usd: number;
   daily_pnl_usd: number;
   open_positions: Position[];
+  pending_orders?: Array<{ pair: string; side: string; seconds_remaining?: number }>;
+  manual_ready_trades?: Array<{ pair: string; side: string; primary_tf?: string }>;
   trades: Trade[];
   trade_count: number;
   traded_pairs: string[];
+  last_tick_at?: string | null;
+  tick_age_seconds?: number | null;
+  last_signals?: Record<string, ConsensusSignal>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -282,6 +305,11 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
         </header>
 
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
+
+          {/* ════════════════════════════════════════════════════════════
+              CANLI TARAMA — şu an okuduğum veriler, parite başına karar
+             ════════════════════════════════════════════════════════════ */}
+          <LiveScanSection trading={trading} now={now} />
 
           {/* ════════════════════════════════════════════════════════════
               ŞU AN NE DÜŞÜNÜYORUM (canlı narrative)
@@ -558,6 +586,170 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
     </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LIVE SCAN — Şu an okuduğum veriler · parite başına karar
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REGIME_TONE: Record<string, { text: string; bg: string; border: string }> = {
+  OFFENSIVE: { text: "text-emerald-300", bg: "bg-emerald-950/30", border: "border-emerald-800/40" },
+  NEUTRAL:   { text: "text-blue-300",    bg: "bg-blue-950/30",    border: "border-blue-800/40" },
+  DEFENSIVE: { text: "text-amber-300",   bg: "bg-amber-950/30",   border: "border-amber-800/40" },
+  CRISIS:    { text: "text-red-300",     bg: "bg-red-950/30",     border: "border-red-800/40" },
+};
+
+function classifyTfAlignment(tfSignals: Record<string, TFSignal> | undefined, direction: string): {
+  label: string; aligned: number; total: number;
+} {
+  if (!tfSignals) return { label: "none", aligned: 0, total: 0 };
+  const want = direction === "bullish" ? "bullish" : direction === "bearish" ? "bearish" : "";
+  if (!want) return { label: "none", aligned: 0, total: Object.keys(tfSignals).length };
+  let aligned = 0, opposed = 0, total = 0;
+  Object.values(tfSignals).forEach(tf => {
+    const d = (tf.direction || tf.final_direction || "").toLowerCase();
+    total++;
+    if (d === want) aligned++;
+    else if ((want === "bullish" && d === "bearish") || (want === "bearish" && d === "bullish")) opposed++;
+  });
+  let label = "none";
+  if (opposed > aligned)            label = "divergent";
+  else if (aligned >= 3)             label = "strong";
+  else if (aligned >= 2)             label = "moderate";
+  else if (aligned === 1)            label = "weak";
+  return { label, aligned, total };
+}
+
+function decideAction(
+  sig: ConsensusSignal | undefined,
+  pair: string,
+  hasPosition: boolean,
+  pendingPairs: Set<string>,
+  manualReadyPairs: Set<string>,
+): { text: string; tone: "ok" | "warn" | "neutral" | "block" } {
+  if (manualReadyPairs.has(pair))  return { text: "MANUEL HAZIR", tone: "warn" };
+  if (pendingPairs.has(pair))      return { text: "ONAY BEKLİYOR", tone: "warn" };
+  if (hasPosition)                 return { text: "POZİSYON AÇIK", tone: "ok" };
+  if (!sig)                        return { text: "VERİ BEKLİYOR", tone: "neutral" };
+  const score  = sig.final_score ?? 50;
+  const dir    = (sig.final_direction || "").toLowerCase();
+  const regime = (sig.raw_regime || "").toUpperCase();
+  if (regime === "DEFENSIVE" || regime === "CRISIS") {
+    if (dir === "bullish" && score >= 58) return { text: "MANUEL ONAYA YOLLA", tone: "warn" };
+    if (dir === "bearish" && score <= 42) return { text: "MANUEL ONAYA YOLLA", tone: "warn" };
+  }
+  if (dir === "bullish" && score >= 60)   return { text: "LONG ADAY", tone: "ok" };
+  if (dir === "bearish" && score <= 40)   return { text: "SHORT ADAY", tone: "ok" };
+  return { text: "İZLİYOR", tone: "neutral" };
+}
+
+function LiveScanSection({ trading, now }: { trading: TradingState | null; now: number }) {
+  if (!trading) {
+    return (
+      <section className="rounded-2xl border border-eyay-border bg-eyay-surface p-5">
+        <p className="text-xs text-eyay-faint italic">Tarama verisi yükleniyor…</p>
+      </section>
+    );
+  }
+
+  const sigs    = trading.last_signals || {};
+  const pairs   = trading.traded_pairs?.length ? trading.traded_pairs : Object.keys(sigs);
+  const posSet  = new Set(trading.open_positions.map(p => p.pair));
+  const pendSet = new Set((trading.pending_orders ?? []).map(p => p.pair));
+  const mrSet   = new Set((trading.manual_ready_trades ?? []).map(p => p.pair));
+
+  // Tick yaşı — saniye / canlı
+  const tickAt = trading.last_tick_at ? new Date(trading.last_tick_at).getTime() : null;
+  const ageSec = tickAt !== null ? Math.max(0, Math.floor((now - tickAt) / 1000)) : null;
+  const fresh  = ageSec !== null && ageSec < 45;
+
+  return (
+    <section className="rounded-2xl border border-eyay-blue/25 bg-gradient-to-br from-slate-900/40 to-slate-950/20 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">📡</span>
+          <p className="text-[10px] font-mono text-eyay-blue uppercase tracking-widest font-bold">
+            Canlı Tarama
+          </p>
+          <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+            {pairs.length} parite
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${fresh ? "bg-emerald-400 animate-pulse" : "bg-amber-400"}`} />
+          <span className="text-[10px] font-mono text-eyay-faint">
+            Son tarama {ageSec === null ? "—" : ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)}dk`} önce
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {pairs.map(pair => {
+          const sig = sigs[pair];
+          const score = sig?.final_score ?? null;
+          const dir = (sig?.final_direction || "").toLowerCase();
+          const regime = (sig?.raw_regime || "").toUpperCase();
+          const tf = sig?.primary_tf || "—";
+          const align = classifyTfAlignment(sig?.tf_signals, dir);
+          const tone = REGIME_TONE[regime] || { text: "text-eyay-dim", bg: "bg-eyay-raised/40", border: "border-eyay-border" };
+          const decision = decideAction(sig, pair, posSet.has(pair), pendSet, mrSet);
+
+          const arrow = dir === "bullish" ? "▲" : dir === "bearish" ? "▼" : "▬";
+          const arrowColor = dir === "bullish" ? "text-emerald-400" : dir === "bearish" ? "text-red-400" : "text-eyay-faint";
+
+          const decisionCls =
+            decision.tone === "ok"     ? "border-emerald-700 text-emerald-300 bg-emerald-950/30" :
+            decision.tone === "warn"   ? "border-amber-700  text-amber-300  bg-amber-950/30"  :
+            decision.tone === "block"  ? "border-red-700    text-red-300    bg-red-950/30"    :
+                                          "border-slate-700  text-slate-300  bg-slate-950/30";
+
+          const alignCls =
+            align.label === "strong"    ? "text-emerald-300" :
+            align.label === "moderate"  ? "text-emerald-400/70" :
+            align.label === "weak"      ? "text-amber-300" :
+            align.label === "divergent" ? "text-red-300" : "text-eyay-faint";
+
+          return (
+            <div key={pair} className={`rounded-lg border ${tone.border} ${tone.bg} px-3 py-2.5`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className={`text-base ${arrowColor}`}>{arrow}</span>
+                  <span className="text-sm font-mono font-bold text-eyay-text">{pair}</span>
+                  <span className="text-[9px] font-mono text-eyay-faint border border-white/10 rounded px-1 py-0.5">
+                    TF {tf}
+                  </span>
+                </div>
+                <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded border ${decisionCls}`}>
+                  {decision.text}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] font-mono">
+                <span>
+                  <span className="text-eyay-faint">Skor </span>
+                  <span className={`font-bold ${arrowColor}`}>
+                    {score !== null ? score.toFixed(1) : "—"}
+                  </span>
+                </span>
+                <span className={tone.text}>
+                  {regime || "—"}
+                </span>
+                {align.total > 0 && (
+                  <span className={alignCls}>
+                    TF {align.aligned}/{align.total} {align.label}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-[9px] font-mono text-eyay-faint/60 mt-3 pt-3 border-t border-eyay-border/30">
+        Her tick'te (≈30 sn) 4 paritenin 1h/4h/1d teknik sinyali okunur · skor + rejim + TF uyumu hesaplanır · multi-katman aggregator karar verir.
+      </p>
+    </section>
+  );
+}
+
 
 // ── Mini stat card
 function Stat({ label, value, color }: { label: string; value: string; color: string }) {
