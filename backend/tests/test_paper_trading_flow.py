@@ -31,7 +31,7 @@ def _consensus_signal(
     *,
     score: float = 75.0,
     direction: str = "bullish",
-    regime: str = "CRISIS",
+    regime: str = "NEUTRAL",
     confluence_status: str = "aligned",
     dominant_module: str = "fundamental",
 ) -> dict[str, object]:
@@ -97,6 +97,49 @@ def test_tick_consensus_queues_then_opens_after_confirmation_window(monkeypatch,
     assert final_state.positions["XAUUSD"].side == "LONG"
     assert final_state.positions["XAUUSD"].entry_price == 3351.0
     assert final_state.pending_orders == {}
+
+
+def test_defensive_regime_routes_signal_to_manual_approval_without_pending(monkeypatch, tmp_path) -> None:
+    """DEFENSIVE/CRISIS rejiminde 60sn otomatik açılış akışı devre dışı —
+    aday doğrudan 'manual_ready_trades' kuyruğuna düşer, kullanıcı 'Aç'
+    demeden asla otomatik açılmaz (original_requested_price donar, fiyat
+    sonraki tick'lerde tazelenir)."""
+    _set_tmp_state(monkeypatch, tmp_path)
+    start_at = datetime(2026, 6, 1, 12, 0, tzinfo=UTC)
+    monkeypatch.setattr(pts, "_utc_now", lambda: start_at)
+
+    state = pts.tick_consensus(
+        {"XAUUSD": _consensus_signal("XAUUSD", regime="DEFENSIVE")},
+        {"XAUUSD": 3345.0},
+    )
+
+    assert state.positions == {}
+    assert state.pending_orders == {}
+    assert "XAUUSD" in state.manual_ready_trades
+    candidate = state.manual_ready_trades["XAUUSD"]
+    assert candidate.side == "LONG"
+    assert candidate.original_requested_price == 3345.0
+    assert candidate.requested_price == 3345.0
+
+    # 61sn sonra bile — eski akışta otomatik açılırdı — pozisyon AÇILMAMALI,
+    # aday yalnızca taze fiyatla revize edilmeli.
+    monkeypatch.setattr(pts, "_utc_now", lambda: start_at + timedelta(seconds=61))
+    later_state = pts.tick_consensus(
+        {"XAUUSD": _consensus_signal("XAUUSD", regime="DEFENSIVE")},
+        {"XAUUSD": 3360.0},
+    )
+
+    assert later_state.positions == {}
+    assert later_state.pending_orders == {}
+    refreshed = later_state.manual_ready_trades["XAUUSD"]
+    assert refreshed.original_requested_price == 3345.0   # donmuş referans korunur
+    assert refreshed.requested_price == 3360.0            # taze fiyatla revize edildi
+
+    # Kullanıcı 'Aç' derse anlık fiyattan açılmalı.
+    opened = pts.force_open_manual_ready("XAUUSD", current_price=3360.0)
+    assert opened["status"] == "opened"
+    final_state = pts.get_snapshot({"XAUUSD": 3360.0})
+    assert any(p["pair"] == "XAUUSD" for p in final_state["open_positions"])
 
 
 def test_expired_pending_open_is_canceled_if_market_is_closed_at_execution(monkeypatch, tmp_path) -> None:

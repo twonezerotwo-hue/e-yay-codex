@@ -11,6 +11,7 @@
  *   /api/backend/trading/state   → açık pozisyonlar + trade history + PnL
  */
 import { useEffect, useMemo, useState } from "react";
+import type { NewsHeadline } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -133,11 +134,38 @@ function fmtUsd(n: number): string {
   return `${n >= 0 ? "+" : "−"}$${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
+// ── SON DAKİKA — savaş haberleri filtresi ────────────────────────────────────
+// Sadece ABD / İran / İsrail / Rusya / Çin eksenli ASKERİ-SİYASİ gerilim
+// haberleri "SON DAKİKA" olarak öne çıkar — diğer jeopolitik/makro haberler
+// NewsPanel'de zaten gösteriliyor, burada tekrar etmesin.
+const WAR_COUNTRY_PATTERNS: RegExp[] = [
+  /\b(ABD|USA?|United States|America[n]?)\b/i,
+  /\b(İran|Iran)\b/i,
+  /\b(İsrail|Israel)\b/i,
+  /\b(Rusya|Russia[n]?)\b/i,
+  /\b(Çin|China|Chinese)\b/i,
+];
+
+const WAR_KEYWORD_PATTERNS: RegExp[] = [
+  /sava[şs]/i, /\bwar\b/i, /sald[ıi]r[ıi]/i, /\battack/i, /\bstrike/i,
+  /çat[ıi][şs]ma/i, /\bconflict/i, /asker[îi]?/i, /\bmilitary\b/i,
+  /\bf[üu]ze\b/i, /\bmissile\b/i, /bombal/i, /\bbomb/i, /i[şs]gal/i,
+  /\binvasion\b/i, /ate[şs]kes/i, /\bceasefire\b/i, /cephe/i, /\bfront\b/i,
+  /nükleer/i, /\bnuclear\b/i, /tırman/i, /\bescalat/i,
+];
+
+function isWarHeadline(h: NewsHeadline): boolean {
+  const text = `${h.title ?? ""} ${h.title_tr ?? ""}`;
+  const hasCountry = WAR_COUNTRY_PATTERNS.some(p => p.test(text));
+  const hasWarKeyword = WAR_KEYWORD_PATTERNS.some(p => p.test(text));
+  return hasCountry && hasWarKeyword;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AgentCommandCenter({ onClose }: { onClose: () => void }) {
+export default function AgentCommandCenter({ onClose, headlines = [] }: { onClose: () => void; headlines?: NewsHeadline[] }) {
   const [insights, setInsights]   = useState<AgentInsight[]>([]);
   const [decision, setDecision]   = useState("");
   const [insightAt, setInsightAt] = useState<string>("");
@@ -203,6 +231,12 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
         || i.severity === "OPPORTUNITY"
     ).slice(0, 5);
   }, [insights]);
+
+  // SON DAKİKA — ABD/İran/İsrail/Rusya/Çin eksenli savaş haberleri (max 4)
+  const warHeadlines = useMemo(
+    () => headlines.filter(isWarHeadline).slice(0, 4),
+    [headlines]
+  );
 
   // GÖZLEMLER — geriye kalan (cluster, news, rotation, vs.)
   const observations = useMemo(() => {
@@ -312,6 +346,48 @@ export default function AgentCommandCenter({ onClose }: { onClose: () => void })
               </span>
             </div>
           </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              SON DAKİKA — ABD/İran/İsrail/Rusya/Çin savaş haberleri
+             ════════════════════════════════════════════════════════════ */}
+          {warHeadlines.length > 0 && (
+            <section className="rounded-2xl border border-red-800/60 bg-red-950/20 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                <span className="text-base">🚨</span>
+                <p className="text-[10px] font-mono text-red-300 uppercase tracking-widest font-black">
+                  Son Dakika · Savaş Gündemi
+                </p>
+                <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+                  {warHeadlines.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {warHeadlines.map((h, i) => {
+                  const display = (h.title_tr && h.title_tr.trim()) || h.title;
+                  return (
+                    <a
+                      key={i}
+                      href={h.url || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-3 p-3 rounded-lg bg-black/30 border border-red-900/40 hover:border-red-700/60 transition-colors group"
+                    >
+                      <span className="shrink-0 mt-0.5 text-[9px] font-mono font-black text-red-300 border border-red-800/60 bg-red-950/40 rounded px-1.5 py-0.5 uppercase tracking-widest">
+                        Son Dakika
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-eyay-text leading-relaxed group-hover:text-white transition-colors">
+                          {display}
+                        </p>
+                        <p className="text-[10px] text-eyay-faint mt-1">{h.source}</p>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* ════════════════════════════════════════════════════════════
               AKTİF KARARLARIM (paper trading açık pozisyonlar)

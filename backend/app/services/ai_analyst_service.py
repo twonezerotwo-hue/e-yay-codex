@@ -5,9 +5,12 @@ Token-minimal: sıkıştırılmış prompt, max_tokens=2500, günlük öğrenme 
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.providers.capital_rotation_provider import CapitalRotation
@@ -60,6 +63,53 @@ def _set_cache(report: AIAnalystReport) -> None:
     global _cached_report, _cached_at
     _cached_report = report
     _cached_at = time.monotonic()
+
+
+# ---------------------------------------------------------------------------
+# Günlük Groq çağrı bütçesi — otomatik sayfa yenilemesi (30s/60s) Groq'u
+# günde onlarca kez tetiklemesin. TPD kotası AI raporu + stratejist + ajan
+# arasında PAYLAŞILIR; bu sayaç sadece AI raporunun payına sabit bir günlük
+# tavan koyar (varsayılan 24/gün — diske kalıcı, restart'ta sıfırlanmaz).
+# Tavan dolunca Groq hiç denenmez — zaten 429 dönecek isteği boşa harcamadan
+# doğrudan Claude'a / stale önbelleğe düşülür.
+# ---------------------------------------------------------------------------
+
+_GROQ_DAILY_CALL_BUDGET = int(os.environ.get("AI_REPORT_GROQ_DAILY_BUDGET", "24"))
+_BUDGET_FILE = Path(__file__).resolve().parents[2] / "data" / "groq_daily_budget.json"
+_budget_date = ""
+_budget_used = 0
+
+
+def _load_budget() -> None:
+    global _budget_date, _budget_used
+    today = datetime.now(UTC).date().isoformat()
+    if _budget_date == today:
+        return
+    _budget_date = today
+    _budget_used = 0
+    try:
+        raw = json.loads(_BUDGET_FILE.read_text(encoding="utf-8"))
+        if raw.get("date") == today:
+            _budget_used = int(raw.get("used", 0))
+    except (OSError, ValueError, TypeError):
+        pass
+
+
+def _try_consume_groq_budget() -> bool:
+    """Bugün Groq deneme hakkı kaldıysa tüketir → True; tavan dolduysa → False."""
+    global _budget_used
+    _load_budget()
+    if _budget_used >= _GROQ_DAILY_CALL_BUDGET:
+        return False
+    _budget_used += 1
+    try:
+        _BUDGET_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _BUDGET_FILE.write_text(
+            json.dumps({"date": _budget_date, "used": _budget_used}), encoding="utf-8",
+        )
+    except OSError:
+        pass
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -182,6 +232,9 @@ _GROQ_BACKUP_MODEL = os.environ.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
 _CLAUDE_MODEL = "claude-haiku-4-5"
 _GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
+# Kullanıcı manuel sağlayıcı seçebilir — varsayılan "auto" Groq önce → Claude yedek
+_VALID_PROVIDERS = ("auto", "groq", "claude")
+
 _SYS_PROMPT = (
     "Sen bir finansal hikaye anlatıcısısın. Yalnızca geçerli JSON "
     "döndür — başka hiçbir şey yazma. Schema: "
@@ -293,11 +346,17 @@ def generate_ai_report(
     rotation: CapitalRotation | None = None,
     force_refresh: bool = False,
     persona_key: str | None = None,
+    provider: str | None = None,
 ) -> AIAnalystReport:
-    import json
-    from datetime import UTC, datetime
+    """
+    `provider`: "auto" (varsayılan, Groq önce → Claude yedek) | "groq" | "claude".
+    Kullanıcı manuel bir sağlayıcı seçtiğinde (groq/claude) önbellek atlanır —
+    aksi halde diğer sağlayıcının önbelleğe aldığı rapor dönebilir.
+    """
+    provider_choice = provider if provider in _VALID_PROVIDERS else "auto"
+    bypass_cache_for_provider = provider_choice != "auto"
 
-    if not force_refresh:
+    if not force_refresh and not bypass_cache_for_provider:
         cached = _get_cached()
         if cached:
             return cached
@@ -326,12 +385,23 @@ def generate_ai_report(
     )
 
     regime_for_prompt = (macro or {}).get("regime")
-    # 1) Groq dene (primary)
-    result = _call_groq(prompt, persona_key=persona_key, regime=regime_for_prompt)
 
-    # 2) Claude'a düş
-    if result is None:
+    if provider_choice == "groq":
+        result = (
+            _call_groq(prompt, persona_key=persona_key, regime=regime_for_prompt)
+            if _try_consume_groq_budget() else None
+        )
+    elif provider_choice == "claude":
         result = _call_claude(prompt, persona_key=persona_key, regime=regime_for_prompt)
+    else:
+        # auto: günlük Groq bütçesi varsa önce Groq dene → yoksa/başarısızsa Claude'a düş.
+        # Bütçe dolduysa Groq hiç denenmez (zaten 429 dönecek isteği boşa harcamayız).
+        result = (
+            _call_groq(prompt, persona_key=persona_key, regime=regime_for_prompt)
+            if _try_consume_groq_budget() else None
+        )
+        if result is None:
+            result = _call_claude(prompt, persona_key=persona_key, regime=regime_for_prompt)
 
     if result is None:
         # Son çare: 2 saatlik stale cache varsa onu kullan

@@ -56,7 +56,7 @@ export default async function HomePage() {
     <div className="min-h-screen bg-eyay-bg">
 
       {/* 🤖 AGENT — proaktif gözlem bandı (en üstte sticky) */}
-      <AgentInsightBar />
+      <AgentInsightBar headlines={data?.report?.news_headlines ?? []} />
 
       <Header
         totalSnapshots={data?.meta.total_snapshots}

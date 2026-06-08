@@ -269,6 +269,10 @@ class Position:
     # ── S2: Partial Take-Profit ──
     partial_tp_taken: bool = False       # TP1 (%50 lot) realize edildi mi
     original_size_usd: float = 0.0      # Partial TP öncesi lot (0 = alınmadı)
+    # ── UI ayrımı için: pozisyonu kim açtı? ──
+    # "PAPER"  = otomatik pending → 60sn'lik onay penceresi sonunda açıldı
+    # "MANUAL" = kullanıcı 'Açılmaya Hazır' kuyruğundan elle açtı (force_open_manual_ready)
+    opened_by:   str = "PAPER"           # backward compat: eski state'lerde alan yoksa PAPER varsayılır
 
 
 @dataclass
@@ -398,6 +402,7 @@ def _load_state() -> TradingState:
             v.setdefault("peak_favorable_price", 0.0)
             v.setdefault("partial_tp_taken", False)
             v.setdefault("original_size_usd", 0.0)
+            v.setdefault("opened_by", "PAPER")
             # Bilinmeyen alanları sessizce at (eski/yeni schema farkına dayanıklı)
             valid = {f.name for f in fields(Position)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
@@ -644,6 +649,82 @@ def _refresh_manual_ready_with_live_signal(
     mr.open_signal       = signal_snapshot or mr.open_signal
     mr.last_signal       = last_signal or mr.last_signal
     mr.last_refreshed_at = _utc_now().isoformat()
+
+
+# Riskli rejimlerde otomatik açılış kapalı — kullanıcı 'Aç' demeden açılmaz.
+_MANUAL_APPROVAL_REGIMES = {"DEFENSIVE", "CRISIS"}
+
+
+def _route_new_open_signal(
+    st: TradingState,
+    *,
+    pair: str,
+    side: PositionSide,
+    price: float,
+    size_usd: float,
+    last_signal: str,
+    signal_snapshot: dict[str, Any],
+    fingerprint: str,
+    now_dt: datetime,
+    atr_value: float,
+    primary_tf: str,
+    is_recurring: bool,
+    raw_regime: str,
+) -> None:
+    """Yeni LONG/SHORT adayını rejime göre yönlendirir.
+
+    DEFENSIVE/CRISIS → 60sn otomatik açılış YOK; aday doğrudan 'Açılmaya
+    Hazır İşlemler' kuyruğuna düşer (kullanıcı 'Aç' demeden açılmaz).
+    Aynı (side, primary_tf) aday zaten kuyruktaysa dokunulmaz — genel
+    per-tick refresh (yukarıda) zaten taze fiyat/sinyal ile günceller ve
+    original_requested_price donmuş kalır. Farklı yön/TF gelirse mevcut
+    adayın üzerine taze sinyalle yazılır + kullanıcıya bildirim gider.
+
+    NEUTRAL/OFFENSIVE → eski davranış: 60sn pending banner, reddedilmezse açılır.
+    """
+    if raw_regime in _MANUAL_APPROVAL_REGIMES:
+        existing = st.manual_ready_trades.get(pair)
+        is_same_candidate = (
+            existing is not None
+            and existing.side == side
+            and (not primary_tf or not existing.primary_tf or existing.primary_tf == primary_tf)
+        )
+        if is_same_candidate:
+            return
+
+        now_iso = now_dt.isoformat()
+        st.pending_orders.pop(pair, None)
+        st.manual_ready_trades[pair] = ManualReadyTrade(
+            pair=pair,
+            side=side,
+            requested_at=now_iso,
+            rejected_at=now_iso,
+            last_signal=last_signal,
+            size_usd=size_usd,
+            requested_price=price,
+            open_signal=signal_snapshot,
+            fingerprint=fingerprint,
+            atr_value=atr_value,
+            primary_tf=primary_tf,
+            original_requested_price=price,
+            last_refreshed_at=now_iso,
+        )
+        _try_emit(
+            "manual_approval_required", "ACTION_REQUIRED",
+            f"{side} {pair} — Manuel Onay Gerekli (Rejim: {raw_regime})",
+            f"{raw_regime} rejiminde otomatik açılış devre dışı. {side} {pair} adayı "
+            f"'Açılmaya Hazır İşlemler' kuyruğuna eklendi — açmak için 'Aç' demelisin.",
+            pair=pair, side=side, size_usd=size_usd, price=price,
+            metadata={"regime": raw_regime, "manual_approval": True, "primary_tf": primary_tf},
+        )
+        return
+
+    _queue_pending_open(
+        st=st, pair=pair, side=side, price=price, size_usd=size_usd,
+        last_signal=last_signal, signal_snapshot=signal_snapshot,
+        fingerprint=fingerprint, now_dt=now_dt, atr_value=atr_value,
+        primary_tf=primary_tf, is_recurring=is_recurring,
+    )
 
 
 def _queue_pending_open(
@@ -1204,6 +1285,8 @@ def tick_consensus(
             confluence_status = confluence.get("status") if isinstance(confluence, dict) else None
             atr_val_pending = float(sig.get("atr") or 0.0)
             current_primary_tf = str(sig.get("primary_tf") or "")
+            raw_regime = (sig.get("raw_regime") or "NEUTRAL").upper()
+            requires_manual_approval = raw_regime in _MANUAL_APPROVAL_REGIMES
 
             # Ham aksiyon — mevcut skor eşiği + confluence mantığı korunuyor
             raw_target, raw_base_mult = _consensus_to_action(
@@ -1229,6 +1312,21 @@ def tick_consensus(
             if price <= 0:
                 continue
 
+            # Açılmaya hazır (manual_ready) bir kayıt varsa HER tick'te taze
+            # fiyat + sinyal + ATR ile revize et — sinyal yön/TF değişip silent
+            # block tetiklenmese bile entry asla bayat fiyatta kalmamalı.
+            # (original_requested_price korunur; yalnızca requested_price/
+            # open_signal/atr_value/last_signal güncellenir.)
+            if pair in st.manual_ready_trades:
+                _refresh_manual_ready_with_live_signal(
+                    st, pair,
+                    price=price,
+                    signal_snapshot=sig,
+                    atr_value=atr_val_pending,
+                    last_signal=(f"{final_direction}@{final_score:.1f}"
+                                 if final_score is not None else "pending"),
+                )
+
             learning_meta: dict[str, Any] = {}
             final_size_mult = base_mult
             signal_fingerprint = ""
@@ -1240,31 +1338,28 @@ def tick_consensus(
                     final_size_mult *= learning_meta["size_multiplier"]
                 signal_fingerprint = build_signal_fingerprint(sig)
 
-            # Yinelenen sinyal kontrolü — manual_ready varken farklı TF/side
-            # → silent block'u bypass et, yeni 60sn pending'i 'recurring' bayrağıyla kur.
-            is_recurring_signal = _is_recurring_signal(st, pair, target, current_primary_tf)
+            # DEFENSIVE/CRISIS: otomatik açılış akışı (60sn pending / yinelenen
+            # sinyal / silent-block) tamamen devre dışı — _route_new_open_signal
+            # adayı doğrudan manuel onay kuyruğuna yönlendirir (target=None
+            # ile burada pozisyon/pending mantığını es geçeriz).
+            is_recurring_signal = False
+            if not requires_manual_approval:
+                # Yinelenen sinyal kontrolü — manual_ready varken farklı TF/side
+                # → silent block'u bypass et, yeni 60sn pending'i 'recurring' bayrağıyla kur.
+                is_recurring_signal = _is_recurring_signal(st, pair, target, current_primary_tf)
 
-            # Aynı (pair, side, primary_tf) zaten reddedilmiş ya da manual_ready'de
-            # → SESSIZ block. Fingerprint kayması (skor/modül oynaması) block'u
-            # kaldırmaz. Banner gönderilmez, pending açılmaz.
-            if not is_recurring_signal and _should_silent_block(
-                st, pair, target, current_primary_tf,
-            ):
-                # Silent block: yeni pending açma. AMA manual_ready entry'sini
-                # taze fiyat + ATR + sinyal ile revize et — kullanıcı "Aç"
-                # deyince güncel piyasa fiyatından + taze SL/TP açılsın.
-                _refresh_manual_ready_with_live_signal(
-                    st, pair,
-                    price=price,
-                    signal_snapshot=sig,
-                    atr_value=atr_val_pending,
-                    last_signal=(f"{final_direction}@{final_score:.1f}"
-                                 if final_score is not None else "pending"),
-                )
-                target = None
-            else:
-                # Rejection eskimiş olabilir (yön/TF tamamen değişti) → temizle.
-                _purge_stale_rejection_if_needed(st, pair, target, current_primary_tf)
+                # Aynı (pair, side, primary_tf) zaten reddedilmiş ya da manual_ready'de
+                # → SESSIZ block. Fingerprint kayması (skor/modül oynaması) block'u
+                # kaldırmaz. Banner gönderilmez, pending açılmaz.
+                if not is_recurring_signal and _should_silent_block(
+                    st, pair, target, current_primary_tf,
+                ):
+                    # Silent block: yeni pending açma (manual_ready zaten her
+                    # tick'te yukarıda taze fiyat/sinyal ile revize edildi).
+                    target = None
+                else:
+                    # Rejection eskimiş olabilir (yön/TF tamamen değişti) → temizle.
+                    _purge_stale_rejection_if_needed(st, pair, target, current_primary_tf)
 
             new_size = round(POSITION_SIZE * final_size_mult, 2)
             cur = st.positions.get(pair)
@@ -1416,8 +1511,8 @@ def tick_consensus(
                     )
 
                     if target in ("LONG", "SHORT") and _is_market_open(pair, now_dt):
-                        _queue_pending_open(
-                            st=st,
+                        _route_new_open_signal(
+                            st,
                             pair=pair,
                             side=target,
                             price=price,
@@ -1429,14 +1524,15 @@ def tick_consensus(
                             atr_value=atr_val_pending,
                             primary_tf=current_primary_tf,
                             is_recurring=is_recurring_signal,
+                            raw_regime=raw_regime,
                         )
                     else:
                         st.pending_orders.pop(pair, None)
                 continue
 
             if target in ("LONG", "SHORT") and pending is None and _is_market_open(pair, now_dt):
-                _queue_pending_open(
-                    st=st,
+                _route_new_open_signal(
+                    st,
                     pair=pair,
                     side=target,
                     price=price,
@@ -1448,6 +1544,7 @@ def tick_consensus(
                     atr_value=atr_val_pending,
                     primary_tf=current_primary_tf,
                     is_recurring=is_recurring_signal,
+                    raw_regime=raw_regime,
                 )
             elif target in ("LONG", "SHORT") and pending is None and pair in MARKET_HOURS_GATED_PAIRS:
                 _today = now_dt.date().isoformat()
@@ -1671,6 +1768,11 @@ def force_open_manual_ready(pair: str, current_price: float | None = None) -> di
             primary_tf=mr.primary_tf,
         )
         _open_position_from_pending(st, pending_obj, price, now_iso)
+        # UI ayrımı için pozisyonu MANUAL olarak işaretle — pending'lerden açılan
+        # pozisyonlar default "PAPER" kalır; sadece bu kullanıcı-tetiklemeli yol MANUAL.
+        opened_pos = st.positions.get(pair)
+        if opened_pos is not None:
+            opened_pos.opened_by = "MANUAL"
         # Manuel açıldı: hem manual_ready hem rejected_signals temizlensin
         st.manual_ready_trades.pop(pair, None)
         st.rejected_signals.pop(pair, None)
@@ -1794,11 +1896,22 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
 
 
 def reset_state() -> None:
-    """Tüm trading state'i sıfırla — sadece debug için."""
+    """Trade geçmişi + pozisyonları sıfırla, hesabı 100k bakiyeden yeniden başlat.
+
+    weight_adjustments / training_history / last_trained_at_trade_count
+    KORUNUR — bunlar agent'ın geçmiş trade'lerden öğrendiği ayarlamalardır,
+    hesap sıfırlamasıyla silinmemeli (signal_attribution.jsonl de ayrı bir
+    dosyada tutulduğu için zaten etkilenmiyor).
+    """
     with _LOCK:
+        st = _load_state()
         # Attribution seen-set'i de sıfırla → eski trade.id'ler tekrar emit'lenebilir
         _ATTRIBUTION_SEEN_IDS.clear()
-        _save_state(TradingState())
+        fresh = TradingState(
+            weight_adjustments=st.weight_adjustments,
+            training_history=st.training_history,
+        )
+        _save_state(fresh)
 
 
 def force_close_position(pair: str, current_price: float, reason: str = "MANUEL") -> dict[str, Any]:

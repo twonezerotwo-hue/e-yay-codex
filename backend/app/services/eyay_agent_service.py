@@ -624,7 +624,8 @@ def _groq_chat_stream(messages: list[dict], model: str = GROQ_MODEL) -> Generato
             })
 
     # Maks iterasyona ulaşıldı
-    yield f"data: {json.dumps({'text': '\\n\\n[Maks araç iterasyonuna ulaşıldı.]'}, ensure_ascii=False)}\n\n"
+    max_iter_text = "\n\n[Maks araç iterasyonuna ulaşıldı.]"
+    yield f"data: {json.dumps({'text': max_iter_text}, ensure_ascii=False)}\n\n"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -697,14 +698,17 @@ def _lock_70b():
                    _GROQ_70B_SKIP_DURATION // 60)
 
 
-def agent_chat_stream(messages: list[dict]) -> Generator[str, None, None]:
-    """
-    Ajansal sohbet akışı — 3 katmanlı fallback.
+_VALID_CHAT_PROVIDERS = ("auto", "groq", "claude")
 
-    Sıralama:
-      1) Groq llama-3.3-70b-versatile (yüksek kalite)
-      2) Groq llama-3.1-8b-instant   (ayrı TPD kotası, rate-limit yedeği)
-      3) Claude opus-4-7              (Anthropic key varsa)
+
+def agent_chat_stream(messages: list[dict], provider: str | None = None) -> Generator[str, None, None]:
+    """
+    Ajansal sohbet akışı — 3 katmanlı fallback (varsayılan "auto").
+
+    `provider`:
+      - "auto"   (varsayılan): 1) Groq 70b → 2) Groq 8b → 3) Claude
+      - "groq"   : yalnızca Groq dene (70b → 8b zinciri, Claude'a düşmez)
+      - "claude" : yalnızca Claude dene (Groq'a düşmez)
 
     Frontend'in algıladığı SSE format aynıdır:
         data: {"text": "..."}
@@ -715,6 +719,52 @@ def agent_chat_stream(messages: list[dict]) -> Generator[str, None, None]:
     """
     groq_key = os.environ.get("GROQ_API_KEY", "")
     claude_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    provider_choice = provider if provider in _VALID_CHAT_PROVIDERS else "auto"
+
+    # ── Manuel "claude" seçimi — Groq'a hiç dokunma ───────────────────────
+    if provider_choice == "claude":
+        if not claude_key:
+            err = "ANTHROPIC_API_KEY tanımlı değil — manuel Claude seçimi için gerekli."
+            yield f"data: {json.dumps({'error': err}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        try:
+            yield f"data: {json.dumps({'provider': 'claude', 'status': 'active', 'reason': 'manuel seçim'})}\n\n"
+            yield from _claude_chat_stream(messages)
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)[:200]}, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+        return
+
+    # ── Manuel "groq" seçimi — yalnızca Groq zinciri, Claude'a düşmez ─────
+    if provider_choice == "groq":
+        if not groq_key:
+            err = "GROQ_API_KEY tanımlı değil — manuel Groq seçimi için gerekli."
+            yield f"data: {json.dumps({'error': err}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        try:
+            payload = {"provider": "groq-70b", "status": "active", "model": GROQ_MODEL, "reason": "manuel seçim"}
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            yield from _groq_chat_stream(messages, model=GROQ_MODEL)
+            yield "data: [DONE]\n\n"
+            return
+        except Exception as exc_70b:
+            logger.warning("Manuel Groq seçimi — 70b başarısız: %s", exc_70b)
+            try:
+                payload = {
+                    "provider": "groq-8b", "status": "fallback",
+                    "model": GROQ_BACKUP_MODEL, "reason": "70b başarısız (manuel Groq seçimi)",
+                }
+                yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                yield from _groq_chat_stream(messages, model=GROQ_BACKUP_MODEL)
+            except Exception as exc_8b:
+                err = f"Groq (manuel seçim) başarısız: {str(exc_8b)[:150]}"
+                yield f"data: {json.dumps({'error': err}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+    # ── "auto" — mevcut 3 katmanlı fallback zinciri ──────────────────────
 
     # ── 1) Groq 70b — birincil (eğer son 90dk içinde TPD doldurmamışsa)
     skip_70b = _is_70b_locked()

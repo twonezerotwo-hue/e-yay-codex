@@ -32,6 +32,7 @@ class _Msg(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[_Msg]
+    provider: str | None = None  # "auto" (varsayılan, Groq→Claude) | "groq" | "claude"
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ class ChatRequest(BaseModel):
 def chat(body: ChatRequest) -> StreamingResponse:
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     return StreamingResponse(
-        agent_chat_stream(messages),
+        agent_chat_stream(messages, provider=body.provider),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -36,6 +36,8 @@ class ChatRequest(BaseModel):
                                           description="Belirli snapshot ID, yoksa güncel veri")
     language:    str             = Field(default="tr",
                                           description="Cevap dili: 'tr' veya 'en'")
+    provider:    str | None      = Field(default=None,
+                                          description="Manuel sağlayıcı seçimi: auto (varsayılan, Groq→Claude) | groq | claude")
 
 
 # ── Endpoint ─────────────────────────────────────────────────────────────────
@@ -55,6 +57,7 @@ def market_strategist_chat(body: ChatRequest) -> dict:
             symbols     = body.symbols,
             snapshot_id = body.snapshot_id,
             language    = body.language,
+            provider    = body.provider,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

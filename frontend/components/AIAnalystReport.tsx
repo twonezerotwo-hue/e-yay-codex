@@ -1,12 +1,42 @@
 "use client";
 
+import { useState } from "react";
 import type { AIAnalystReport } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { fetchAIReport, type LLMProvider } from "@/lib/api";
 
 interface Props {
   report: AIAnalystReport | null;
   error?: string | null;
   geoNewsCount?: number;
+}
+
+// ─── Model seçici ────────────────────────────────────────────────────────────
+// Kullanıcı dilerse sağlayıcıyı manuel seçebilir — varsayılan "auto" (Groq → Claude).
+
+function ProviderSelect({
+  value, onChange, disabled,
+}: {
+  value: LLMProvider;
+  onChange: (p: LLMProvider) => void;
+  disabled: boolean;
+}) {
+  const { t } = useLanguage();
+  return (
+    <label className="flex items-center gap-1.5 font-mono text-[10px] text-eyay-faint">
+      <span className="uppercase tracking-widest">{t.ai.providerLabel}</span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value as LLMProvider)}
+        className="bg-eyay-surface border border-eyay-border rounded px-1.5 py-0.5 text-eyay-dim text-[10px] font-mono focus:outline-none focus:border-eyay-blue/50 disabled:opacity-50"
+      >
+        <option value="auto">{t.ai.providerAuto}</option>
+        <option value="groq">{t.ai.providerGroq}</option>
+        <option value="claude">{t.ai.providerClaude}</option>
+      </select>
+    </label>
+  );
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -79,8 +109,33 @@ function NarrativeText({ text }: { text: string }) {
 
 // ─── Ana bileşen ─────────────────────────────────────────────────────────────
 
-export default function AIAnalystReportPanel({ report, error, geoNewsCount }: Props) {
+export default function AIAnalystReportPanel({ report: initialReport, error, geoNewsCount }: Props) {
   const { t, lang } = useLanguage();
+
+  const [provider, setProvider] = useState<LLMProvider>("auto");
+  const [override,  setOverride]  = useState<AIAnalystReport | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [overrideErr, setOverrideErr] = useState<string | null>(null);
+
+  async function handleProviderChange(next: LLMProvider) {
+    setProvider(next);
+    setOverrideErr(null);
+    if (next === "auto") {
+      setOverride(null);
+      return;
+    }
+    setRefreshing(true);
+    try {
+      const res = await fetchAIReport(next);
+      setOverride(res.ai_report ?? null);
+    } catch (err) {
+      setOverrideErr(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const report = override ?? initialReport;
 
   if (!report && !error) return <Skeleton />;
   if (error) return <ErrorBox message={error} />;
@@ -112,10 +167,24 @@ export default function AIAnalystReportPanel({ report, error, geoNewsCount }: Pr
             )}
           </span>
         </div>
-        <span className="font-mono text-[10px] border border-red-900 text-red-500 bg-red-950/60 rounded px-2 py-0.5">
-          PAPER_SAFE · NO_EXECUTION
-        </span>
+        <div className="flex items-center gap-3">
+          <ProviderSelect value={provider} onChange={handleProviderChange} disabled={refreshing} />
+          <span className="font-mono text-[10px] border border-red-900 text-red-500 bg-red-950/60 rounded px-2 py-0.5">
+            PAPER_SAFE · NO_EXECUTION
+          </span>
+        </div>
       </div>
+
+      {(refreshing || overrideErr) && (
+        <div className="px-5 py-2 border-b border-eyay-border bg-eyay-surface/30">
+          {refreshing && (
+            <p className="font-mono text-[10px] text-eyay-faint italic">{t.ai.providerRefreshing}</p>
+          )}
+          {overrideErr && !refreshing && (
+            <p className="font-mono text-[10px] text-red-400">{overrideErr}</p>
+          )}
+        </div>
+      )}
 
       {/* ── Sinyal tickers ────────────────────────────────────────────── */}
       {report.key_signals.length > 0 && (

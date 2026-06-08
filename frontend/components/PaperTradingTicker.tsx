@@ -34,7 +34,12 @@ interface Position {
   pnl_pct: number;
   stop_loss: number;
   take_profit: number;
+  size_usd?: number;
   risk_plan?: RiskPlan;
+  // Backend Position dataclass'taki opened_by alanı:
+  //   "PAPER"  → otomatik pending → 60sn'lik onay penceresi sonunda açıldı
+  //   "MANUAL" → 'Açılmaya Hazır' kuyruğundan kullanıcı elle açtı
+  opened_by?: "PAPER" | "MANUAL";
 }
 
 interface ChartPatternSummary {
@@ -122,6 +127,13 @@ function alertVoiceText(alert: AlertEvent): string {
 
 const POLL_MS = 15_000;
 
+// Sesli uyarı aç/kapa tercihi — localStorage'da kalıcı
+const VOICE_STORAGE_KEY = "eyay:voice-alerts-enabled";
+
+// USD biçimleyici — module scope (PaperTradingTicker + OpenPositionCard ortak kullanır)
+const fmtUsd = (value: number): string =>
+  `${value >= 0 ? "+" : ""}$${Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
 export default function PaperTradingTicker() {
   const [state,     setState]    = useState<TradingState | null>(null);
   const [expanded,  setExpanded] = useState(false);
@@ -129,9 +141,23 @@ export default function PaperTradingTicker() {
   const [agentOpen, setAgentOpen] = useState(false);
   const [closing,   setClosing]  = useState<string | null>(null);
   const [patterns,  setPatterns] = useState<Record<string, ChartPatternSummary>>({});
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(true);
   const [nowMs,     setNowMs]    = useState(Date.now());
   const lastEventAtRef  = useRef<string | null>(null);
   const lastAlertIdRef  = useRef<number>(0);   // sesli uyarı dedup
+
+  // Panel (Açık Pozisyonlar) açıkken arkadaki dashboard'un body-scroll'unu
+  // kilitle — kullanıcı panel içinde scroll yaparken arka plan kaymasın.
+  // Panel kapanınca/unmount olunca önceki overflow değeri geri yüklenir.
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [expanded]);
 
   const loadState = async () => {
     const res = await fetch("/api/backend/trading/state", { cache: "no-store" });
@@ -158,6 +184,30 @@ export default function PaperTradingTicker() {
     window.addEventListener("eyay:agent-modal", onAgent as EventListener);
     return () => window.removeEventListener("eyay:agent-modal", onAgent as EventListener);
   }, []);
+
+  // Sesli uyarı tercihini localStorage'dan oku (ilk render)
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem(VOICE_STORAGE_KEY) : null;
+    if (saved !== null) {
+      const enabled = saved === "1";
+      setVoiceEnabled(enabled);
+      voiceEnabledRef.current = enabled;
+    }
+  }, []);
+
+  function toggleVoiceEnabled() {
+    setVoiceEnabled((prev) => {
+      const next = !prev;
+      voiceEnabledRef.current = next;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(VOICE_STORAGE_KEY, next ? "1" : "0");
+      }
+      if (!next && typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -191,12 +241,14 @@ export default function PaperTradingTicker() {
         if (newAlerts.length === 0) return;
         // En yeninin ID'sini kaydet
         lastAlertIdRef.current = Math.max(...newAlerts.map(a => a.id));
-        // Sesli uyarıları sıraya al (önce kritik)
-        const voiceAlerts = newAlerts
-          .filter(a => a.voice)
-          .sort((a, b) => a.id - b.id);
-        for (const alert of voiceAlerts) {
-          speakAlert(alert);
+        // Sesli uyarıları sıraya al (önce kritik) — kullanıcı kapattıysa atla
+        if (voiceEnabledRef.current) {
+          const voiceAlerts = newAlerts
+            .filter(a => a.voice)
+            .sort((a, b) => a.id - b.id);
+          for (const alert of voiceAlerts) {
+            speakAlert(alert);
+          }
         }
       } catch { /* sessiz */ }
     }
@@ -261,9 +313,6 @@ export default function PaperTradingTicker() {
   const dailyColor = state.daily_pnl_usd >= 0 ? "text-emerald-300" : "text-red-300";
   const equityColor = equityPct >= 0 ? "text-emerald-400" : "text-red-400";
 
-  const fmtUsd = (value: number) =>
-    `${value >= 0 ? "+" : ""}$${Math.abs(value).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-
   const rejectPendingOrder = async (pair: string) => {
     try {
       await fetch(`/api/backend/trading/pending/${pair}/reject`, {
@@ -315,6 +364,9 @@ export default function PaperTradingTicker() {
 
       {showWidget && (
         <div className="fixed top-4 right-4 z-40 flex flex-col items-end gap-1">
+          {/* Sesli uyarı toggle'ı artık panelin altında (footer) — bkz. aşağıdaki
+              "expanded" bloğu içindeki sticky footer. Burada panel kapalıyken
+              kullanıcı toggle'a erişemez; bu kasıtlı — toggle paneli açtığında görünür. */}
           <button
             onClick={() => setExpanded((value) => !value)}
             className="bg-eyay-surface border border-eyay-border rounded-xl shadow-card px-3 py-2 hover:border-eyay-blue/40 transition-colors"
@@ -379,7 +431,15 @@ export default function PaperTradingTicker() {
           </button>
 
           {expanded && (
-            <div className="bg-eyay-surface border border-eyay-border rounded-xl shadow-card p-3 w-[340px] space-y-2">
+            <div
+              className="bg-eyay-surface border border-eyay-border rounded-xl shadow-card w-[340px] sm:w-[520px] flex flex-col overflow-hidden"
+              style={{ maxHeight: "calc(100vh - 80px)" }}
+            >
+              {/* Scroll edilebilir içerik alanı — açık pozisyon sayısı arttıkça
+                  panel viewport dışına taşmasın diye burada overflow-y-auto var.
+                  overscroll-contain: panel içeriği üst/alt sınıra ulaştığında
+                  scroll arkadaki dashboard'a "zincirlenmesin" (scroll chaining). */}
+              <div className="overflow-y-auto overscroll-contain p-3 space-y-2">
               <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-eyay-border/40">
                 <div>
                   <p className="text-[8px] font-mono text-eyay-faint">REALIZED</p>
@@ -404,118 +464,16 @@ export default function PaperTradingTicker() {
                   <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1.5">
                     Acik Pozisyonlar
                   </p>
-                  <div className="space-y-1.5">
-                    {state.open_positions.map(p => {
-                      const sideColor    = p.side === "LONG" ? "text-emerald-400" : "text-red-400";
-                      const pnlColor     = p.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400";
-                      const isClosing    = closing === p.pair;
-                      const fmt2         = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-                      const pctFromEntry = (level: number) =>
-                        ((level - p.entry_price) / p.entry_price * 100).toFixed(1);
-                      return (
-                        <div key={p.pair} className="bg-eyay-raised rounded px-2 py-1.5 space-y-1 text-[10px] font-mono">
-                          {/* Row 1: pair + PnL + Kapat */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`font-black ${sideColor}`}>
-                                {p.side === "LONG" ? "▲" : "▼"} {p.pair}
-                              </span>
-                              <span className="text-eyay-faint">@{fmt2(p.entry_price)}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="text-right">
-                                <p className={`font-bold ${pnlColor}`}>{fmtUsd(p.pnl_usd)}</p>
-                                <p className={`text-[8px] ${pnlColor}`}>{p.pnl_pct >= 0 ? "+" : ""}{p.pnl_pct.toFixed(2)}%</p>
-                              </div>
-                              <button
-                                onClick={() => handleManualClose(p.pair)}
-                                disabled={isClosing}
-                                className="text-[8px] font-bold bg-red-950/60 hover:bg-red-700/50 border border-red-700/40 text-red-400 hover:text-red-200 px-1.5 py-1 rounded transition-colors disabled:opacity-40 whitespace-nowrap leading-tight"
-                              >
-                                {isClosing ? "···" : <span className="flex flex-col items-center"><span>Manuel</span><span>Kapat</span></span>}
-                              </button>
-                            </div>
-                          </div>
-                          {/* Row 2: SL / TP seviyeleri */}
-                          {(p.stop_loss > 0 || p.take_profit > 0) && (
-                            <div className="flex items-center gap-3 text-[8px]">
-                              {p.stop_loss > 0 && (
-                                <span className="text-red-400">
-                                  SL {fmt2(p.stop_loss)}
-                                  <span className="opacity-70 ml-0.5">({pctFromEntry(p.stop_loss)}%)</span>
-                                </span>
-                              )}
-                              {p.take_profit > 0 && (
-                                <span className="text-emerald-400">
-                                  TP {fmt2(p.take_profit)}
-                                  <span className="opacity-70 ml-0.5">(+{pctFromEntry(p.take_profit)}%)</span>
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          {/* Row 2b: Risk plan — timeframe + ATR + horizon */}
-                          {p.risk_plan && (p.risk_plan.timeframe || p.risk_plan.atr_value) && (
-                            <div
-                              className="flex flex-wrap items-center gap-2 text-[8px] text-eyay-faint border-t border-eyay-border/20 pt-1"
-                              title={p.risk_plan.explanation || ""}
-                            >
-                              {p.risk_plan.timeframe && (
-                                <span className="px-1 py-[1px] rounded bg-eyay-raised/60 border border-eyay-border/40">
-                                  TF: <span className="text-eyay-text font-bold">{p.risk_plan.timeframe}</span>
-                                </span>
-                              )}
-                              {p.risk_plan.atr_period_bars && (
-                                <span>
-                                  ATR({p.risk_plan.atr_period_bars})
-                                  {p.risk_plan.atr_value != null && (
-                                    <span className="opacity-70 ml-0.5">
-                                      ={typeof p.risk_plan.atr_value === "number" ? p.risk_plan.atr_value.toFixed(4) : p.risk_plan.atr_value}
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                              {p.risk_plan.risk_reward && (
-                                <span>RR <span className="text-eyay-text">1:{p.risk_plan.risk_reward}</span></span>
-                              )}
-                              {p.risk_plan.expected_horizon_hours?.low != null && (
-                                <span>
-                                  ⏱ Beklenen tutuş:
-                                  <span className="text-eyay-text ml-0.5">
-                                    {p.risk_plan.expected_horizon_hours.low}-{p.risk_plan.expected_horizon_hours.high} saat
-                                  </span>
-                                </span>
-                              )}
-                              {p.risk_plan.sl_basis && (
-                                <span className="opacity-70">· {p.risk_plan.sl_basis}</span>
-                              )}
-                            </div>
-                          )}
-                          {/* Row 3: Chart Pattern göstergesi (pattern_score: -100..+100, ≠ consensus) */}
-                          {patterns[p.pair] && (
-                            <div
-                              className="flex items-center gap-1.5 text-[8px] pt-0.5 border-t border-eyay-border/30"
-                              title="Chart Pattern skoru -100..+100 aralığındadır. Consensus skoru (0-100) ile aynı değildir."
-                            >
-                              <span className="text-eyay-faint">📊 Pattern</span>
-                              <span className={
-                                patterns[p.pair].bias === "BULLISH" ? "text-emerald-400 font-bold" :
-                                patterns[p.pair].bias === "BEARISH" ? "text-red-400 font-bold" :
-                                "text-eyay-faint"
-                              }>
-                                {patterns[p.pair].bias} {patterns[p.pair].consolidated_score >= 0 ? "+" : ""}
-                                {patterns[p.pair].consolidated_score.toFixed(1)}
-                                <span className="text-eyay-faint font-normal">/100</span>
-                              </span>
-                              {patterns[p.pair].active_patterns?.length > 0 && (
-                                <span className="text-eyay-faint truncate">
-                                  · {patterns[p.pair].active_patterns.slice(0, 2).join(", ")}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-2">
+                    {state.open_positions.map(p => (
+                      <OpenPositionCard
+                        key={p.pair}
+                        position={p}
+                        pattern={patterns[p.pair]}
+                        isClosing={closing === p.pair}
+                        onClose={() => handleManualClose(p.pair)}
+                      />
+                    ))}
                   </div>
                 </div>
               ) : (
@@ -614,7 +572,7 @@ export default function PaperTradingTicker() {
                                 {sign}${Math.abs(delta).toLocaleString("en-US", { maximumFractionDigits: 2 })} ({sign}{Math.abs(deltaPct).toFixed(2)}%)
                               </span>
                             )}
-                            <span className="text-eyay-faint/70 text-[9px]" title={`Reddedildiği fiyat: $${orig.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}>
+                            <span className="text-eyay-faint/70 text-[9px]" title={`Referans fiyat (kuyruğa girdiği an): $${orig.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}>
                               vs ${orig.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                             </span>
                           </p>
@@ -653,11 +611,339 @@ export default function PaperTradingTicker() {
               <p className="text-[8px] font-mono text-eyay-faint/50 pt-1 border-t border-eyay-border/40">
                 Agent sinyalleri · 4 parite (BTC/XAU/XAG/BRENT) · PAPER_SAFE
               </p>
+              </div>
+
+              {/* Footer — Sesli Uyarı toggle'ı. Panelin en altında, içerik
+                  scroll edilse bile sticky ile her zaman görünür kalır;
+                  açık pozisyon kartlarının üstüne binmemesi için kendi
+                  satırında, ayrı arka planlı bir şerit olarak ayrıldı. */}
+              <div className="shrink-0 sticky bottom-0 border-t border-eyay-border/60 bg-eyay-surface px-3 py-2">
+                <button
+                  onClick={toggleVoiceEnabled}
+                  title={voiceEnabled ? "Sesli uyarılar açık — kapatmak için tıkla" : "Sesli uyarılar kapalı — açmak için tıkla"}
+                  className={`w-full flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-colors ${
+                    voiceEnabled
+                      ? "border-emerald-800/60 bg-emerald-950/30 text-emerald-300 hover:border-emerald-600/60"
+                      : "border-eyay-border bg-eyay-raised text-eyay-faint hover:border-eyay-muted"
+                  }`}
+                >
+                  <span>{voiceEnabled ? "🔊" : "🔇"}</span>
+                  <span>Sesli Uyarı {voiceEnabled ? "Açık" : "Kapalı"}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
     </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPEN POSITION CARD
+// Açık pozisyon kartı — 4 bölüm:
+//   A) Header  : asset, side, status badge (MANUEL/PAPER), PnL badge, Kapat
+//   B) Pozisyon Özeti : entry, current PnL, position size, timeframe, beklenen tutuş
+//   C) Risk Planı    : SL, TP, RR, ATR, stop mantığı
+//   D) Pattern       : bias, score, aktif pattern'lar, kısa açıklama
+// + karar cümlesi (en altta italic)
+// Mobil: tek kolon. Desktop (sm+): B & C yan yana 2-col grid.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OpenPositionCard({
+  position: p,
+  pattern,
+  isClosing,
+  onClose,
+}: {
+  position: Position;
+  pattern?: ChartPatternSummary;
+  isClosing: boolean;
+  onClose: () => void;
+}) {
+  const fmt2 = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const fmt0 = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const pctFromEntry = (level: number) =>
+    p.entry_price > 0 ? ((level - p.entry_price) / p.entry_price * 100) : 0;
+
+  const sideTextClr = p.side === "LONG" ? "text-emerald-400" : "text-red-400";
+  const sideBadgeClr = p.side === "LONG"
+    ? "bg-emerald-950/50 text-emerald-300 border-emerald-800/50"
+    : "bg-red-950/50 text-red-300 border-red-800/50";
+
+  // PnL state: pozitif / negatif / nötr (~0)
+  const pnlState: "POS" | "NEG" | "NEUTRAL" =
+    p.pnl_usd > 0.5 ? "POS" : p.pnl_usd < -0.5 ? "NEG" : "NEUTRAL";
+  const pnlBadgeClr =
+    pnlState === "POS" ? "bg-emerald-950/40 text-emerald-300 border-emerald-800/50" :
+    pnlState === "NEG" ? "bg-red-950/40 text-red-300 border-red-800/50" :
+    "bg-eyay-raised/60 text-eyay-faint border-eyay-border/50";
+  const pnlPctClr =
+    pnlState === "POS" ? "text-emerald-300" :
+    pnlState === "NEG" ? "text-red-300" :
+    "text-eyay-faint";
+
+  // MANUEL / PAPER ENGINE badge
+  const isManual = p.opened_by === "MANUAL";
+  const sourceBadgeClr = isManual
+    ? "bg-violet-950/60 text-violet-300 border-violet-800/50"
+    : "bg-sky-950/60 text-sky-300 border-sky-800/50";
+  const sourceTooltip = isManual
+    ? "Bu pozisyon kullanıcı onayıyla açıldı; paper engine yalnızca risk yönetimini takip ediyor."
+    : "Bu pozisyon paper trading sinyaliyle açıldı.";
+
+  // Risk Plan değerleri
+  const slPct = p.stop_loss > 0 ? pctFromEntry(p.stop_loss) : null;
+  const tpPct = p.take_profit > 0 ? pctFromEntry(p.take_profit) : null;
+  const rr = p.risk_plan?.risk_reward ?? null;
+  // RR rengi: ≥1.5 yeşil (iyi), 1.0-1.5 sarı, <1.0 kırmızı
+  const rrColor =
+    rr == null ? "text-eyay-faint" :
+    rr >= 1.5 ? "text-emerald-300" :
+    rr >= 1.0 ? "text-amber-300" :
+    "text-red-300";
+  const atrVal = p.risk_plan?.atr_value;
+  const atrBars = p.risk_plan?.atr_period_bars;
+  const atrText = atrVal != null
+    ? `${atrBars ? `(${atrBars}) ` : ""}${typeof atrVal === "number" ? atrVal.toFixed(4) : atrVal}`
+    : "—";
+  const tf = p.risk_plan?.timeframe || "—";
+  const horizon = p.risk_plan?.expected_horizon_hours;
+  const horizonText = horizon?.low != null
+    ? `${horizon.low}–${horizon.high} saat`
+    : "—";
+  const slBasis = p.risk_plan?.sl_basis;
+
+  // Pattern bias rengi (consensus skor 0-100 değil, pattern skor -100..+100 — açıklama tooltipte)
+  const biasColor =
+    pattern?.bias === "BULLISH" ? "text-emerald-300" :
+    pattern?.bias === "BEARISH" ? "text-red-300" :
+    "text-eyay-faint";
+  const hasPattern = !!pattern;
+  const activeP = pattern?.active_patterns ?? [];
+
+  // Karar cümlesi — dinamik
+  const intensity =
+    Math.abs(p.pnl_pct) < 0.5 ? "hafif " :
+    Math.abs(p.pnl_pct) > 2 ? "ciddi " : "";
+  const pnlWord =
+    pnlState === "POS" ? "kârda" :
+    pnlState === "NEG" ? "zararda" :
+    "başabaş seviyesinde";
+  const slStr = slPct != null ? `${slPct.toFixed(1)}%` : "—";
+  const tpStr = tpPct != null ? `+${tpPct.toFixed(1)}%` : "—";
+  const patternHint = !hasPattern
+    ? ""
+    : pattern.bias === "NEUTRAL"
+      ? " Pattern nötr olduğu için sistem pozisyonu teknik pattern yerine SL/TP planıyla yönetiyor."
+      : pattern.bias === "BULLISH"
+        ? " Pattern hâlâ bullish; SL/TP planı geçerli."
+        : " Pattern bearish; SL/TP planı geçerli.";
+  const decisionSentence =
+    `Bu pozisyon şu an ${intensity}${pnlWord}. Stop mesafesi ${slStr}, hedef ${tpStr}.${patternHint}`;
+
+  return (
+    <article className="bg-eyay-raised/40 rounded-lg border border-eyay-border/50 overflow-hidden font-mono">
+      {/* ────────────── A) HEADER ────────────── */}
+      <header className="flex items-start justify-between gap-2 px-2.5 py-2 bg-eyay-surface/40 border-b border-eyay-border/40">
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+          <span className={`text-sm font-black ${sideTextClr}`}>
+            {p.side === "LONG" ? "▲" : "▼"} {p.pair}
+          </span>
+          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sideBadgeClr}`}>
+            {p.side}
+          </span>
+          <span
+            className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sourceBadgeClr}`}
+            title={sourceTooltip}
+          >
+            {isManual ? "MANUEL AÇILDI" : "PAPER ENGINE"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div
+            className={`text-right px-1.5 py-0.5 rounded border ${pnlBadgeClr}`}
+            title="Açılış fiyatından bu yana gerçekleşmemiş kâr/zarar."
+          >
+            <span className="block text-[10px] font-bold leading-none">{fmtUsd(p.pnl_usd)}</span>
+            <span className="block text-[8px] leading-none opacity-90">
+              {p.pnl_pct >= 0 ? "+" : ""}{p.pnl_pct.toFixed(2)}%
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            disabled={isClosing}
+            title="Pozisyonu anlık fiyattan elle kapat"
+            className="text-[8px] font-bold border border-red-800/40 text-red-300/80 hover:text-red-100 hover:bg-red-900/40 hover:border-red-600/60 px-1.5 py-1 rounded transition-colors disabled:opacity-40 leading-tight whitespace-nowrap"
+          >
+            {isClosing ? "···" : (
+              <span className="flex flex-col items-center gap-0.5">
+                <span>Manuel</span>
+                <span>Kapat</span>
+              </span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* ────────────── B + C : 2-col on desktop, 1-col on mobile ────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
+        {/* B) Pozisyon Özeti */}
+        <section className="bg-eyay-surface/30 rounded p-2 border border-eyay-border/30">
+          <h4 className="text-[8px] uppercase tracking-wider text-eyay-faint mb-1.5">
+            Pozisyon Özeti
+          </h4>
+          <dl className="space-y-0.5 text-[10px]">
+            <CardRow label="Entry" value={fmt2(p.entry_price)} valueClass="text-eyay-text" />
+            <CardRow
+              label="Current PnL"
+              value={`${p.pnl_pct >= 0 ? "+" : ""}${p.pnl_pct.toFixed(2)}%`}
+              valueClass={pnlPctClr + " font-bold"}
+            />
+            <CardRow
+              label="Boyut"
+              value={p.size_usd != null ? `$${fmt0(p.size_usd)}` : "—"}
+              valueClass="text-eyay-text"
+            />
+            <CardRow
+              label="TF"
+              labelTip="Sinyalin üretildiği ana zaman dilimi."
+              value={tf}
+              valueClass="text-eyay-text"
+            />
+            <CardRow label="Beklenen tutuş" value={horizonText} valueClass="text-eyay-text" />
+          </dl>
+        </section>
+
+        {/* C) Risk Planı */}
+        <section className="bg-eyay-surface/30 rounded p-2 border border-eyay-border/30">
+          <h4 className="text-[8px] uppercase tracking-wider text-eyay-faint mb-1.5">
+            Risk Planı
+          </h4>
+          <dl className="space-y-0.5 text-[10px]">
+            <CardRow
+              label="Stop Loss"
+              labelTip="Fiyat buraya gelirse zarar sınırlamak için kapanır."
+              value={p.stop_loss > 0 ? `${fmt2(p.stop_loss)} (${slPct!.toFixed(1)}%)` : "—"}
+              valueClass="text-red-300"
+            />
+            <CardRow
+              label="Take Profit"
+              labelTip="Fiyat buraya gelirse hedef kâr alınır."
+              value={p.take_profit > 0 ? `${fmt2(p.take_profit)} (+${tpPct!.toFixed(1)}%)` : "—"}
+              valueClass="text-emerald-300"
+            />
+            <CardRow
+              label="R / R"
+              labelTip="Alınan riske karşı beklenen ödül oranı."
+              value={rr != null ? `1 : ${rr}` : "—"}
+              valueClass={rrColor + " font-bold"}
+            />
+            <CardRow
+              label="ATR"
+              labelTip="Ortalama fiyat oynaklığı; stop/target mesafesini ayarlamak için kullanılır."
+              value={atrText}
+              valueClass="text-sky-300/80"
+            />
+            {slBasis && (
+              <CardRow label="Stop mantığı" value={slBasis} valueClass="text-eyay-faint text-[9px]" />
+            )}
+          </dl>
+        </section>
+      </div>
+
+      {/* ────────────── D) Pattern / Teknik Okuma ────────────── */}
+      {hasPattern && (
+        <section className="mx-2 mb-2 bg-eyay-surface/20 rounded p-2 border border-eyay-border/30">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <h4
+              className="text-[8px] uppercase tracking-wider text-eyay-faint"
+              title="Mum formasyonu / teknik yapı yorumu."
+            >
+              📊 Pattern / Teknik Okuma
+            </h4>
+            <span
+              className={`text-[9px] font-bold ${biasColor}`}
+              title="Chart Pattern skoru -100..+100 aralığındadır. Consensus skoru (0-100) ile aynı değildir."
+            >
+              {pattern.bias}{" "}
+              {pattern.consolidated_score >= 0 ? "+" : ""}
+              {pattern.consolidated_score.toFixed(1)}
+              <span className="text-eyay-faint font-normal">/100</span>
+            </span>
+          </div>
+          {activeP.length > 0 ? (
+            <PatternList items={activeP} />
+          ) : (
+            <p className="text-[9px] text-eyay-faint italic">Aktif pattern yok.</p>
+          )}
+          {pattern.bias === "NEUTRAL" && (
+            <p className="text-[9px] text-eyay-faint/80 italic mt-1.5 leading-snug">
+              Pattern yön teyidi vermiyor; pozisyon daha çok risk planına göre yönetiliyor.
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ────────────── Karar cümlesi ────────────── */}
+      <p className="px-2.5 pb-2 text-[9px] text-eyay-dim italic leading-snug">
+        {decisionSentence}
+        {isManual && (
+          <span className="block text-violet-300/70 mt-0.5">
+            ↳ Bu pozisyon kullanıcı onayıyla açıldı; paper engine yalnızca risk yönetimini takip ediyor.
+          </span>
+        )}
+      </p>
+    </article>
+  );
+}
+
+// Tek satırlık etiket–değer rowu (Pozisyon Özeti / Risk Planı içinde)
+function CardRow({
+  label,
+  labelTip,
+  value,
+  valueClass = "text-eyay-text",
+}: {
+  label: string;
+  labelTip?: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <dt
+        className="text-[9px] text-eyay-faint shrink-0 truncate"
+        title={labelTip}
+      >
+        {labelTip ? <span className="border-b border-dotted border-eyay-faint/40">{label}</span> : label}
+      </dt>
+      <dd className={`text-right truncate ${valueClass}`}>{value}</dd>
+    </div>
+  );
+}
+
+// Pattern aktif liste — uzun olursa truncate + expand toggle
+function PatternList({ items }: { items: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, 3);
+  const hasMore = items.length > 3;
+  return (
+    <div className="text-[9px] text-eyay-text/90 leading-snug">
+      <span>{shown.join(" · ")}</span>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+          className="ml-1.5 text-eyay-faint hover:text-eyay-text underline underline-offset-2 decoration-dotted"
+        >
+          {expanded ? "daha az" : `+${items.length - 3} daha`}
+        </button>
+      )}
+    </div>
   );
 }
 

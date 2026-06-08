@@ -3,7 +3,32 @@
 import { useEffect, useState } from "react";
 import type { AssetSignal, AssetActionType, SignalStatus, TechnicalInsight } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { mapIndicatorToLayer } from "@/lib/layerLabels";
 import MiniChart, { type ChartTFView } from "./MiniChart";
+
+// ---------------------------------------------------------------------------
+// Paper Trading durumu — sade UI özeti (agent pipeline / open_signal GÖSTERİLMEZ)
+//
+// Mevcut status + asset_action alanlarından türetilen 3 sade etiketten biri:
+//   "İzle"   → henüz teyit yok / nötr taraf
+//   "Uygun"  → onaylı yön sinyali var, paper trading değerlendirmeye uygun
+//   "Bloklu" → risk filtresi/blok durumu aktif
+// Bu sadece görsel bir özet — agent karar zincirine yeni bir bağ eklemez.
+// ---------------------------------------------------------------------------
+
+function paperTradingSummary(
+  signal: AssetSignal,
+  labels: { watch: string; allowed: string; blocked: string },
+): { text: string; cls: string } {
+  if (signal.status === "BLOCKING") {
+    return { text: labels.blocked, cls: "text-red-300/80" };
+  }
+  if (signal.status === "CONFIRMED" && signal.asset_action && signal.asset_action !== "NEUTRAL"
+      && signal.asset_action !== "AVOID") {
+    return { text: labels.allowed, cls: "text-emerald-300/80" };
+  }
+  return { text: labels.watch, cls: "text-eyay-faint" };
+}
 
 // ---------------------------------------------------------------------------
 // 5 Komut Sinyali — büyük kartlar
@@ -160,7 +185,9 @@ function CommandCard({
   statusLabel: string;
   techInsight?: TechnicalInsight;
 }) {
+  const { t } = useLanguage();
   const st = STATUS_STYLE[signal.status];
+  const ptSummary = paperTradingSummary(signal, t.assetGrid.paperTrading);
   const [flipped, setFlipped] = useState(false);
   const [reading, setReading] = useState<ChartReading | null>(null);
   const [loading, setLoading] = useState(false);
@@ -278,6 +305,12 @@ function CommandCard({
             {signal.reason.replace(/\s*\[S:[^\]]+\]/g, "")}
           </p>
 
+          {/* Sade Paper Trading özeti — agent pipeline / open_signal burada GÖSTERİLMEZ,
+              yalnızca İzle/Uygun/Bloklu görsel özeti sunulur. */}
+          <p className={`text-[9px] font-mono ${ptSummary.cls}`}>
+            {ptSummary.text}
+          </p>
+
           <p className="text-[9px] text-eyay-faint/60 italic text-center mt-auto">
             ⤺ grafiği görmek için tıkla
           </p>
@@ -370,11 +403,14 @@ function CommandCard({
 // ---------------------------------------------------------------------------
 
 function SecondaryCard({
-  signal, icon, statusLabel,
+  signal, icon, statusLabel, layerInfo, layerContributionLabel,
 }: {
   signal: AssetSignal;
   icon: string;
   statusLabel: string;
+  /** Bu ham göstergenin hangi dashboard katman(lar)ına katkı sağladığı — bkz. lib/layerLabels.ts */
+  layerInfo?: { layers: number[]; label: string } | null;
+  layerContributionLabel?: string;
 }) {
   const st = STATUS_STYLE[signal.status];
   return (
@@ -411,6 +447,16 @@ function SecondaryCard({
       <div className={`text-[8px] font-mono px-1 py-0.5 rounded border text-center truncate ${st.badge}`}>
         {statusLabel}
       </div>
+
+      {/* Katman katkısı — hangi dashboard katman(lar)ını beslediğini gösterir (yalnızca bilgi amaçlı) */}
+      {layerInfo && (
+        <div
+          className="text-[8px] font-mono px-1 py-0.5 rounded border border-eyay-blue/30 bg-eyay-blue/10 text-eyay-blue text-center truncate"
+          title={`${layerContributionLabel ?? "Katman katkısı"}: ${layerInfo.label}`}
+        >
+          {layerInfo.label}
+        </div>
+      )}
     </div>
   );
 }
@@ -433,7 +479,8 @@ export default function AssetGrid({
 
   const primaryCodes   = new Set(PRIMARY_SIGNALS.map(c => c.code));
   const secondaryCodes = new Set(SECONDARY_SIGNALS.map(c => c.code));
-  const allKnownCodes  = new Set([...primaryCodes, ...secondaryCodes]);
+  // Array.from kullan (downlevelIteration olmadan Set spread çalışmaz — tsconfig target ES2015 öncesi)
+  const allKnownCodes  = new Set([...Array.from(primaryCodes), ...Array.from(secondaryCodes)]);
 
   const primaryItems = PRIMARY_SIGNALS
     .map(c => ({ ...c, signal: byCode[c.code] }))
@@ -458,11 +505,12 @@ export default function AssetGrid({
       {/* ── Header ── */}
       <div className="px-5 py-3.5 border-b border-eyay-border">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">
+          <div className="min-w-0">
+            <p className="text-2xs text-eyay-blue uppercase tracking-widest font-semibold">
               {t.assetGrid.layer}
             </p>
             <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.assetGrid.title}</p>
+            <p className="text-[11px] text-eyay-faint mt-0.5 leading-snug">{t.assetGrid.layerSub}</p>
           </div>
           <div className="flex items-center gap-2 text-[10px] font-mono">
             {priBlocking > 0 && (
@@ -502,11 +550,16 @@ export default function AssetGrid({
       {/* ── İkincil Sinyaller — kompakt ── */}
       {secondaryItems.length > 0 && (
         <div className="px-4 pb-4 border-t border-eyay-border/40 pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
-              Makro Göstergeler
-            </p>
-            <div className="flex items-center gap-2 text-[9px] font-mono">
+          <div className="flex items-start justify-between mb-2 gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
+                {t.assetGrid.rawTitle}
+              </p>
+              <p className="text-[10px] text-eyay-faint/80 mt-0.5 leading-snug max-w-2xl">
+                {t.assetGrid.rawSub}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-[9px] font-mono shrink-0">
               {secBlocking  > 0 && <span className="text-red-400">{secBlocking} blok</span>}
               {secConfirmed > 0 && <span className="text-emerald-400">{secConfirmed} onay</span>}
             </div>
@@ -518,6 +571,8 @@ export default function AssetGrid({
                 signal={c.signal}
                 icon={c.icon}
                 statusLabel={t.assetGrid.statusLabel[c.signal.status] ?? c.signal.status}
+                layerInfo={mapIndicatorToLayer(c.signal.asset_code)}
+                layerContributionLabel={t.assetGrid.layerContribution}
               />
             ))}
           </div>

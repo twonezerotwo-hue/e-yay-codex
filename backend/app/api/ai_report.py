@@ -74,6 +74,7 @@ def _to_dict(obj: object) -> object:
 def get_ai_report(
     force_refresh: bool = Query(default=False, description="Önbelleği yoksay, yeni rapor üret"),
     persona: str | None = Query(default=None, description="Persona key (analyst|risk_officer|macro_strategist|narrator)"),
+    provider: str | None = Query(default=None, description="Manuel sağlayıcı seçimi: auto (varsayılan, Groq→Claude) | groq | claude"),
 ) -> JSONResponse:
     """
     Piyasa katmanları + jeopolitik haberleri okuyup Claude ile Türkçe analiz üretir.
@@ -146,6 +147,7 @@ def get_ai_report(
         rotation=rotation,
         force_refresh=force_refresh,
         persona_key=persona,
+        provider=provider,
     )
 
     # ── Self-validation + confidence + audit ─────────────────────────────
@@ -222,6 +224,7 @@ def get_ai_report(
                 "assets":         len(assets_list),
                 "geo_news":       len(geo_news),
                 "force_refresh":  force_refresh,
+                "provider":       provider or "auto",
             },
             output_payload={
                 "status":     payload.get("status"),

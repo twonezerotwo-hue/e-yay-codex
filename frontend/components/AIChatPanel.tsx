@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { LLMProvider } from "@/lib/api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,6 +190,8 @@ export default function AIChatPanel() {
   const [streaming, setStreaming] = useState("");
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
   const [provider,  setProvider]  = useState<ProviderInfo | null>(null);
+  // Kullanıcının manuel sağlayıcı seçimi — varsayılan "auto" (Groq → Claude öncelik sırası)
+  const [modelChoice, setModelChoice] = useState<LLMProvider>("auto");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
@@ -229,6 +232,7 @@ export default function AIChatPanel() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
           messages: newHistory.map(m => ({ role: m.role, content: m.content })),
+          provider: modelChoice,
         }),
         signal: abortRef.current.signal,
       });
@@ -350,6 +354,18 @@ export default function AIChatPanel() {
               {messages.length} mesaj
             </span>
           )}
+          {/* Manuel model seçimi — varsayılan "Otomatik" (Groq → Claude öncelik sırası) */}
+          <select
+            value={modelChoice}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => { e.stopPropagation(); setModelChoice(e.target.value as LLMProvider); }}
+            disabled={loading}
+            className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5 py-0.5 bg-eyay-surface focus:outline-none focus:border-eyay-blue/50 disabled:opacity-50"
+          >
+            <option value="auto">Otomatik (Groq → Claude)</option>
+            <option value="groq">Groq</option>
+            <option value="claude">Claude</option>
+          </select>
           <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5 py-0.5">
             PAPER_SAFE
           </span>

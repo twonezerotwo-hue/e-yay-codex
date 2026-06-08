@@ -12,6 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import AgentCommandCenter from "./AgentCommandCenter";
+import type { NewsHeadline } from "@/lib/types";
 
 interface AgentInsight {
   severity:  "CRITICAL" | "WARNING" | "OPPORTUNITY" | "OBSERVATION";
@@ -48,7 +49,7 @@ const SEVERITY_STYLE: Record<AgentInsight["severity"], {
   },
 };
 
-export default function AgentInsightBar() {
+export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHeadline[] }) {
   const [insights, setInsights] = useState<AgentInsight[]>([]);
   const [idx,      setIdx]      = useState(0);
   const [open,     setOpen]     = useState(false);   // modal mı açık?
@@ -104,10 +105,10 @@ export default function AgentInsightBar() {
 
   if (loading) {
     return (
-      <div className="sticky top-0 z-40 bg-eyay-surface/95 backdrop-blur border-b border-eyay-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2 flex items-center gap-3">
-          <span className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">🤖 Agent</span>
-          <span className="text-xs text-eyay-faint italic">Veriler taranıyor…</span>
+      <div className="sticky top-0 z-40 bg-eyay-surface/95 backdrop-blur-md border-b border-eyay-border shadow-lg shadow-black/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+          <span className="text-sm font-mono text-eyay-faint uppercase tracking-widest">🤖 Agent</span>
+          <span className="text-base text-eyay-faint italic">Veriler taranıyor…</span>
         </div>
       </div>
     );
@@ -121,44 +122,49 @@ export default function AgentInsightBar() {
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════
-          KAPALI HAL — tek satır sticky bant
+          KAPALI HAL — tek satır sticky bant (2x büyütülmüş)
+          Sayfa her zaman bu bandın ALTINDAN kayar — yüksek z-index + güçlü
+          backdrop-blur + alt gölge ile içerik bandın "içine giriyormuş" gibi
+          görünür (absorbe edilme efekti).
          ═══════════════════════════════════════════════════════════════════ */}
-      <div className={`sticky top-0 z-40 backdrop-blur border-b ${st.border} ${st.bg}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2">
+      <div className={`sticky top-0 z-40 backdrop-blur-md border-b ${st.border} ${st.bg} shadow-xl shadow-black/40 relative`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
           <button
             onClick={() => setOpen(true)}
-            className="w-full flex items-center gap-3 group"
+            className="w-full flex items-center gap-4 group"
           >
-            <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-white/10 bg-black/30">
-              <span className={`w-1.5 h-1.5 rounded-full ${st.dot} animate-pulse`} />
-              <span className="text-[9px] font-mono font-bold text-eyay-text uppercase tracking-widest">
+            <span className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-black/30">
+              <span className={`w-3 h-3 rounded-full ${st.dot} animate-pulse`} />
+              <span className="text-base font-mono font-bold text-eyay-text uppercase tracking-widest">
                 🤖 AGENT
               </span>
             </span>
 
-            <span className={`shrink-0 text-[9px] font-mono font-black tracking-widest ${st.text}`}>
-              {st.label}{cur.icon && <span className="ml-1">{cur.icon}</span>}
+            <span className={`shrink-0 text-base font-mono font-black tracking-widest ${st.text}`}>
+              {st.label}{cur.icon && <span className="ml-1.5">{cur.icon}</span>}
             </span>
 
-            <span className={`flex-1 text-left text-xs font-medium truncate ${st.text}`}>
+            <span className={`flex-1 text-left text-lg font-medium truncate ${st.text}`}>
               {cur.headline}
             </span>
 
             {insights.length > 1 && (
-              <span className="shrink-0 text-[9px] font-mono text-eyay-faint">
+              <span className="shrink-0 text-sm font-mono text-eyay-faint">
                 {idx + 1}/{insights.length}
               </span>
             )}
 
-            <span className="shrink-0 text-[9px] font-mono text-eyay-faint group-hover:text-eyay-blue transition-colors">
+            <span className="shrink-0 text-sm font-mono text-eyay-faint group-hover:text-eyay-blue transition-colors">
               tümünü gör ›
             </span>
           </button>
         </div>
+        {/* İçeriğin banda "girdiği" hissini güçlendiren alt gradyan/fade */}
+        <div className="pointer-events-none absolute -bottom-6 left-0 right-0 h-6 bg-gradient-to-b from-black/30 to-transparent" />
       </div>
 
       {/* AÇIK HAL — Agent Komut Merkezi */}
-      {open && <AgentCommandCenter onClose={() => setOpen(false)} />}
+      {open && <AgentCommandCenter onClose={() => setOpen(false)} headlines={headlines} />}
     </>
   );
 }

@@ -48,8 +48,8 @@ _MINIMAL_CTX = mss.StrategistContext(
 )
 
 
-def _fake_call_llm(system: str, user: str) -> tuple[str, str]:
-    # _call_llm gerçek imzası: tuple[str, str] | None
+def _fake_call_llm(system: str, user: str, *, provider: str = "auto") -> tuple[str, str]:
+    # _call_llm gerçek imzası: tuple[str, str] | None — artık `provider` kwarg'ı da alıyor
     return _CLEAN_RESPONSE, "claude-opus-4-7"
 
 
@@ -180,7 +180,7 @@ def test_language_tr_passed_to_system_prompt():
     """TR dil seçiminde system prompt Türkçe talimat içermeli."""
     captured: dict = {}
 
-    def capturing_call_llm(system: str, user: str) -> tuple[str, str]:
+    def capturing_call_llm(system: str, user: str, *, provider: str = "auto") -> tuple[str, str]:
         captured["system"] = system
         return _CLEAN_RESPONSE, "claude-opus-4-7"
 

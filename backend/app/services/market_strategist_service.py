@@ -51,6 +51,12 @@ _FORBIDDEN_INSIDER_PATTERNS = (
 _DEFAULT_SYMBOLS = ("BTCUSD", "XAUUSD", "XAGUSD", "BRENT")
 _CLAUDE_MODEL = os.environ.get("CLAUDE_AGENT_MODEL", "claude-opus-4-7")
 
+# Groq (primary) → Claude (fallback) — kullanıcı `provider` ile manuel override edebilir
+_GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+_GROQ_BACKUP_MODEL = os.environ.get("GROQ_BACKUP_MODEL", "llama-3.1-8b-instant")
+_GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+_VALID_PROVIDERS = ("auto", "groq", "claude")
+
 
 # ── Dataclasses ─────────────────────────────────────────────────────────────
 
@@ -346,7 +352,39 @@ def _build_user_prompt(question: str, ctx: StrategistContext) -> str:
 
 # ── LLM call ────────────────────────────────────────────────────────────────
 
-def _call_llm(system_prompt: str, user_prompt: str) -> tuple[str, str] | None:
+def _call_groq_model(system_prompt: str, user_prompt: str, model: str) -> tuple[str, str] | None:
+    """Groq'tan (OpenAI-uyumlu) belirli bir modelle tek-shot cevap al."""
+    api_key = os.environ.get("GROQ_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key, base_url=_GROQ_BASE_URL, timeout=60.0)
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=2500,
+            temperature=0.4,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        raw = resp.choices[0].message.content or ""
+        return raw, f"groq/{model}"
+    except Exception as exc:
+        logger.warning("strategist Groq %s çağrısı başarısız: %s", model, exc)
+        return None
+
+
+def _call_groq(system_prompt: str, user_prompt: str) -> tuple[str, str] | None:
+    """Groq fallback zinciri: önce ana model, olmazsa yedek model."""
+    result = _call_groq_model(system_prompt, user_prompt, _GROQ_MODEL)
+    if result is not None:
+        return result
+    return _call_groq_model(system_prompt, user_prompt, _GROQ_BACKUP_MODEL)
+
+
+def _call_claude(system_prompt: str, user_prompt: str) -> tuple[str, str] | None:
     """Anthropic Claude tek-shot çağrı. API key yoksa None → abstain path."""
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
@@ -369,6 +407,27 @@ def _call_llm(system_prompt: str, user_prompt: str) -> tuple[str, str] | None:
     except Exception as exc:
         logger.warning("strategist Claude çağrısı başarısız: %s", exc)
         return None
+
+
+def _call_llm(system_prompt: str, user_prompt: str, *, provider: str = "auto") -> tuple[str, str] | None:
+    """
+    Sağlayıcı seçimine göre LLM çağrısı.
+
+    - "groq"  : yalnızca Groq dene (model fallback zinciriyle)
+    - "claude": yalnızca Claude dene
+    - "auto"  : Groq önce, olmazsa Claude (varsayılan öncelik sırası)
+
+    API key yoksa veya çağrı başarısızsa None → abstain path.
+    """
+    if provider == "groq":
+        return _call_groq(system_prompt, user_prompt)
+    if provider == "claude":
+        return _call_claude(system_prompt, user_prompt)
+
+    result = _call_groq(system_prompt, user_prompt)
+    if result is not None:
+        return result
+    return _call_claude(system_prompt, user_prompt)
 
 
 # ── Response parsing & safety filtering ─────────────────────────────────────
@@ -458,12 +517,18 @@ def answer(
     symbols: list[str] | None = None,
     snapshot_id: str | None = None,
     language: str = "tr",
+    provider: str | None = None,
 ) -> tuple[StrategistResponse, StrategistContext]:
     """
     Stratejist cevabı üret. Veri yoksa abstain, LLM yoksa abstain.
 
+    `provider`: "auto" (varsayılan, Groq önce → Claude yedek) | "groq" | "claude"
+    Geçersiz/boş değer "auto" olarak ele alınır — kullanıcı dilerse manuel seçer.
+
     Returns: (StrategistResponse, StrategistContext)
     """
+    provider_choice = provider if provider in _VALID_PROVIDERS else "auto"
+
     ctx = build_context(symbols=symbols, snapshot_id=snapshot_id)
 
     if not isinstance(question, str) or not question.strip():
@@ -475,7 +540,7 @@ def answer(
     system_prompt = _build_system_prompt(language)
     user_prompt   = _build_user_prompt(question, ctx)
 
-    llm_result = _call_llm(system_prompt, user_prompt)
+    llm_result = _call_llm(system_prompt, user_prompt, provider=provider_choice)
     if llm_result is None:
         return _build_abstain("llm_unavailable", ctx), ctx
 

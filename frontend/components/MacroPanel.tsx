@@ -2,6 +2,7 @@
 
 import type { MacroLayer, RiskAppetiteLayer, RegimeCode, AppetiteCode } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { mapRegimeToHumanLabel, mapRiskAppetiteToHumanLabel, buildUnifiedReading } from "@/lib/layerLabels";
 
 // ── Renk haritaları ──────────────────────────────────────────────────────────
 
@@ -44,20 +45,28 @@ export default function MacroPanel({ macro, appetite }: {
   const { t } = useLanguage();
   const rb = REGIME_BADGE[macro.regime];
   const ad = APPETITE_DOT[appetite.status];
-  const appetiteLabel = t.macro.appetiteLabels[appetite.status] ?? appetite.status;
+  // Yeni human-label haritalaması (spesifikasyon Bölüm 5) — internal AppetiteCode
+  // (STRONG/MODERATE/WEAK/CRISIS) DEĞİŞMEDEN okunur, sadece gösterim metni güncel.
+  const appetiteLabel = mapRiskAppetiteToHumanLabel(appetite.status);
+  const unified = buildUnifiedReading(macro.regime, appetite.status);
 
   return (
+    <div className="space-y-4">
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-      {/* ── Katman 1 — Makro Rejim ─────────────────────────────────────── */}
+      {/* ── KATMAN 2 — Makro Zemin / Para Rejimi (eski: Katman 1 — Makro Rejim) ── */}
       <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between">
-          <div>
-            <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">{t.macro.layer1}</p>
-            <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.macro.macroRegime}</p>
+        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xs text-eyay-blue uppercase tracking-widest font-semibold">{t.macro.layer1}</p>
+            <p className="text-[11px] text-eyay-faint mt-0.5 leading-snug">{t.macro.layer1Sub}</p>
           </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-mono font-semibold ${rb.bg} ${rb.text}`}>
-            {macro.regime.replace("_", " ")}
+          {/* Human label gösterilir — internal enum DEĞİŞMEDEN tooltip'te korunur (agent/paper-trading bunu okur) */}
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold shrink-0 ${rb.bg} ${rb.text}`}
+            title={`internal_label: ${macro.regime}`}
+          >
+            {mapRegimeToHumanLabel(macro.regime)}
           </div>
         </div>
 
@@ -86,14 +95,18 @@ export default function MacroPanel({ macro, appetite }: {
         </div>
       </div>
 
-      {/* ── Katman 2 — Risk İştahı ─────────────────────────────────────── */}
+      {/* ── KATMAN 3 — Risk İştahı / Piyasa Davranışı (eski: Katman 2 — Risk İştahı) ── */}
       <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between">
-          <div>
-            <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">{t.macro.layer2}</p>
-            <p className="text-sm font-semibold text-eyay-text mt-0.5">{t.macro.riskAppetite}</p>
+        <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-2xs text-eyay-blue uppercase tracking-widest font-semibold">{t.macro.layer2}</p>
+            <p className="text-[11px] text-eyay-faint mt-0.5 leading-snug">{t.macro.layer2Sub}</p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-eyay-raised border border-eyay-border">
+          {/* Human label gösterilir — internal enum DEĞİŞMEDEN tooltip'te korunur (agent/paper-trading bunu okur) */}
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-eyay-raised border border-eyay-border shrink-0"
+            title={`internal_label: ${appetite.status}`}
+          >
             <span className={`w-2 h-2 rounded-full ${ad.dot}`} />
             <span className={`text-xs font-semibold ${ad.text}`}>{appetiteLabel}</span>
           </div>
@@ -113,6 +126,33 @@ export default function MacroPanel({ macro, appetite }: {
         </div>
       </div>
 
+    </div>
+
+    {/* ── Birleşik Okuma — Makro Zemin (Katman 2) + Risk İştahı (Katman 3) sentezi ──
+         Tamamen mevcut internal enum'lardan (regime + appetite) türetilir;
+         Agent → Paper Trading bağlantısı burada GÖSTERİLMEZ — sadece kullanıcıya
+         okunabilir bir sentez sunulur. */}
+    <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
+      <div className="px-5 py-4 border-b border-eyay-border">
+        <p className="text-2xs text-eyay-blue uppercase tracking-widest font-semibold">{t.unifiedReading.title}</p>
+        <p className="text-[11px] text-eyay-faint mt-1 leading-relaxed">{t.unifiedReading.intro}</p>
+      </div>
+      <div className="px-5 py-4 space-y-2.5">
+        <UnifiedRow label={t.unifiedReading.regime}  value={unified.combinedRegime} accent="text-eyay-text font-semibold" />
+        <UnifiedRow label={t.unifiedReading.meaning} value={unified.meaning} />
+        <UnifiedRow label={t.unifiedReading.impact}  value={unified.impact} />
+      </div>
+    </div>
+
+    </div>
+  );
+}
+
+function UnifiedRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-xs text-eyay-faint w-28 shrink-0 pt-px font-medium">{label}</span>
+      <p className={`text-xs leading-relaxed flex-1 min-w-0 ${accent ?? "text-eyay-dim"}`}>{value}</p>
     </div>
   );
 }
