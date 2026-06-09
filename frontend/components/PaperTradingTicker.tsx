@@ -1523,25 +1523,28 @@ function OpenPositionCard({
   const hasPattern = !!pattern;
   const activeP = pattern?.active_patterns ?? [];
 
-  // Karar cümlesi — dinamik
-  const intensity =
-    Math.abs(p.pnl_pct) < 0.5 ? "hafif " :
-    Math.abs(p.pnl_pct) > 2 ? "ciddi " : "";
-  const pnlWord =
-    pnlState === "POS" ? "kârda" :
-    pnlState === "NEG" ? "zararda" :
-    "başabaş seviyesinde";
-  const slStr = slPct != null ? `${slPct.toFixed(1)}%` : "—";
-  const tpStr = tpPct != null ? `+${tpPct.toFixed(1)}%` : "—";
-  const patternHint = !hasPattern
-    ? ""
-    : pattern.bias === "NEUTRAL"
-      ? " Pattern nötr olduğu için sistem pozisyonu teknik pattern yerine SL/TP planıyla yönetiyor."
-      : pattern.bias === "BULLISH"
-        ? " Pattern hâlâ bullish; SL/TP planı geçerli."
-        : " Pattern bearish; SL/TP planı geçerli.";
-  const decisionSentence =
-    `Bu pozisyon şu an ${intensity}${pnlWord}. Stop mesafesi ${slStr}, hedef ${tpStr}.${patternHint}`;
+  // Kısa karar cümlesi — SL/TP tekrarı yok (Risk Planı bölümünde zaten var)
+  const decisionSentence = (() => {
+    const sig = p.open_signal;
+    const primaryTf = sig?.primary_tf?.toUpperCase() ?? "1H";
+    const baseDir = sig?.base?.direction ?? sig?.final_direction ?? "bullish";
+    const tfDirs = sig?.confluence?.tf_directions ?? {};
+    const alignedTfs = Object.entries(tfDirs)
+      .filter(([, v]) => v === "bullish" || v === "bearish")
+      .map(([k]) => k.toUpperCase());
+
+    let sentence = `Kısa karar: ${primaryTf} sinyali ${baseDir} geldi`;
+    if (alignedTfs.length > 0) {
+      sentence += `; ${alignedTfs.join(" ve ")} de aynı yönde — confluence skoru final kararı güçlendirdi`;
+    }
+    sentence += ".";
+    if (hasPattern && pattern.bias === "BEARISH") {
+      sentence += " Pattern karşı sinyal verdi ama final kararın ana sürücüsü değildi; pozisyon kontrollü izlenmeli.";
+    } else if (hasPattern && pattern.bias === "BULLISH") {
+      sentence += " Pattern de aynı yönde — teknik destek güçlü.";
+    }
+    return sentence;
+  })();
 
   return (
     <article className="bg-eyay-raised/40 rounded-lg border border-eyay-border/50 overflow-hidden font-mono">
@@ -1779,6 +1782,22 @@ function OpenPositionCard({
                         Modül katkıları: {buildModuleScores(p.open_signal)}
                       </p>
                     )}
+                    {/* Pattern notu — chart_pattern skoru 50 altındaysa açıkla */}
+                    {(() => {
+                      const cp = p.open_signal?.base?.module_scores?.["chart_pattern"];
+                      if (cp == null) return null;
+                      if (cp < 50) return (
+                        <p className="text-[9px] text-amber-300/80 mt-0.5">
+                          Pattern karşı sinyal verdi (skor {cp.toFixed(0)}/100) — final kararın ana sürücüsü değildi; consensus + confluence ile açıldı.
+                        </p>
+                      );
+                      if (cp >= 65) return (
+                        <p className="text-[9px] text-emerald-300/70 mt-0.5">
+                          Pattern işlem yönünü destekledi (skor {cp.toFixed(0)}/100).
+                        </p>
+                      );
+                      return null;
+                    })()}
                   </>
                 ) : (
                   <p className="text-[10px] text-eyay-faint">Kayıt yok.</p>
@@ -1841,9 +1860,11 @@ function OpenPositionCard({
               {/* C) Manuel Takip Notu */}
               <div>
                 <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">C) Manuel Takip Notu</p>
-                <p className="text-[10px] text-eyay-text/90 leading-snug">
-                  {buildManualFollowNote(p.open_signal)}
-                </p>
+                <div className="text-[10px] text-eyay-text/90 leading-snug space-y-0.5">
+                  {buildManualFollowNote(p.open_signal).split("\n").map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                </div>
               </div>
 
               {/* D) Haber / Event Etkisi */}
@@ -1955,6 +1976,13 @@ function buildConsensusExplanation(openSignal: Position["open_signal"]): string 
       .map(([k, v]) => `${k}:${v}`)
       .join(" + ");
     lines.push(`Confluence: ${aligned} uyumu → ×${mult} → Final skor: ${finalScore?.toFixed(1) ?? "—"}`);
+    // Not satırı
+    const higherTfs = Object.keys(conf?.tf_directions ?? {})
+      .filter(tf => tf !== primaryTf)
+      .map(t => t.toUpperCase());
+    if (higherTfs.length > 0) {
+      lines.push(`Not: Final skor, ${primaryTf.toUpperCase()} base skorunun ${higherTfs.join("/")} confluence çarpanıyla güçlendirilmesiyle oluştu.`);
+    }
   } else if (status === "skipped") {
     lines.push(`Confluence skip (higher TF'ler nötr) → Çarpan uygulanmadı → Final skor: ${finalScore?.toFixed(1) ?? "—"}`);
   } else if (status === "opposing") {
@@ -1985,23 +2013,30 @@ function buildModuleScores(openSignal: Position["open_signal"]): string | null {
 }
 
 // Manuel takip notu — timeframe_decision + aggression
+// "Max tutuş" = aggression yeniden değerlendirme penceresi; "Hedeflened Pozisyon Süresi" ile çakışmasın
 function buildManualFollowNote(openSignal: Position["open_signal"]): string {
   const td = openSignal?.timeframe_decision;
   const ac = openSignal?.aggression_context;
 
   if (!td && !ac) return "Kayıt yok.";
 
-  const parts: string[] = [];
-  if (td?.selected_timeframe) {
-    parts.push(`İzleme TF: ${td.selected_timeframe.toUpperCase()}`);
-    if (td.reason) parts.push(`(${td.reason})`);
-    if (td.max_holding_time) parts.push(`Max tutuş: ${td.max_holding_time}`);
-    if (td.recheck_interval_minutes) parts.push(`Recheck: ${td.recheck_interval_minutes} dk`);
-  } else if (ac?.recommended_timeframe) {
-    parts.push(`Önerilen TF: ${ac.recommended_timeframe.toUpperCase()}`);
-    if (ac.max_holding_time) parts.push(`Max tutuş: ${ac.max_holding_time}`);
+  const monitorTf = (td?.selected_timeframe ?? ac?.recommended_timeframe ?? "").toUpperCase();
+  const primaryTf = (openSignal?.primary_tf ?? "1h").toUpperCase();
+  const tfDirs = openSignal?.confluence?.tf_directions ?? {};
+  const bullishTfs = Object.entries(tfDirs)
+    .filter(([, v]) => v === "bullish")
+    .map(([k]) => k.toUpperCase());
+  const recheckMins = td?.recheck_interval_minutes;
+
+  const lines: string[] = [];
+  if (monitorTf) lines.push(`İzleme TF: ${monitorTf}`);
+  if (recheckMins) lines.push(`Recheck: ${recheckMins} dk`);
+  if (bullishTfs.length >= 2) {
+    lines.push(`${bullishTfs.join(" ve ")} bullish kaldıkça ana fikir korunur.`);
   }
-  return parts.join(" · ");
+  lines.push(`${primaryTf} bearish'e dönerse erken kapatma / küçültme düşünülebilir.`);
+
+  return lines.join("\n");
 }
 
 // Haber/Event etkisi
