@@ -27,6 +27,20 @@ export interface RiskAppetiteLayer {
   summary: string;
 }
 
+export type AggressionLevel = "" | "low" | "medium" | "high" | "extreme";
+export type AgentCommand =
+  | ""
+  | "WAIT"
+  | "WATCH"
+  | "AGGRESSIVE_WATCH"
+  | "SCALP_LONG_SETUP"
+  | "TACTICAL_LONG_SETUP"
+  | "LONG_SETUP"
+  | "LONG_CONFIRMED"
+  | "NEUTRAL"
+  | "RISK_REDUCE"
+  | "BLOCKED";
+
 export interface AssetSignal {
   asset_code: string;
   asset_name: string;
@@ -37,6 +51,13 @@ export interface AssetSignal {
   delta_7d_pct: number | null;
   asset_action?: AssetActionType;
   action_trigger?: string;
+  /** paper_trading'ten dolar — yalnızca aktif pozisyon/pending/manual_ready varsa */
+  aggression_level?: AggressionLevel;
+  agent_command?: AgentCommand;
+  /** FAZ 2: sade etiket için ek alanlar — UI yalnızca dolu olduğunda gösterir */
+  recommended_timeframe?: "" | "15m" | "30m" | "1h" | "4h" | "1d";
+  stop_style?: "" | "tight_atr" | "structure_based" | "hybrid_tight" | "no_trade";
+  recheck_interval_minutes?: number;
 }
 
 export interface ConfirmationItem {
@@ -148,6 +169,7 @@ export interface CorrelationPair {
   pair: string;
   corr_30d: number;
   regime: string;
+  explanation?: string;
 }
 
 export interface CapitalRotation {

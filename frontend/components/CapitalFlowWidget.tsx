@@ -5,23 +5,30 @@ import type { CapitalRotation, AssetClassScore, KeyInsight, CorrelationPair } fr
 
 // ---------------------------------------------------------------------------
 // Döngü sırası — soldan sağa risk-off → risk-on
+// NAKİT kategorisi artık ayrı; DXY "DOLAR GÜCÜ" olarak gösteriliyor
 // ---------------------------------------------------------------------------
-const CYCLE_ORDER = ["NAKİT", "TAHVİL", "ALTIN", "GÜMÜŞ", "PETROL", "BTC", "HİSSE"] as const;
+const CYCLE_ORDER = ["DOLAR_GÜCÜ", "TAHVİL", "ALTIN", "GÜMÜŞ", "PETROL", "BTC", "HİSSE"] as const;
+
+const CYCLE_LABEL: Record<string, string> = {
+  DOLAR_GÜCÜ: "DOLAR GÜCÜ",
+  TAHVİL: "TAHVİL", ALTIN: "ALTIN", GÜMÜŞ: "GÜMÜŞ",
+  PETROL: "PETROL", BTC: "BTC", HİSSE: "HİSSE",
+};
 
 const AXIS_LABELS = {
-  left:  "← Güvenli Liman",
+  left:  "← Güvenli Liman / Dolar",
   right: "Risk-On →",
 };
 
 // Her sınıfın hangi göstergeyle ölçüldüğü — kullanıcının "neye göre?" sorusunu yanıtlar
 const CLASS_PROXY: Record<string, { ticker: string; label: string }> = {
-  NAKİT:  { ticker: "DXY", label: "Dolar Endeksi (DXY) 30g getirisi" },
-  TAHVİL: { ticker: "TLT", label: "20Y Treasury ETF (TLT) 30g getirisi" },
-  ALTIN:  { ticker: "GLD", label: "Altın ETF (GLD) 30g getirisi" },
-  GÜMÜŞ:  { ticker: "XAG", label: "Gümüş futures (XAG) 30g getirisi" },
-  PETROL: { ticker: "OIL", label: "Ham Petrol (OIL/WTI) 30g getirisi" },
-  BTC:    { ticker: "BTC", label: "Bitcoin spot 30g getirisi" },
-  HİSSE:  { ticker: "SPY", label: "S&P 500 ETF (SPY) 30g getirisi" },
+  DOLAR_GÜCÜ: { ticker: "DXY", label: "Dolar Endeksi (DXY) 30g momentum — para akışı değil, dolar gücü" },
+  TAHVİL:     { ticker: "TLT", label: "20Y Treasury ETF (TLT) 30g getirisi" },
+  ALTIN:      { ticker: "GLD", label: "Altın ETF (GLD) 30g getirisi" },
+  GÜMÜŞ:      { ticker: "XAG", label: "Gümüş futures (XAG) 30g getirisi" },
+  PETROL:     { ticker: "OIL", label: "Ham Petrol (OIL/WTI) 30g getirisi" },
+  BTC:        { ticker: "BTC", label: "Bitcoin spot 30g getirisi" },
+  HİSSE:      { ticker: "SPY", label: "S&P 500 ETF (SPY) 30g getirisi" },
 };
 
 // ---------------------------------------------------------------------------
@@ -97,7 +104,7 @@ function CycleChain({ scores }: { scores: AssetClassScore[] }) {
 
                 {/* İsim */}
                 <span className={`font-mono text-[9px] font-bold leading-none text-center ${st.text}`}>
-                  {name}
+                  {CYCLE_LABEL[name] ?? name}
                 </span>
 
                 {/* Referans gösterge — "neye göre" sorusunu yanıtlar */}
@@ -208,16 +215,23 @@ function CorrTable({ corrs }: { corrs: CorrelationPair[] }) {
         Korelasyon tablosu — {corrs.length} çift
       </button>
       {open && (
-        <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-0.5">
+        <div className="mt-2 space-y-1.5">
           {corrs.map(c => (
-            <div key={c.pair} className="flex items-center gap-1.5">
-              <span className="font-mono text-[9px] text-eyay-dim w-[58px] shrink-0">{c.pair}</span>
-              <span className={`font-mono text-[9px] font-semibold ${CORR_COLOR[c.regime] ?? "text-eyay-faint"}`}>
-                {c.corr_30d > 0 ? "+" : ""}{c.corr_30d.toFixed(2)}
-              </span>
-              <span className={`text-[8px] font-mono ${CORR_COLOR[c.regime] ?? "text-eyay-faint"}`}>
-                [{c.regime.replace(/_/g, " ")}]
-              </span>
+            <div key={c.pair} className="border-l border-eyay-border/40 pl-2">
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] font-semibold text-eyay-text w-[58px] shrink-0">{c.pair}</span>
+                <span className={`font-mono text-[10px] font-bold ${CORR_COLOR[c.regime] ?? "text-eyay-faint"}`}>
+                  {c.corr_30d > 0 ? "+" : ""}{c.corr_30d.toFixed(2)}
+                </span>
+                <span className={`text-[8px] font-mono ${CORR_COLOR[c.regime] ?? "text-eyay-faint"}`}>
+                  [{c.regime.replace(/_/g, " ")}]
+                </span>
+              </div>
+              {c.explanation && (
+                <p className="text-[9px] text-eyay-faint leading-snug mt-0.5">
+                  {c.explanation}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -239,13 +253,57 @@ function convictionColor(c: number) {
 // Ana bileşen
 // ---------------------------------------------------------------------------
 
+// Veri kalitesi şüpheli olduğunda gösterilecek kısa, sade UI
+function InvalidPanel({ reason }: { reason: string }) {
+  const reasonText = reason.includes("identical_returns_across_assets")
+    ? "Getiriler birden çok varlıkta aynı görünüyor — veri serileri güvenilir değil."
+    : reason.includes("degenerate_correlation_matrix")
+      ? "Korelasyon matrisi degenere (çoğu çift +1.00/-1.00) — veri serileri güvenilir değil."
+      : reason.includes("data_insufficient")
+        ? "Yeterli veri yok."
+        : "Veri kalitesi şüpheli.";
+
+  return (
+    <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-eyay-border flex items-center justify-between">
+        <div>
+          <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">
+            Sermaye Rotasyonu · 30 Gün
+          </p>
+          <p className="text-sm font-semibold text-eyay-text mt-0.5">Durum: Veri şüpheli</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[8px] text-eyay-faint uppercase tracking-wider">Conviction</p>
+          <p className="font-mono font-black text-lg leading-none text-eyay-faint">—</p>
+        </div>
+      </div>
+      <div className="p-4 space-y-2">
+        <p className="text-[11px] text-amber-400/80 font-mono">
+          ⚠ Sermaye rotasyonu yorumu durduruldu.
+        </p>
+        <p className="text-[11px] text-eyay-dim leading-relaxed">
+          {reasonText}
+        </p>
+        <p className="text-[10px] text-eyay-faint/70 leading-snug border-t border-eyay-border/40 pt-2">
+          Korelasyon açıklaması gösterilmiyor; veri serileri güvenilir değil.
+        </p>
+        <p className="text-[8px] text-eyay-faint/40 font-mono pt-1">
+          Sebep: {reason}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function CapitalFlowWidget({
   rotation,
 }: {
   rotation: CapitalRotation | null | undefined;
 }) {
   if (!rotation) return null;
-  if (rotation.error && rotation.class_scores.length === 0) return null;
+  if (rotation.error && rotation.class_scores.length === 0) {
+    return <InvalidPanel reason={rotation.error} />;
+  }
 
   const cv = convictionColor(rotation.conviction);
 

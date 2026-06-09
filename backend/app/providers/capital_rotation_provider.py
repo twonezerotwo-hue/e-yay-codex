@@ -64,6 +64,7 @@ class CorrelationPair:
     pair: str
     corr_30d: float
     regime: str
+    explanation: str = ""   # Pariteye özel 1 cümle anlamlandırma
 
 
 @dataclass(frozen=True)
@@ -100,13 +101,13 @@ _ROTATION_TICKERS: dict[str, dict] = {
 
 # Her varlık sınıfının "ana göstergesi" — momentum referansı için
 _CLASS_MAIN_ASSET: dict[str, str] = {
-    "ALTIN":  "GLD",
-    "GÜMÜŞ":  "XAG",
-    "TAHVİL": "TLT",
-    "BTC":    "BTC",
-    "HİSSE":  "SPY",
-    "NAKİT":  "DXY",
-    "PETROL": "OIL",
+    "ALTIN":      "GLD",
+    "GÜMÜŞ":      "XAG",
+    "TAHVİL":     "TLT",
+    "BTC":        "BTC",
+    "HİSSE":      "SPY",
+    "DOLAR_GÜCÜ": "DXY",   # DXY artık "NAKİT" değil — dolar gücü ölçüsü
+    "PETROL":     "OIL",
 }
 
 # ---------------------------------------------------------------------------
@@ -232,19 +233,32 @@ _CORR_PAIRS: list[tuple[str, str]] = [
     ("HYG", "SPY"), ("TLT", "SPY"), ("OIL", "DXY"),
 ]
 
+# Her parite için 1 cümle anlamlandırma — UI sadece valid matriste gösterir
+_CORR_EXPLAIN: dict[str, str] = {
+    "BTC/DXY": "Negatif ilişki klasik risk-on; pozitif ilişki normale göre dikkat gerektirir.",
+    "BTC/GLD": "Birlikte hareket ediyorsa piyasa ikisini hedge/risk alternatifi gibi fiyatlıyor olabilir.",
+    "BTC/SPY": "BTC hisseyle birlikte hareket ediyorsa kripto risk-on/risk-off davranışına bağlıdır.",
+    "GLD/TLT": "Altın ve tahvil birlikteyse güvenli liman talebi ortak olabilir.",
+    "GLD/DXY": "Altın dolar güçlenirken de yükseliyorsa hedge talebi güçlü olabilir.",
+    "HYG/SPY": "Kredi ve hisse aynı yöndeyse risk iştahı daha sağlıklı görünür.",
+    "TLT/SPY": "Ters hareket klasik risk-on/risk-off ayrımını gösterir.",
+    "OIL/DXY": "Petrol-dolar ilişkisi arz/jeopolitik veya emtia-dolar etkisini gösterebilir.",
+}
+
 # ---------------------------------------------------------------------------
 # Varlık sınıfı skorlaması
 # ---------------------------------------------------------------------------
 # Her sınıf için katkı sinyalleri: (sinyal_adı, katsayı)
 # Pozitif katsayı → o sinyal güçlenince o sınıfa para giriyor demek
 _FLOW_SIGNALS: dict[str, list[tuple[str, float]]] = {
-    "ALTIN":  [("GLD", 1.5), ("GLD/TLT", 1.0), ("GLD/DXY", 1.0), ("BTC/GLD", -0.5)],
-    "GÜMÜŞ":  [("XAG", 1.5), ("GLD/TLT", 0.5), ("GLD/DXY", 0.5)],
-    "TAHVİL": [("TLT", 1.5), ("SHY", 0.8), ("TLT/SPY", 1.0), ("GLD/TLT", -0.5)],
-    "BTC":    [("BTC", 1.5), ("BTC/GLD", 0.8), ("BTC/DXY", 1.0)],
-    "HİSSE":  [("SPY", 1.5), ("HYG/LQD", 0.5), ("TLT/SPY", -0.8)],
-    "NAKİT":  [("DXY", 1.5), ("BTC/DXY", -0.5), ("GLD/DXY", -0.5)],
-    "PETROL": [("OIL", 2.0)],
+    "ALTIN":      [("GLD", 1.5), ("GLD/TLT", 1.0), ("GLD/DXY", 1.0), ("BTC/GLD", -0.5)],
+    "GÜMÜŞ":      [("XAG", 1.5), ("GLD/TLT", 0.5), ("GLD/DXY", 0.5)],
+    "TAHVİL":     [("TLT", 1.5), ("SHY", 0.8), ("TLT/SPY", 1.0), ("GLD/TLT", -0.5)],
+    "BTC":        [("BTC", 1.5), ("BTC/GLD", 0.8), ("BTC/DXY", 1.0)],
+    "HİSSE":      [("SPY", 1.5), ("HYG/LQD", 0.5), ("TLT/SPY", -0.8)],
+    # DXY = dolar gücü ölçüsü; "para nereye akıyor" değil, dolar momentum
+    "DOLAR_GÜCÜ": [("DXY", 1.5), ("BTC/DXY", -0.5), ("GLD/DXY", -0.5)],
+    "PETROL":     [("OIL", 2.0)],
 }
 
 
@@ -272,6 +286,46 @@ def _direction(score: float) -> str:
     if score > 0.15:    return "GİRİŞ"
     if score < -0.15:   return "ÇIKIŞ"
     return "NÖTR"
+
+
+# ---------------------------------------------------------------------------
+# Veri kalitesi kontrolleri — sanity guard
+# ---------------------------------------------------------------------------
+
+def _check_return_quality(momenta: dict[str, float]) -> str | None:
+    """5+ asset aynı momentum'a sahipse veri serileri güvenilir değil.
+
+    yfinance race condition'ı veya cache contamination tipik bu pattern'i üretir.
+    Tolerance 0.05% — gerçek piyasada bu kadar yakın oluşma ihtimali yok.
+    """
+    base_keys = {"BTC", "GLD", "XAG", "TLT", "SHY", "SPY", "HYG", "LQD", "DXY", "OIL"}
+    base = {k: round(v, 2) for k, v in momenta.items() if k in base_keys}
+    if len(base) < 5:
+        return None
+    # Aynı değere yakın olanları say
+    counts: dict[float, int] = {}
+    for v in base.values():
+        # 0.05% tolerance ile bucket'le
+        bucket = round(v * 20) / 20
+        counts[bucket] = counts.get(bucket, 0) + 1
+    max_same = max(counts.values()) if counts else 0
+    if max_same >= 5:
+        return "identical_returns_across_assets"
+    return None
+
+
+def _check_correlation_quality(corrs: list["CorrelationPair"]) -> str | None:
+    """Korelasyonların çoğu |c|>=0.95 ise matris degenere.
+
+    Gerçek piyasada 8 çapraz çiftin hepsi 1.00 olamaz — bu yfinance race veya
+    aynı seri kullanılması demek.
+    """
+    if len(corrs) < 5:
+        return None
+    extreme = sum(1 for c in corrs if abs(c.corr_30d) >= 0.95)
+    if extreme / len(corrs) >= 0.75:
+        return "degenerate_correlation_matrix"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -614,14 +668,14 @@ class CapitalRotationProvider:
 
     def _compute_impl(self) -> CapitalRotation:
         try:
-            # 1. Paralel OHLCV çekimi
+            # 1. OHLCV çekimi — max_workers=1 ile sıralı (yfinance thread race fix)
             closes: dict[str, np.ndarray] = {}
-            with ThreadPoolExecutor(max_workers=len(_ROTATION_TICKERS)) as pool:
+            with ThreadPoolExecutor(max_workers=1) as pool:
                 futures = {
                     pool.submit(_fetch_close, name, cfg): name
                     for name, cfg in _ROTATION_TICKERS.items()
                 }
-                for fut in as_completed(futures, timeout=25):
+                for fut in as_completed(futures, timeout=60):
                     key = futures[fut]
                     try:
                         k, arr = fut.result()
@@ -631,12 +685,18 @@ class CapitalRotationProvider:
                         logger.debug("CapitalRotation future %s: %s", key, exc)
 
             if len(closes) < 3:
-                return _error_result("Yetersiz veri — veri çekim hatası.")
+                return _error_result("data_insufficient: 3+ varlık verisi alınamadı.")
 
             # 2. Bireysel 30g momentumlar
             momenta: dict[str, float] = {
                 name: _momentum_30d(arr) for name, arr in closes.items()
             }
+
+            # 2a. Sanity: aynı momentum'a sahip 5+ asset varsa veri kalitesi şüpheli
+            #     (yfinance race veya genel piyasa felaketi/cache hit'i değil — degenerate veri)
+            quality_reason = _check_return_quality(momenta)
+            if quality_reason:
+                return _error_result(quality_reason)
 
             # 3. Oran sinyalleri
             ratio_signals: list[RatioSignal] = []
@@ -662,15 +722,26 @@ class CapitalRotationProvider:
                 ratio_signals.append(RatioSignal(rd["pair"], round(cur, 4), delta, t, meaning))
                 momenta[rd["pair"]] = delta
 
-            # 4. Korelasyonlar
+            # 4. Korelasyonlar — min 20 ortak veri noktası gerekli
             corr_signals: list[CorrelationPair] = []
             for a_k, b_k in _CORR_PAIRS:
                 if a_k not in closes or b_k not in closes:
                     continue
+                if min(len(closes[a_k]), len(closes[b_k])) < 22:  # 20 valid + 2 buffer
+                    continue
                 c = _rolling_corr(closes[a_k], closes[b_k])
                 if c is None:
                     continue
-                corr_signals.append(CorrelationPair(f"{a_k}/{b_k}", c, _corr_regime(c)))
+                pair_name = f"{a_k}/{b_k}"
+                corr_signals.append(CorrelationPair(
+                    pair_name, c, _corr_regime(c),
+                    explanation=_CORR_EXPLAIN.get(pair_name, ""),
+                ))
+
+            # 4a. Sanity: korelasyonların çoğu |c|>=0.95 ise matris degenere
+            corr_reason = _check_correlation_quality(corr_signals)
+            if corr_reason:
+                return _error_result(corr_reason)
 
             # 5. Her varlık sınıfı için skor
             raw_scores: dict[str, float] = {
@@ -729,12 +800,27 @@ class CapitalRotationProvider:
             return _error_result(str(exc))
 
 
+_ERROR_SYNTHESIS: dict[str, str] = {
+    "identical_returns_across_assets":
+        "Sermaye rotasyonu yorumu durduruldu: getiriler birden çok varlıkta aynı görünüyor, veri serileri güvenilir değil.",
+    "degenerate_correlation_matrix":
+        "Sermaye rotasyonu yorumu durduruldu: korelasyon matrisi degenere (çoğu çift +1.00/-1.00), veri serileri güvenilir değil.",
+    "data_insufficient":
+        "Sermaye rotasyonu yorumu durduruldu: yeterli veri yok.",
+}
+
+
 def _error_result(msg: str) -> CapitalRotation:
+    # msg "code: detail" veya sadece "code" olabilir; ilk segmenti tablo lookup için kullan
+    code = msg.split(":", 1)[0].strip()
+    synth = _ERROR_SYNTHESIS.get(
+        code, "Sermaye rotasyonu yorumu durduruldu: veri kalitesi şüpheli.",
+    )
     return CapitalRotation(
         primary_flow="KARISIK", secondary_flow=None, conviction=0,
-        class_scores=(), key_insights=(), synthesis="Rotasyon analizi şu an kullanılamıyor.",
+        class_scores=(), key_insights=(), synthesis=synth,
         ratios=(), correlations=(),
-        rotation_context="Sermaye rotasyon analizi şu an kullanılamıyor.",
+        rotation_context=synth,
         error=msg,
     )
 
