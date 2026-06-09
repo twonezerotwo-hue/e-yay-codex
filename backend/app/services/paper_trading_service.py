@@ -860,6 +860,17 @@ def _route_new_open_signal(
     except Exception:  # noqa: BLE001
         pass  # audit enrichment hatası trade açılışını bloke etmez
 
+    # FAZ 12 — Paper Risk Sizing (öğrenme için kontrollü boyut artışı)
+    # Hard gate geçti, size_usd burada revize edilir; karar motoru etkilenmez.
+    try:
+        from app.services.paper_risk_sizing import (  # noqa: PLC0415
+            compute_paper_risk_size as _compute_risk_size,
+        )
+        size_usd, _sizing_ctx = _compute_risk_size(size_usd, signal_snapshot, side)
+        signal_snapshot = {**signal_snapshot, "paper_risk_sizing_context": _sizing_ctx}
+    except Exception:  # noqa: BLE001
+        pass  # sizing hatası trade açılışını bloke etmez
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (
