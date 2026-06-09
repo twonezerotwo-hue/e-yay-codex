@@ -836,6 +836,18 @@ def _route_new_open_signal(
     except Exception:  # noqa: BLE001
         pass  # audit enrichment hatası trade açılışını bloke etmez
 
+    # FAZ 10.2 — Similar Trade Memory (audit only; karar motorunu etkilemez)
+    try:
+        from app.services.similar_trade_memory import (  # noqa: PLC0415
+            find_similar_trade_memories as _find_similar,
+        )
+        signal_snapshot = {
+            **signal_snapshot,
+            "similar_memory_context": _find_similar(signal_snapshot, pair, side),
+        }
+    except Exception:  # noqa: BLE001
+        pass  # audit enrichment hatası trade açılışını bloke etmez
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (
