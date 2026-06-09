@@ -679,7 +679,7 @@ export default function PaperTradingTicker() {
                   <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1.5">
                     Açık Pozisyonlar
                   </p>
-                  <div className="space-y-2">
+                  <div className="space-y-4">
                     {state.open_positions.map(p => (
                       <OpenPositionCard
                         key={p.pair}
@@ -1472,17 +1472,30 @@ function OpenPositionCard({
     ? "bg-emerald-950/50 text-emerald-300 border-emerald-800/50"
     : "bg-red-950/50 text-red-300 border-red-800/50";
 
-  // PnL state: pozitif / negatif / nötr (~0)
+  // PnL state: % bazlı (0.05% eşik)
   const pnlState: "POS" | "NEG" | "NEUTRAL" =
-    p.pnl_usd > 0.5 ? "POS" : p.pnl_usd < -0.5 ? "NEG" : "NEUTRAL";
+    p.pnl_pct > 0.05 ? "POS" : p.pnl_pct < -0.05 ? "NEG" : "NEUTRAL";
   const pnlBadgeClr =
-    pnlState === "POS" ? "bg-emerald-950/40 text-emerald-300 border-emerald-800/50" :
-    pnlState === "NEG" ? "bg-red-950/40 text-red-300 border-red-800/50" :
-    "bg-eyay-raised/60 text-eyay-faint border-eyay-border/50";
+    pnlState === "POS" ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/60" :
+    pnlState === "NEG" ? "bg-red-950/40 text-red-300 border-red-500/60" :
+    "bg-amber-950/40 text-amber-300 border-amber-500/60";
   const pnlPctClr =
     pnlState === "POS" ? "text-emerald-300" :
     pnlState === "NEG" ? "text-red-300" :
-    "text-eyay-faint";
+    "text-amber-300";
+  // Kart tema renkleri — PnL durumuna göre
+  const cardBorderClr =
+    pnlState === "POS" ? "border-emerald-500/60" :
+    pnlState === "NEG" ? "border-red-500/60" :
+    "border-amber-500/60";
+  const cardBgClr =
+    pnlState === "POS" ? "bg-emerald-950/10" :
+    pnlState === "NEG" ? "bg-red-950/10" :
+    "bg-amber-950/10";
+  const accentBarClr =
+    pnlState === "POS" ? "bg-emerald-500/80" :
+    pnlState === "NEG" ? "bg-red-500/80" :
+    "bg-amber-500/80";
 
   // MANUEL / PAPER ENGINE badge
   const isManual = p.opened_by === "MANUAL";
@@ -1547,9 +1560,11 @@ function OpenPositionCard({
   })();
 
   return (
-    <article className="bg-eyay-raised/40 rounded-lg border border-eyay-border/50 overflow-hidden font-mono">
+    <article className={`relative rounded-xl border overflow-hidden font-mono shadow-sm transition-colors ${cardBorderClr} ${cardBgClr}`}>
+      {/* Sol accent bar — PnL durumunu anında gösterir */}
+      <div className={`absolute inset-y-0 left-0 w-[3px] ${accentBarClr}`} aria-hidden="true" />
       {/* ────────────── A) HEADER ────────────── */}
-      <header className="flex items-start justify-between gap-2 px-3 py-2.5 bg-eyay-surface/40 border-b border-eyay-border/40">
+      <header className="flex items-start justify-between gap-2 pl-3 pr-3 py-2.5 bg-black/20 border-b border-white/5">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className={`text-sm font-black ${sideTextClr}`}>
             {p.side === "LONG" ? "▲" : "▼"} {p.pair}
