@@ -75,15 +75,22 @@ interface TradingState {
 type BannerMode = "waiting" | "managing_position" | "contradiction" | "risk_alert" | "learning";
 
 interface AgentBanner {
-  mode:           BannerMode;
-  headline:       string;
-  main_view:      string;
-  top_signals:    string[];
-  contradictions: string[];
-  watch_next:     string[];
-  position_note:  string | null;
-  learning_note:  string | null;
-  updated_at:     string;
+  mode:                BannerMode;
+  headline:            string;
+  main_view:           string;
+  top_signals:         string[];
+  contradictions:      string[];
+  watch_next:          string[];
+  position_note:       string | null;
+  learning_note:       string | null;
+  updated_at:          string;
+  // FAZ 13 — piyasa fikri alanları
+  market_thought?:      string;
+  price_story?:         string;
+  event_story?:         string;
+  event_calendar_note?: string;
+  market_pricing_note?: string;
+  next_trigger?:        string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -528,6 +535,16 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
               </div>
             )}
 
+            {/* FAZ 13 — Piyasa fikri satırları (market_thought önce) */}
+            {banner?.market_thought && (
+              <div className="mt-3 p-3 rounded-lg bg-eyay-raised/50 border border-eyay-border/40 space-y-2">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
+                  Piyasa fikri
+                </p>
+                <p className="text-xs text-eyay-text leading-relaxed">{banner.market_thought}</p>
+              </div>
+            )}
+
             {/* Portföy kararı */}
             <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3 flex-wrap">
               <span className="text-[10px] font-mono text-eyay-faint">PORTFÖY KARARI</span>
@@ -547,6 +564,60 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
               </span>
             </div>
           </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              FAZ 13 — PIYASA BAĞLAMI: fiyat / takvim / tetikleyici
+             ════════════════════════════════════════════════════════════ */}
+          {banner && (banner.price_story || banner.event_calendar_note || banner.market_pricing_note || banner.next_trigger) && (
+            <section className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-5">
+              <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-3">
+                Piyasa bağlamı
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                {/* Fiyat hikayesi */}
+                {banner.price_story && (
+                  <div className="rounded-xl border border-eyay-border/60 bg-eyay-raised/40 p-3 space-y-1">
+                    <p className="text-[9px] font-mono text-eyay-blue uppercase tracking-widest">📈 Fiyat hikayesi</p>
+                    <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.price_story}</p>
+                  </div>
+                )}
+
+                {/* Olay takvimi */}
+                {banner.event_calendar_note && (
+                  <div className="rounded-xl border border-amber-800/40 bg-amber-950/10 p-3 space-y-1">
+                    <p className="text-[9px] font-mono text-amber-300 uppercase tracking-widest">📅 Olay takvimi</p>
+                    <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.event_calendar_note}</p>
+                  </div>
+                )}
+
+                {/* Piyasa neyi fiyatlıyor */}
+                {banner.market_pricing_note && (
+                  <div className="rounded-xl border border-eyay-border/60 bg-eyay-raised/40 p-3 space-y-1">
+                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">📊 Piyasa neyi fiyatlıyor?</p>
+                    <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.market_pricing_note}</p>
+                  </div>
+                )}
+
+                {/* Beklenen tetikleyici */}
+                {banner.next_trigger && (
+                  <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-3 space-y-1">
+                    <p className="text-[9px] font-mono text-emerald-400 uppercase tracking-widest">🎯 Beklenen tetikleyici</p>
+                    <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.next_trigger}</p>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Jeopolitik hikaye ayrı satır (varsa) */}
+              {banner.event_story && !banner.event_story.startsWith("Jeopolitik başlık yok") && (
+                <div className="mt-3 rounded-xl border border-red-800/40 bg-red-950/10 p-3 space-y-1">
+                  <p className="text-[9px] font-mono text-red-300 uppercase tracking-widest">🌐 Jeopolitik / savaş gündemi</p>
+                  <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.event_story}</p>
+                </div>
+              )}
+            </section>
+          )}
 
           {/* ════════════════════════════════════════════════════════════
               SON DAKİKA — ABD/İran/İsrail/Rusya/Çin savaş haberleri

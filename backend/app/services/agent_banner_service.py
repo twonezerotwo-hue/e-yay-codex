@@ -58,6 +58,7 @@ def _collect_context() -> dict[str, Any]:
         "prev_snapshot": None,
         "snapshot_decision": None,
         "prev_decision": None,
+        "snapshot_report": {},         # FAZ 13 — event calendar context için
         "latest_thesis": None,
         "thesis_safe": None,           # True | False | None
         "thesis_issues": [],           # critical/warning issue list
@@ -92,6 +93,7 @@ def _collect_context() -> dict[str, Any]:
             ctx["latest_snapshot"] = snaps[-1]
             report = snaps[-1].get("report") or {}
             ctx["snapshot_decision"] = report.get("decision")
+            ctx["snapshot_report"]   = report          # FAZ 13 — event context için
         if len(snaps) >= 2:
             ctx["prev_snapshot"] = snaps[-2]
             prev_report = snaps[-2].get("report") or {}
@@ -521,14 +523,31 @@ def build_agent_banner() -> dict[str, Any]:
     else:
         headline, main_view = _banner_waiting(ctx)
 
+    # FAZ 13 — Event calendar + piyasa fikri (audit; karar motorunu etkilemez)
+    event_ctx: dict[str, Any] = {}
+    try:
+        from app.services.event_calendar_context import (  # noqa: PLC0415
+            build_event_calendar_context as _build_event_ctx,
+        )
+        event_ctx = _build_event_ctx(ctx.get("snapshot_report") or {})
+    except Exception:  # noqa: BLE001
+        _log.debug("agent_banner: event_calendar_context unavailable")
+
     return {
-        "mode":           mode,
-        "headline":       headline,
-        "main_view":      main_view,
-        "top_signals":    _extract_top_signals(ctx, mode),
-        "contradictions": _extract_contradictions(ctx),
-        "watch_next":     _extract_watch_next(ctx),
-        "position_note":  _build_position_note(ctx),
-        "learning_note":  _build_learning_note(ctx),
-        "updated_at":     ctx["now"],
+        "mode":                mode,
+        "headline":            headline,
+        "main_view":           main_view,
+        "top_signals":         _extract_top_signals(ctx, mode),
+        "contradictions":      _extract_contradictions(ctx),
+        "watch_next":          _extract_watch_next(ctx),
+        "position_note":       _build_position_note(ctx),
+        "learning_note":       _build_learning_note(ctx),
+        "updated_at":          ctx["now"],
+        # FAZ 13 — piyasa fikri alanları
+        "market_thought":      event_ctx.get("market_thought", ""),
+        "price_story":         event_ctx.get("price_story", ""),
+        "event_story":         event_ctx.get("event_story", ""),
+        "event_calendar_note": event_ctx.get("event_calendar_note", ""),
+        "market_pricing_note": event_ctx.get("market_pricing_note", ""),
+        "next_trigger":        event_ctx.get("next_trigger", ""),
     }
