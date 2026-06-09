@@ -62,10 +62,28 @@ function detectKey(signal: string): string | null {
   return null;
 }
 
-/** Sayısal değeri ham strinden çıkar — "$61,000", "4.32%", "134,680/ton" gibi. */
+/**
+ * Sayısal değeri ham strinden çıkar.
+ * Desteklenen formatlar: "$61,000", "4.32%", "134,680/ton",
+ * "< $100", "> $58,712", "<= 104", ">= 0", "10Y-2Y = +0.92%"
+ */
 export function parseNumeric(raw: string): number | null {
   if (!raw || raw.trim() === "" || raw === "—" || raw === "-") return null;
-  const cleaned = raw.replace(/[$%,]/g, "").replace(/\/\w+$/, "").trim();
+
+  const cleaned = raw
+    .replace(/[<>]=?/g, "")   // < > <= >= comparator işaretleri
+    .replace(/→/g, "")        // ok işareti
+    .replace(/[$%,]/g, "")    // para birimi, yüzde, binlik ayraç
+    .replace(/\/\w+$/, "")    // /lb /ton /oz gibi birim son ekleri
+    .trim();
+
+  // "10Y-2Y = +0.92" gibi spread ifadelerinde "=" sonrasındaki değeri al
+  if (cleaned.includes("=")) {
+    const after = cleaned.split("=").pop()?.trim() ?? "";
+    const m = after.match(/[+-]?\d+(?:\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  }
+
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
 }

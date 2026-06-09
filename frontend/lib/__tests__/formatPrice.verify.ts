@@ -13,13 +13,57 @@ function assert(label: string, condition: boolean) {
   }
 }
 
-// ── parseNumeric ──────────────────────────────────────────────────────────
+// ── parseNumeric — temel ──────────────────────────────────────────────────
 assert("parseNumeric $61,000 → 61000", parseNumeric("$61,000") === 61000);
 assert("parseNumeric $61 → 61",        parseNumeric("$61")     === 61);
 assert("parseNumeric 99.78 → 99.78",   parseNumeric("99.78")   === 99.78);
 assert("parseNumeric 4.32% → 4.32",    parseNumeric("4.32%")   === 4.32);
 assert("parseNumeric 59109 → 59109",   parseNumeric("59109")   === 59109);
 assert("parseNumeric — → null",        parseNumeric("—")       === null);
+
+// ── parseNumeric — comparator threshold stringleri ────────────────────────
+assert("parseNumeric '< $100' → 100",     parseNumeric("< $100")    === 100);
+assert("parseNumeric '< 104' → 104",      parseNumeric("< 104")     === 104);
+assert("parseNumeric '> $58,712' → 58712",parseNumeric("> $58,712") === 58712);
+assert("parseNumeric '> $62.00' → 62",    parseNumeric("> $62.00")  === 62);
+assert("parseNumeric '>= 0' → 0",         parseNumeric(">= 0")      === 0);
+assert("parseNumeric '<= 104' → 104",     parseNumeric("<= 104")    === 104);
+// yield spread "=" ifadesi
+assert("parseNumeric '10Y-2Y = +0.92%' → 0.92",
+  parseNumeric("10Y-2Y = +0.92%") === 0.92);
+
+// ── Comparator threshold stringleri — backend gerçek formatlar ───────────
+// Brent: threshold "< $100"
+{
+  const r = checkConfirmationSanity("Brent petrol baskı altında", "$90.50", "< $100");
+  assert("Brent cmp: current_ok",       r.current.ok   === true);
+  assert("Brent cmp: threshold_ok",     r.threshold.ok === true);
+  assert("Brent cmp: final=ok",         r.final_status === "ok");
+}
+
+// DXY: threshold "< 104"
+{
+  const r = checkConfirmationSanity("DXY dolar gücü düşük", "99.5", "< 104");
+  assert("DXY cmp: current_ok",         r.current.ok   === true);
+  assert("DXY cmp: threshold_ok",       r.threshold.ok === true);
+  assert("DXY cmp: final=ok",           r.final_status === "ok");
+}
+
+// BTC: threshold "> $58,712"
+{
+  const r = checkConfirmationSanity("BTC destek üstünde", "$61,000", "> $58,712");
+  assert("BTC cmp: current_ok",         r.current.ok   === true);
+  assert("BTC cmp: threshold_ok",       r.threshold.ok === true);
+  assert("BTC cmp: final=ok",           r.final_status === "ok");
+}
+
+// XAG: threshold "> $62.00"
+{
+  const r = checkConfirmationSanity("Gümüş destek üstünde", "$68.60", "> $62.00");
+  assert("XAG cmp: current_ok",         r.current.ok   === true);
+  assert("XAG cmp: threshold_ok",       r.threshold.ok === true);
+  assert("XAG cmp: final=ok",           r.final_status === "ok");
+}
 
 // ── DXY ──────────────────────────────────────────────────────────────────
 {
