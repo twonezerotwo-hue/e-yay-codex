@@ -2444,6 +2444,53 @@ def _backup_state_file(reason: str = "manual") -> str | None:
     return str(backup_path)
 
 
+def archive_finalize_and_reset(
+    reason: str = "fresh_paper_account_keep_learning_memory",
+) -> dict[str, Any]:
+    """
+    1. Mevcut state'i arşivle (data/paper_trading_archives/).
+    2. Kapalı trade'leri mistake_memory'ye finalize et (duplicate önle).
+    3. Paper trading state'ini temiz $100k başlangıçla sıfırla.
+       weight_adjustments / training_history KORUNUR.
+       mistake_memory / learning_candidates / calibration / auto_tune DOKUNULMAZ.
+
+    PAPER_SAFE / NO_EXECUTION — gerçek emir yok.
+    """
+    from app.services.paper_account_archive import (  # noqa: PLC0415
+        archive_and_finalize_paper_state as _archive_finalize,
+    )
+    # 1. Snapshot + arşiv — lock dışında (_LOCK'u yeniden almaz)
+    snapshot = get_snapshot()
+    archive_result = _archive_finalize(snapshot, reason=reason)
+
+    # 2. Reset — _LOCK ile atomik
+    with _LOCK:
+        st = _load_state()
+        _ATTRIBUTION_SEEN_IDS.clear()
+        fresh = TradingState(
+            weight_adjustments=st.weight_adjustments,
+            training_history=st.training_history,
+        )
+        _save_state(fresh)
+
+    return {
+        "status":              "archived_and_reset",
+        "reason":              reason,
+        "archive_path":        archive_result["archive_path"],
+        "finalize_result":     archive_result["finalize_result"],
+        "starting_balance":    fresh.starting_balance,
+        "equity":              fresh.starting_balance,
+        "realized_pnl_usd":    0.0,
+        "unrealized_pnl_usd":  0.0,
+        "open_positions":      0,
+        "trade_count":         0,
+        "state_anomaly_active": False,
+        "protected_files":     archive_result["protected_files"],
+        "decision_permission": "NO_EXECUTION",
+        "execution_mode":      "PAPER_SAFE",
+    }
+
+
 def hard_reset_state(reason: str = "corrupt_state_manual_reset") -> dict[str, Any]:
     """Bozuk state'i temizle: önce backup, sonra TAM sıfırla.
 

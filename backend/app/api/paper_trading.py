@@ -259,6 +259,25 @@ def hard_reset_state(payload: dict[str, Any] = Body(default={})) -> dict:
     return result
 
 
+@router.post("/state/archive-and-reset", dependencies=[Depends(require_paper_safe)])
+def archive_and_reset(payload: dict[str, Any] = Body(default={})) -> dict:
+    """Arşivle + memory finalize + temiz $100k sıfırlama.
+
+    Adımlar:
+      1. Mevcut state'i data/paper_trading_archives/'a arşivle.
+      2. Kapalı trade'leri mistake_memory'ye finalize et (duplicate önle).
+      3. Paper trading state'ini $100k başlangıçla sıfırla.
+         weight_adjustments / training_history KORUNUR.
+         mistake_memory / learning_candidates / calibration / auto_tune DOKUNULMAZ.
+    """
+    reason = str(
+        payload.get("reason") or "fresh_paper_account_keep_learning_memory"
+    )
+    result = pts.archive_finalize_and_reset(reason=reason)
+    _invalidate_caches()
+    return result
+
+
 @router.post("/state/repair", dependencies=[Depends(require_paper_safe)])
 def repair_state(payload: dict[str, Any] = Body(default={})) -> dict:
     """Realized PnL'i sağlıklı trade'lerden yeniden hesapla.
