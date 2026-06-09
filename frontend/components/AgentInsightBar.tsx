@@ -3,91 +3,163 @@
 /**
  * Agent Insight Bar — sayfanın üstünde sticky bant.
  *
- * Kapalıyken: tek satırlık bant, rotation ile 5sn'de bir farklı insight.
- * Tıklayınca: TÜM SAYFAYI kaplayan dark overlay (modal) açılır,
- *             tüm insights net listelenir, arka plandaki dashboard gizlenir.
- *             ESC veya backdrop tıklayınca kapanır.
+ * Bant içeriği: yeni /agent/banner endpoint'inden dinamik, durum odaklı banner.
+ *   • mode=risk_alert       → kırmızı bant + anomali detayı
+ *   • mode=contradiction    → turuncu bant + thesis sanity uyarısı
+ *   • mode=managing_position→ yeşil bant + açık pozisyon özeti
+ *   • mode=learning         → yeşil bant + öğrenme adayı
+ *   • mode=waiting          → mavi/slate bant + son karar
  *
- * Groq'a istek YAPMAZ — saf analiz katmanı (eşik kıyaslamaları).
+ * Tıklayınca: AgentCommandCenter (pipeline analizi) açılır.
+ * ESC veya backdrop tıklayınca kapanır.
+ *
+ * Groq'a istek YAPMAZ — saf analiz katmanı.
+ * FAZ 10.1: /agent/banner (stored-data banner) birincil kaynak.
+ *           /agent/insight (pipeline insights) sadece modal için.
  */
 import { useEffect, useState } from "react";
 import AgentCommandCenter from "./AgentCommandCenter";
 import type { NewsHeadline } from "@/lib/types";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface AgentInsight {
-  severity:  "CRITICAL" | "WARNING" | "OPPORTUNITY" | "OBSERVATION";
-  headline:  string;
-  detail:    string;
+  severity:   "CRITICAL" | "WARNING" | "OPPORTUNITY" | "OBSERVATION";
+  headline:   string;
+  detail:     string;
   asset_code: string;
-  icon:      string;
+  icon:       string;
   generated_at: string;
 }
 
-const SEVERITY_STYLE: Record<AgentInsight["severity"], {
-  bg:        string;
-  border:    string;
-  text:      string;
-  dot:       string;
-  label:     string;
-  modalAccent: string;
+type BannerMode = "waiting" | "managing_position" | "contradiction" | "risk_alert" | "learning";
+
+interface AgentBanner {
+  mode:          BannerMode;
+  headline:      string;
+  main_view:     string;
+  top_signals:   string[];
+  contradictions: string[];
+  watch_next:    string[];
+  position_note: string | null;
+  learning_note: string | null;
+  updated_at:    string;
+}
+
+// ── Mode → stil eşlemesi ──────────────────────────────────────────────────────
+
+const MODE_STYLE: Record<BannerMode, {
+  bg:    string;
+  border: string;
+  text:  string;
+  dot:   string;
+  label: string;
 }> = {
-  CRITICAL:    {
-    bg: "bg-red-950/60",     border: "border-red-800/70",     text: "text-red-200",     dot: "bg-red-400",
-    label: "KRİTİK",  modalAccent: "from-red-900/40 to-red-950/20",
+  risk_alert: {
+    bg:     "bg-red-950/60",
+    border: "border-red-800/70",
+    text:   "text-red-200",
+    dot:    "bg-red-400",
+    label:  "RİSK UYARISI",
   },
-  WARNING:     {
-    bg: "bg-amber-950/50",   border: "border-amber-800/60",   text: "text-amber-200",   dot: "bg-amber-400",
-    label: "DİKKAT",  modalAccent: "from-amber-900/30 to-amber-950/10",
+  contradiction: {
+    bg:     "bg-amber-950/50",
+    border: "border-amber-800/60",
+    text:   "text-amber-200",
+    dot:    "bg-amber-400",
+    label:  "ÇELİŞKİ",
   },
-  OPPORTUNITY: {
-    bg: "bg-emerald-950/40", border: "border-emerald-800/60", text: "text-emerald-200", dot: "bg-emerald-400",
-    label: "FIRSAT",  modalAccent: "from-emerald-900/30 to-emerald-950/10",
+  managing_position: {
+    bg:     "bg-emerald-950/40",
+    border: "border-emerald-800/60",
+    text:   "text-emerald-200",
+    dot:    "bg-emerald-400",
+    label:  "POZİSYON",
   },
-  OBSERVATION: {
-    bg: "bg-eyay-raised",    border: "border-eyay-border",    text: "text-eyay-dim",    dot: "bg-eyay-blue/60",
-    label: "GÖZLEM",  modalAccent: "from-slate-900/40 to-slate-950/20",
+  learning: {
+    bg:     "bg-emerald-950/30",
+    border: "border-emerald-900/50",
+    text:   "text-emerald-300",
+    dot:    "bg-emerald-500",
+    label:  "ÖĞRENME",
+  },
+  waiting: {
+    bg:     "bg-eyay-raised",
+    border: "border-eyay-border",
+    text:   "text-eyay-dim",
+    dot:    "bg-eyay-blue/60",
+    label:  "BEKLİYOR",
   },
 };
 
-export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHeadline[] }) {
-  const [insights, setInsights] = useState<AgentInsight[]>([]);
-  const [idx,      setIdx]      = useState(0);
-  const [open,     setOpen]     = useState(false);   // modal mı açık?
-  const [loading,  setLoading]  = useState(true);
+// Fallback: eski insight'lardan severity → mode eşlemesi
+const SEVERITY_TO_MODE: Record<AgentInsight["severity"], BannerMode> = {
+  CRITICAL:    "risk_alert",
+  WARNING:     "contradiction",
+  OPPORTUNITY: "managing_position",
+  OBSERVATION: "waiting",
+};
 
-  // ── Backend polling
+// ── Bileşen ───────────────────────────────────────────────────────────────────
+
+export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHeadline[] }) {
+  // Banner endpoint (FAZ 10.1 — birincil)
+  const [banner,   setBanner]   = useState<AgentBanner | null>(null);
+  // Insight endpoint (sadece modal için)
+  const [insights, setInsights] = useState<AgentInsight[]>([]);
+  const [insIdx,   setInsIdx]   = useState(0);
+
+  const [open,    setOpen]    = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // ── Banner polling (birincil, 30sn)
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    async function loadBanner() {
       try {
-        const res = await fetch("/api/backend/agent/insight", { cache: "no-store" });
+        const res = await fetch("/api/backend/agent/banner", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const data: AgentBanner = await res.json();
         if (!cancelled) {
-          setInsights(data.insights || []);
+          setBanner(data);
           setLoading(false);
-          setIdx(0);
         }
       } catch {
+        // Banner endpoint başarısızsa loading'i kaldır ama banner null kalır
         if (!cancelled) setLoading(false);
       }
     }
-    load();
-    const interval = setInterval(load, 60_000);
-    return () => { cancelled = true; clearInterval(interval); };
+    loadBanner();
+    const id = setInterval(loadBanner, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  // ── Modal kapalıyken: insight rotation
+  // ── Insight polling (modal için, 60sn)
+  useEffect(() => {
+    let cancelled = false;
+    async function loadInsights() {
+      try {
+        const res = await fetch("/api/backend/agent/insight", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setInsights(data.insights || []);
+      } catch { /* silent */ }
+    }
+    loadInsights();
+    const id = setInterval(loadInsights, 60_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // ── Insight rotation (insight array'i varsa, modal kapalıyken)
   useEffect(() => {
     if (open || insights.length <= 1) return;
     const r = setInterval(() => {
-      setIdx(prev => (prev + 1) % insights.length);
+      setInsIdx(prev => (prev + 1) % insights.length);
     }, 5000);
     return () => clearInterval(r);
   }, [open, insights.length]);
 
-  // ── Modal açıkken: ESC ile kapat + body scroll lock + global event yayını
-  // (TradingTicker ve AutoRefresh modal açıkken gizlenir — sayfada agent dışında bir şey görünmez)
+  // ── Modal açıkken: ESC + body scroll lock + global event
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
@@ -103,6 +175,8 @@ export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHe
     };
   }, [open]);
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="sticky top-0 z-40 bg-eyay-surface/95 backdrop-blur-md border-b border-eyay-border shadow-lg shadow-black/30">
@@ -114,18 +188,22 @@ export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHe
     );
   }
 
-  if (insights.length === 0) return null;
+  // Banner yoksa insight'lardan fallback; ikisi de yoksa null
+  const stripMode: BannerMode = banner?.mode
+    ?? (insights[insIdx] ? SEVERITY_TO_MODE[insights[insIdx].severity] : null)
+    ?? "waiting";
+  const stripHeadline: string = banner?.headline
+    ?? insights[insIdx]?.headline
+    ?? "";
 
-  const cur = insights[idx];
-  const st  = SEVERITY_STYLE[cur.severity];
+  if (!stripHeadline) return null;
+
+  const st = MODE_STYLE[stripMode];
 
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════
-          KAPALI HAL — tek satır sticky bant (2x büyütülmüş)
-          Sayfa her zaman bu bandın ALTINDAN kayar — yüksek z-index + güçlü
-          backdrop-blur + alt gölge ile içerik bandın "içine giriyormuş" gibi
-          görünür (absorbe edilme efekti).
+          KAPALI HAL — tek satır sticky bant
          ═══════════════════════════════════════════════════════════════════ */}
       <div className={`sticky top-0 z-40 backdrop-blur-md border-b ${st.border} ${st.bg} shadow-xl shadow-black/40 relative`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
@@ -133,6 +211,7 @@ export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHe
             onClick={() => setOpen(true)}
             className="w-full flex items-center gap-4 group"
           >
+            {/* Agent badge */}
             <span className="shrink-0 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-black/30">
               <span className={`w-3 h-3 rounded-full ${st.dot} animate-pulse`} />
               <span className="text-base font-mono font-bold text-eyay-text uppercase tracking-widest">
@@ -140,30 +219,33 @@ export default function AgentInsightBar({ headlines = [] }: { headlines?: NewsHe
               </span>
             </span>
 
+            {/* Mode label */}
             <span className={`shrink-0 text-base font-mono font-black tracking-widest ${st.text}`}>
-              {st.label}{cur.icon && <span className="ml-1.5">{cur.icon}</span>}
+              {st.label}
             </span>
 
+            {/* Headline */}
             <span className={`flex-1 text-left text-lg font-medium truncate ${st.text}`}>
-              {cur.headline}
+              {stripHeadline}
             </span>
 
-            {insights.length > 1 && (
-              <span className="shrink-0 text-sm font-mono text-eyay-faint">
-                {idx + 1}/{insights.length}
+            {/* Banner'dan gelen extra context: watch_next veya top signal */}
+            {banner?.watch_next?.length ? (
+              <span className={`shrink-0 hidden sm:block text-sm font-mono max-w-[280px] truncate ${st.text} opacity-70`}>
+                {banner.watch_next[0]}
               </span>
-            )}
+            ) : null}
 
             <span className="shrink-0 text-sm font-mono text-eyay-faint group-hover:text-eyay-blue transition-colors">
-              tümünü gör ›
+              detay ›
             </span>
           </button>
         </div>
-        {/* İçeriğin banda "girdiği" hissini güçlendiren alt gradyan/fade */}
+        {/* Alt fade */}
         <div className="pointer-events-none absolute -bottom-6 left-0 right-0 h-6 bg-gradient-to-b from-black/30 to-transparent" />
       </div>
 
-      {/* AÇIK HAL — Agent Komut Merkezi */}
+      {/* AÇIK HAL — Agent Komut Merkezi (pipeline insights modalı) */}
       {open && <AgentCommandCenter onClose={() => setOpen(false)} headlines={headlines} />}
     </>
   );

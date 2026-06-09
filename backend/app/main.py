@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.agent_banner import router as agent_banner_router
 from app.api.agent_audit import router as agent_audit_router
 from app.api.agent_chart import router as agent_chart_router
 from app.api.agent_critique import router as agent_critique_router
@@ -31,6 +32,15 @@ from app.api.consensus import router as consensus_router
 from app.api.core_snapshots import jobs_router as core_jobs_router
 from app.api.core_snapshots import router as core_snapshots_router
 from app.api.health import router as health_router
+from app.api.hourly_snapshots import router as hourly_snapshots_router
+from app.api.learning_candidates import router as learning_candidates_router
+from app.api.mistake_memory import router as mistake_memory_router
+from app.api.auto_tune import router as auto_tune_router
+from app.api.weekly_calibration import router as weekly_calibration_router
+from app.api.learning_summary import router as learning_summary_router
+from app.api.scheduler import router as scheduler_router
+from app.api.system_health import router as system_health_router
+from app.api.position_rechecks import router as position_rechecks_router
 from app.api.paper_trading import router as paper_trading_router
 from app.api.market_strategist import router as market_strategist_router
 from app.api.paper_decision import router as paper_decision_router
@@ -127,6 +137,16 @@ app.include_router(core_snapshots_router, prefix=settings.api_prefix)
 app.include_router(core_jobs_router, prefix=settings.api_prefix)
 app.include_router(chart_patterns_router, prefix=settings.api_prefix)
 app.include_router(snapshot_replay_router, prefix=settings.api_prefix)
+app.include_router(hourly_snapshots_router, prefix=settings.api_prefix)
+app.include_router(position_rechecks_router, prefix=settings.api_prefix)
+app.include_router(learning_candidates_router, prefix=settings.api_prefix)
+app.include_router(mistake_memory_router, prefix=settings.api_prefix)
+app.include_router(auto_tune_router, prefix=settings.api_prefix)
+app.include_router(weekly_calibration_router, prefix=settings.api_prefix)
+app.include_router(learning_summary_router, prefix=settings.api_prefix)
+app.include_router(scheduler_router, prefix=settings.api_prefix)
+app.include_router(system_health_router, prefix=settings.api_prefix)
+app.include_router(agent_banner_router, prefix=settings.api_prefix)
 
 
 __all__ = [name for name in globals() if not name.startswith('_')]

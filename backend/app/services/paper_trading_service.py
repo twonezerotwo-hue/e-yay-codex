@@ -823,6 +823,19 @@ def _route_new_open_signal(
 
     NEUTRAL/OFFENSIVE → eski davranış: 60sn pending banner, reddedilmezse açılır.
     """
+    # FAZ 3 — Audit: agent thesis context (read-only; karar motorunu etkilemez)
+    from app.services.agent_thesis_context import (  # noqa: PLC0415
+        build_thesis_trade_context as _build_ctx,
+        load_latest_safe_thesis as _load_safe,
+    )
+    try:
+        signal_snapshot = {
+            **signal_snapshot,
+            "agent_thesis_context": _build_ctx(pair, _load_safe()),
+        }
+    except Exception:  # noqa: BLE001
+        pass  # audit enrichment hatası trade açılışını bloke etmez
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (
@@ -1629,6 +1642,7 @@ def tick_consensus(
         aggregate_agent_decision,
         decision_to_open_signal_extras,
     )
+    from app.services.auto_tune_override_reader import apply_auto_tune_modifiers
 
     with _LOCK:
         st = _load_state()
@@ -1746,6 +1760,19 @@ def tick_consensus(
                     _purge_stale_rejection_if_needed(st, pair, target, current_primary_tf)
 
             new_size = round(POSITION_SIZE * final_size_mult, 2)
+
+            # FAZ 7.5 — Auto-tune override (position_size_multiplier only)
+            # Override = küçük çarpan; side/direction değişmez; trade açmaz.
+            if target in ("LONG", "SHORT"):
+                try:
+                    _at = apply_auto_tune_modifiers(sig, target, final_size_mult)
+                    sig["auto_tune_context"] = _at["auto_tune_context"]
+                    if _at["auto_tune_context"].get("applied"):
+                        final_size_mult = _at["size_pct"]
+                        new_size = round(POSITION_SIZE * final_size_mult, 2)
+                except Exception:
+                    logger.exception("auto_tune_override: failed (ignored)")
+
             cur = st.positions.get(pair)
             pending = st.pending_orders.get(pair)
 

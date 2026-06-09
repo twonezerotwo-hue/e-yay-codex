@@ -17,6 +17,8 @@ import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
 import PaperTradingTicker from "@/components/PaperTradingTicker";
 import WarBreakingAlert from "@/components/WarBreakingAlert";
+import LearningPanel from "@/components/LearningPanel";
+import SystemHealthPanel from "@/components/SystemHealthPanel";
 import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
 // Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
@@ -121,6 +123,10 @@ export default async function HomePage() {
                   macro={data.report.macro_layer}
                   appetite={data.report.appetite_layer}
                 />
+                {/* FAZ 8 — Öğrenme & Auto-Tune özeti */}
+                <LearningPanel />
+                {/* FAZ 10 — Sistem sağlık özeti */}
+                <SystemHealthPanel />
               </div>
               <div className="sticky top-16 self-start">
                 <CatalystSidebar catalysts={data.report.upcoming_catalysts ?? []} />

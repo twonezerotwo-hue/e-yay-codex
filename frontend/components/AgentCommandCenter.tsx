@@ -3,12 +3,12 @@
 /**
  * Agent Komut Merkezi — modal içeriği.
  *
- * Insight + trading state + asset signals'i birleştirip aktif bir agent
- * görünümü verir: "ne düşünüyorum / ne yaptım / ne bekliyorum / ne kadar haklıydım".
- *
  * Veri kaynakları:
- *   /api/backend/agent/insight   → 8 proaktif gözlem
+ *   /api/backend/agent/banner    → dinamik mod/headline/signals/learning (FAZ 10.1)
+ *   /api/backend/agent/insight   → pipeline insights (yaklaşan tetikleyiciler + gözlemler)
  *   /api/backend/trading/state   → açık pozisyonlar + trade history + PnL
+ *
+ * PAPER_SAFE / NO_EXECUTION.
  */
 import { useEffect, useMemo, useState } from "react";
 import type { NewsHeadline } from "@/lib/types";
@@ -29,7 +29,7 @@ interface AgentInsight {
 interface InsightResponse {
   status: string;
   decision: string;
-  paper_decision_label?: string;  // disiplinli karar dili (0 pozisyon → KÜÇÜLT yok)
+  paper_decision_label?: string;
   generated_at: string;
   insights: AgentInsight[];
 }
@@ -69,13 +69,30 @@ interface TradingState {
   trades: Trade[];
   trade_count: number;
   traded_pairs: string[];
+  state_anomaly?: { active: boolean; reasons: string[] };
+}
+
+type BannerMode = "waiting" | "managing_position" | "contradiction" | "risk_alert" | "learning";
+
+interface AgentBanner {
+  mode:           BannerMode;
+  headline:       string;
+  main_view:      string;
+  top_signals:    string[];
+  contradictions: string[];
+  watch_next:     string[];
+  position_note:  string | null;
+  learning_note:  string | null;
+  updated_at:     string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styling
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SEV: Record<AgentInsight["severity"], { dot: string; text: string; bg: string; border: string; label: string }> = {
+const SEV: Record<AgentInsight["severity"], {
+  dot: string; text: string; bg: string; border: string; label: string
+}> = {
   CRITICAL:    { dot: "bg-red-400",     text: "text-red-300",     bg: "bg-red-950/30",     border: "border-red-800/50",     label: "KRİTİK"  },
   WARNING:     { dot: "bg-amber-400",   text: "text-amber-300",   bg: "bg-amber-950/30",   border: "border-amber-800/50",   label: "DİKKAT"  },
   OPPORTUNITY: { dot: "bg-emerald-400", text: "text-emerald-300", bg: "bg-emerald-950/30", border: "border-emerald-800/50", label: "FIRSAT"  },
@@ -83,37 +100,83 @@ const SEV: Record<AgentInsight["severity"], { dot: string; text: string; bg: str
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Narrative — agent'ın "şu an ne düşünüyorum" cümlesi (Groq'a istek YOK)
+// Narrative — banner endpoint'ten gelen veriye dayanır
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildNarrative(insights: AgentInsight[], trading: TradingState | null, decision: string): string {
+function buildNarrative(
+  banner: AgentBanner | null,
+  insights: AgentInsight[],
+  trading: TradingState | null,
+  decision: string,
+): string {
+  // ── Banner yüklendiyse: dinamik, moda özgü anlatı ─────────────────────────
+  if (banner) {
+    const parts: string[] = [];
+
+    if (banner.mode === "risk_alert") {
+      parts.push(banner.headline);
+      if (banner.main_view) parts.push(banner.main_view);
+      return parts.join(" · ");
+    }
+
+    if (banner.mode === "contradiction") {
+      parts.push(banner.headline);
+      if (banner.main_view) parts.push(banner.main_view);
+      return parts.join(" · ");
+    }
+
+    if (banner.mode === "managing_position") {
+      if (banner.main_view) parts.push(banner.main_view);
+      if (trading && trading.open_positions.length > 0) {
+        const pnl = trading.unrealized_pnl_usd;
+        const dir = pnl >= 0 ? "kâr" : "zarar";
+        parts.push(`Toplam açık PnL: ${dir} ${Math.abs(pnl).toFixed(0)} USD`);
+      }
+      return parts.join(". ") || banner.headline;
+    }
+
+    if (banner.mode === "learning") {
+      parts.push(banner.headline);
+      if (banner.main_view) parts.push(banner.main_view);
+      return parts.join(". ");
+    }
+
+    // waiting — pozisyon yok, gerçek neden
+    const isPlaceholder = !banner.main_view
+      || banner.main_view.startsWith("Henüz")
+      || banner.main_view === "Yeni trade için sinyal ve uygun market koşulları bekleniyor.";
+
+    if (!isPlaceholder) {
+      parts.push(`Pozisyon yok · ${banner.main_view}`);
+    } else {
+      parts.push("Pozisyon yok — aktif sinyal bekleniyor");
+    }
+    return parts.join(". ");
+  }
+
+  // ── Fallback: banner henüz yüklenmediyse minimal metin ────────────────────
   const crit = insights.filter(i => i.severity === "CRITICAL");
   const warn = insights.filter(i => i.severity === "WARNING");
   const opp  = insights.filter(i => i.severity === "OPPORTUNITY");
-
   const parts: string[] = [];
 
   if (crit.length > 0) {
-    parts.push(`Şu an ${crit.length} kritik sinyal görüyorum; en kritik olanı: ${crit[0].headline.split("—")[0].trim()}`);
-  } else if (warn.length >= 3) {
-    parts.push(`Birden fazla dikkat sinyali var (${warn.length}); piyasa rejimi geçişte olabilir`);
+    parts.push(`${crit.length} kritik sinyal: ${crit[0].headline.split("—")[0].trim()}`);
   } else if (warn.length > 0) {
-    parts.push(`Genel piyasa yapısı ${decision} kararına uygun; ${warn[0].headline.split("—")[0].trim()}`);
+    parts.push(warn[0].headline.split("—")[0].trim());
   } else if (opp.length > 0) {
-    parts.push(`Aktif kritik sinyal yok; ${opp.length} fırsat izleme listemde`);
-  } else {
-    parts.push(`Sistem stabil — mevcut ${decision} rejimi devam ediyor`);
+    parts.push(`${opp.length} fırsat sinyali izleniyor`);
+  } else if (decision) {
+    parts.push(`Aktif karar: ${decision}`);
   }
 
   if (trading && trading.open_positions.length > 0) {
-    const totalPnl = trading.unrealized_pnl_usd;
-    const direction = totalPnl >= 0 ? "kâr" : "zarar";
-    parts.push(`Şu an ${trading.open_positions.length} açık pozisyonum var, toplam ${direction} ${Math.abs(totalPnl).toFixed(0)} USD`);
-  } else if (trading) {
-    parts.push(`Hiç pozisyon açmadım — uygun sinyal bekliyorum`);
+    const pnl = trading.unrealized_pnl_usd;
+    const dir = pnl >= 0 ? "kâr" : "zarar";
+    parts.push(`${trading.open_positions.length} pozisyon açık, ${dir} ${Math.abs(pnl).toFixed(0)} USD`);
   }
 
-  return parts.join(". ") + ".";
+  return parts.join(" · ") || "Sistem stabil";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,9 +198,6 @@ function fmtUsd(n: number): string {
 }
 
 // ── SON DAKİKA — savaş haberleri filtresi ────────────────────────────────────
-// Sadece ABD / İran / İsrail / Rusya / Çin eksenli ASKERİ-SİYASİ gerilim
-// haberleri "SON DAKİKA" olarak öne çıkar — diğer jeopolitik/makro haberler
-// NewsPanel'de zaten gösteriliyor, burada tekrar etmesin.
 const WAR_COUNTRY_PATTERNS: RegExp[] = [
   /\b(ABD|USA?|United States|America[n]?)\b/i,
   /\b(İran|Iran)\b/i,
@@ -145,7 +205,6 @@ const WAR_COUNTRY_PATTERNS: RegExp[] = [
   /\b(Rusya|Russia[n]?)\b/i,
   /\b(Çin|China|Chinese)\b/i,
 ];
-
 const WAR_KEYWORD_PATTERNS: RegExp[] = [
   /sava[şs]/i, /\bwar\b/i, /sald[ıi]r[ıi]/i, /\battack/i, /\bstrike/i,
   /çat[ıi][şs]ma/i, /\bconflict/i, /asker[îi]?/i, /\bmilitary\b/i,
@@ -153,26 +212,64 @@ const WAR_KEYWORD_PATTERNS: RegExp[] = [
   /\binvasion\b/i, /ate[şs]kes/i, /\bceasefire\b/i, /cephe/i, /\bfront\b/i,
   /nükleer/i, /\bnuclear\b/i, /tırman/i, /\bescalat/i,
 ];
-
 function isWarHeadline(h: NewsHeadline): boolean {
   const text = `${h.title ?? ""} ${h.title_tr ?? ""}`;
-  const hasCountry = WAR_COUNTRY_PATTERNS.some(p => p.test(text));
-  const hasWarKeyword = WAR_KEYWORD_PATTERNS.some(p => p.test(text));
-  return hasCountry && hasWarKeyword;
+  return WAR_COUNTRY_PATTERNS.some(p => p.test(text)) && WAR_KEYWORD_PATTERNS.some(p => p.test(text));
+}
+
+// Banner mode → bant rengi
+function modeColor(mode: BannerMode): string {
+  switch (mode) {
+    case "risk_alert":         return "text-red-300";
+    case "contradiction":      return "text-amber-300";
+    case "managing_position":  return "text-emerald-300";
+    case "learning":           return "text-emerald-300";
+    default:                   return "text-eyay-blue";
+  }
+}
+function modeBorder(mode: BannerMode): string {
+  switch (mode) {
+    case "risk_alert":         return "border-red-800/50 bg-gradient-to-br from-red-950/20 to-transparent";
+    case "contradiction":      return "border-amber-800/40 bg-gradient-to-br from-amber-950/15 to-transparent";
+    case "managing_position":  return "border-emerald-800/40 bg-gradient-to-br from-emerald-950/15 to-transparent";
+    case "learning":           return "border-emerald-900/30 bg-gradient-to-br from-emerald-950/10 to-transparent";
+    default:                   return "border-eyay-blue/30 bg-gradient-to-br from-eyay-blue/10 to-eyay-blue/0";
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AgentCommandCenter({ onClose, headlines = [] }: { onClose: () => void; headlines?: NewsHeadline[] }) {
-  const [insights, setInsights]   = useState<AgentInsight[]>([]);
-  const [decision, setDecision]   = useState("");
+export default function AgentCommandCenter({ onClose, headlines = [] }: {
+  onClose: () => void;
+  headlines?: NewsHeadline[];
+}) {
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [banner,    setBanner]    = useState<AgentBanner | null>(null);
+  const [insights,  setInsights]  = useState<AgentInsight[]>([]);
+  const [decision,  setDecision]  = useState("");
   const [insightAt, setInsightAt] = useState<string>("");
-  const [trading, setTrading]     = useState<TradingState | null>(null);
-  const [now, setNow]             = useState(Date.now());
+  const [trading,   setTrading]   = useState<TradingState | null>(null);
+  const [now,       setNow]       = useState(Date.now());
 
-  // Polling — modal açıkken 15sn'de bir
+  // ── Banner polling (FAZ 10.1 — birincil, 30sn)
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/backend/agent/banner", { cache: "no-store" });
+        if (!res.ok) return;
+        const data: AgentBanner = await res.json();
+        if (!cancelled) setBanner(data);
+      } catch { /* silent */ }
+    }
+    load();
+    const id = setInterval(load, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // ── Insight + trading state polling (modal açıkken 15sn)
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -182,10 +279,9 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
           fetch("/api/backend/trading/state",  { cache: "no-store" }),
         ]);
         const iData: InsightResponse = await iRes.json();
-        const tData: TradingState     = await tRes.json();
+        const tData: TradingState    = await tRes.json();
         if (!cancelled) {
           setInsights(iData.insights || []);
-          // Disiplinli karar dili önce; yoksa regime report kararına düş
           setDecision(iData.paper_decision_label || iData.decision || "");
           setInsightAt(iData.generated_at || "");
           setTrading(tData);
@@ -197,70 +293,92 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
     return () => { cancelled = true; clearInterval(i); };
   }, []);
 
-  // Anlık saat tic-toc (timeAgo için)
+  // Anlık saat tic-toc
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(t);
   }, []);
 
-  // ── Türetilen veri
+  // ── Türetilen veri ─────────────────────────────────────────────────────────
   const narrative = useMemo(
-    () => buildNarrative(insights, trading, decision),
-    [insights, trading, decision]
+    () => buildNarrative(banner, insights, trading, decision),
+    [banner, insights, trading, decision],
   );
 
   const activeDecisions = useMemo(() => {
     if (!trading) return [];
     return trading.open_positions.map(p => ({
       type: "POSITION" as const,
-      pair: p.pair,
-      side: p.side,
-      pnl_usd: p.pnl_usd,
-      pnl_pct: p.pnl_pct,
-      entry_price: p.entry_price,
-      current_price: p.current_price,
-      entry_at: p.entry_at,
-      last_signal: p.last_signal,
+      pair: p.pair, side: p.side,
+      pnl_usd: p.pnl_usd, pnl_pct: p.pnl_pct,
+      entry_price: p.entry_price, current_price: p.current_price,
+      entry_at: p.entry_at, last_signal: p.last_signal,
     }));
   }, [trading]);
 
-  // YAKLAŞAN TETİKLEYİCİLER — level proximity insight'ları + OPPORTUNITY'ler
   const triggers = useMemo(() => {
     return insights.filter(
-      i => i.severity === "WARNING" && /yakın|eşiğinde/.test(i.headline)
+      i => (i.severity === "WARNING" && /yakın|eşiğinde/.test(i.headline))
         || i.severity === "OPPORTUNITY"
     ).slice(0, 5);
   }, [insights]);
 
-  // SON DAKİKA — ABD/İran/İsrail/Rusya/Çin eksenli savaş haberleri (max 4)
   const warHeadlines = useMemo(
     () => headlines.filter(isWarHeadline).slice(0, 4),
-    [headlines]
+    [headlines],
   );
 
-  // GÖZLEMLER — geriye kalan (cluster, news, rotation, vs.)
   const observations = useMemo(() => {
-    const usedHeadlines = new Set(triggers.map(t => t.headline));
-    return insights.filter(i => !usedHeadlines.has(i.headline));
+    const used = new Set(triggers.map(t => t.headline));
+    return insights.filter(i => !used.has(i.headline));
   }, [insights, triggers]);
 
-  // DOĞRULUK skoru
   const accuracy = useMemo(() => {
     if (!trading || trading.trades.length === 0) {
       return { winRate: null as number | null, wins: 0, losses: 0, totalRealized: 0 };
     }
-    const wins = trading.trades.filter(t => t.pnl_usd > 0).length;
+    const wins   = trading.trades.filter(t => t.pnl_usd > 0).length;
     const losses = trading.trades.filter(t => t.pnl_usd < 0).length;
-    const total = wins + losses;
+    const total  = wins + losses;
     return {
       winRate: total > 0 ? (wins / total) * 100 : null,
-      wins,
-      losses,
+      wins, losses,
       totalRealized: trading.realized_pnl_usd,
     };
   }, [trading]);
 
-  // ── Render
+  // Boş pozisyon mesajı — banner'dan gerçek neden
+  const noPositionReason: string = useMemo(() => {
+    if (banner?.mode === "waiting" && banner.main_view
+        && !banner.main_view.startsWith("Henüz")
+        && banner.main_view !== "Yeni trade için sinyal ve uygun market koşulları bekleniyor."
+        && banner.main_view !== "Pozisyon yok — aktif sinyal bekleniyor") {
+      return banner.main_view;
+    }
+    return "Şu an açık pozisyon yok — aktif sinyal bekliyorum";
+  }, [banner]);
+
+  // Banner'dan filtreli top_signals (kayıt yok olanları çıkar)
+  const topSignals = useMemo(
+    () => (banner?.top_signals ?? []).filter(s => s !== "kayıt yok").slice(0, 3),
+    [banner],
+  );
+
+  const contradictions = useMemo(
+    () => banner?.contradictions ?? [],
+    [banner],
+  );
+
+  const watchNext = useMemo(
+    () => (banner?.watch_next ?? []).slice(0, 3),
+    [banner],
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  const bannerMode: BannerMode = banner?.mode ?? "waiting";
+  const narrativeBorderCls = modeBorder(bannerMode);
+  const narrativeTextCls   = modeColor(bannerMode);
+
   return (
     <div
       className="fixed inset-0 z-[200] flex flex-col"
@@ -270,10 +388,11 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
       <div
         className="flex-1 overflow-y-auto"
         style={{ backgroundColor: "#0a0a0f" }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
       >
+
         {/* ════════════════════════════════════════════════════════════════
-            ÜST BAŞLIK — AGENT STATÜSÜ
+            ÜST BAŞLIK
            ════════════════════════════════════════════════════════════════ */}
         <header
           className="sticky top-0 z-10 border-b border-eyay-border"
@@ -281,14 +400,12 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
         >
           <div className="max-w-5xl mx-auto px-6 py-5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              {/* Canlı agent indicator */}
               <div className="relative">
                 <div className="w-12 h-12 rounded-2xl bg-eyay-raised border border-eyay-border flex items-center justify-center text-2xl">
                   🤖
                 </div>
                 <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-eyay-bg animate-pulse" />
               </div>
-
               <div>
                 <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -297,14 +414,18 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
                 <h2 className="text-lg font-bold text-eyay-text mt-0.5 leading-tight">
                   Komut Merkezi
                 </h2>
-                {insightAt && (
+                {(insightAt || banner?.updated_at) && (
                   <p className="text-[10px] font-mono text-eyay-faint mt-0.5">
-                    Son tarama {timeAgo(insightAt)} · piyasa izleniyor
+                    Son tarama {timeAgo(banner?.updated_at ?? insightAt)}
+                    {banner && (
+                      <span className={`ml-2 uppercase font-bold ${narrativeTextCls}`}>
+                        · {banner.mode.replace("_", " ")}
+                      </span>
+                    )}
                   </p>
                 )}
               </div>
             </div>
-
             <button
               onClick={onClose}
               className="w-9 h-9 rounded-lg border border-eyay-border bg-eyay-surface hover:border-eyay-blue/50 hover:text-eyay-blue text-eyay-dim flex items-center justify-center transition-colors"
@@ -315,30 +436,110 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
           </div>
         </header>
 
+        {/* ════════════════════════════════════════════════════════════════
+            RISK ALERT — paper anomaly veya contradiction modu (bant)
+           ════════════════════════════════════════════════════════════════ */}
+        {banner && (banner.mode === "risk_alert" || banner.mode === "contradiction") && (
+          <div className={`border-b px-6 py-3 ${
+            banner.mode === "risk_alert"
+              ? "border-red-800/60 bg-red-950/20"
+              : "border-amber-800/40 bg-amber-950/15"
+          }`}>
+            <div className="max-w-5xl mx-auto flex items-center gap-3">
+              <span className={`w-2 h-2 rounded-full animate-pulse ${
+                banner.mode === "risk_alert" ? "bg-red-400" : "bg-amber-400"
+              }`} />
+              <span className={`text-xs font-mono font-bold ${
+                banner.mode === "risk_alert" ? "text-red-300" : "text-amber-300"
+              }`}>
+                {banner.headline}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
 
           {/* ════════════════════════════════════════════════════════════
-              ŞU AN NE DÜŞÜNÜYORUM (canlı narrative)
+              ŞU AN NE DÜŞÜNÜYORUM — banner'dan dinamik içerik
              ════════════════════════════════════════════════════════════ */}
-          <section className="rounded-2xl border border-eyay-blue/30 bg-gradient-to-br from-eyay-blue/10 to-eyay-blue/0 p-5">
+          <section className={`rounded-2xl border p-5 ${narrativeBorderCls}`}>
             <div className="flex items-center gap-2 mb-2">
               <span className="text-base">🧠</span>
-              <p className="text-[10px] font-mono text-eyay-blue uppercase tracking-widest font-bold">
+              <p className={`text-[10px] font-mono uppercase tracking-widest font-bold ${narrativeTextCls}`}>
                 Şu an ne düşünüyorum
               </p>
             </div>
+
+            {/* Narrative */}
             <p className="text-sm text-eyay-text leading-relaxed">{narrative}</p>
-            <div className="mt-3 pt-3 border-t border-eyay-blue/15 flex items-center gap-3 flex-wrap">
+
+            {/* Top signals */}
+            {topSignals.length > 0 && (
+              <div className="mt-3 space-y-1">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                  Öne çıkan sinyaller
+                </p>
+                {topSignals.map((sig, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs font-mono text-eyay-dim">
+                    <span className={`shrink-0 mt-0.5 ${narrativeTextCls}`}>›</span>
+                    <span>{sig}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Contradictions */}
+            {contradictions.length > 0 && (
+              <div className="mt-3 space-y-1">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                  Çelişkiler
+                </p>
+                {contradictions.map((c, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs font-mono text-amber-400/80">
+                    <span className="shrink-0 mt-0.5">⚡</span>
+                    <span>{c}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Watch next */}
+            {watchNext.length > 0 && (
+              <div className="mt-3 space-y-1">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                  İzlenecekler
+                </p>
+                {watchNext.map((w, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs font-mono text-eyay-dim">
+                    <span className="shrink-0 mt-0.5 text-eyay-blue">📌</span>
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Learning note */}
+            {banner?.learning_note && (
+              <div className="mt-3 p-2.5 rounded-lg bg-eyay-raised/60 border border-eyay-border/40">
+                <p className="text-[10px] font-mono text-sky-300 leading-relaxed">
+                  🧠 {banner.learning_note}
+                </p>
+              </div>
+            )}
+
+            {/* Portföy kararı */}
+            <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3 flex-wrap">
               <span className="text-[10px] font-mono text-eyay-faint">PORTFÖY KARARI</span>
               <span className={`text-xs font-mono font-black px-2 py-0.5 rounded border ${
-                decision === "AÇIL" ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
-                : decision === "KORU" ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
-                : decision === "KAPAT" ? "border-red-700 text-red-300 bg-red-950/30"
-                : decision === "İŞLEM YOK / SİSTEM DURDU" ? "border-red-700 text-red-300 bg-red-950/40"
-                : decision === "KÜÇÜLT" ? "border-orange-700 text-orange-300 bg-orange-950/30"
-                : decision === "POZİSYON ARTIRMA" ? "border-yellow-700 text-yellow-300 bg-yellow-950/25"
-                : decision === "İZLE" ? "border-blue-700 text-blue-300 bg-blue-950/25"
-                : decision === "YENİ RİSK AÇMA / BEKLE" ? "border-amber-700 text-amber-300 bg-amber-950/30"
+                decision === "AÇIL"                    ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
+                : decision === "KORU"                  ? "border-emerald-700 text-emerald-300 bg-emerald-950/30"
+                : decision === "KAPAT"                 ? "border-red-700    text-red-300    bg-red-950/30"
+                : decision === "İŞLEM YOK / SİSTEM DURDU" ? "border-red-700 text-red-300  bg-red-950/40"
+                : decision === "KÜÇÜLT"                ? "border-orange-700 text-orange-300 bg-orange-950/30"
+                : decision === "POZİSYON ARTIRMA"      ? "border-yellow-700 text-yellow-300 bg-yellow-950/25"
+                : decision === "İZLE"                  ? "border-blue-700   text-blue-300   bg-blue-950/25"
+                : decision === "YENİ RİSK AÇMA / BEKLE"? "border-amber-700 text-amber-300  bg-amber-950/30"
                 : decision === "POZİSYON YOK · NÖTR İZLEME" ? "border-slate-700 text-slate-300 bg-slate-950/30"
                 : "border-amber-700 text-amber-300 bg-amber-950/30"
               }`}>
@@ -414,9 +615,21 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
             </div>
 
             {activeDecisions.length === 0 ? (
-              <p className="text-xs text-eyay-faint italic text-center py-6">
-                Şu an açık pozisyon yok — uygun sinyal bekliyorum
-              </p>
+              <div className="py-6 text-center space-y-1.5">
+                <p className="text-xs text-eyay-faint italic">
+                  {noPositionReason}
+                </p>
+                {/* Eğer banner'dan watch_next varsa burada da göster */}
+                {watchNext.length > 0 && (
+                  <div className="flex flex-wrap justify-center gap-2 mt-2">
+                    {watchNext.map((w, i) => (
+                      <span key={i} className="text-[9px] font-mono border border-eyay-border rounded px-2 py-0.5 text-eyay-dim">
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="space-y-2">
                 {activeDecisions.map((d, i) => (
@@ -439,7 +652,6 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
                         </p>
                       </div>
                     </div>
-
                     <div className="text-right">
                       <p className={`text-sm font-mono font-black ${d.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                         {fmtUsd(d.pnl_usd)}
@@ -497,7 +709,7 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
           )}
 
           {/* ════════════════════════════════════════════════════════════
-              GENEL GÖZLEMLER (cluster, news, rotation)
+              GENEL GÖZLEMLER
              ════════════════════════════════════════════════════════════ */}
           {observations.length > 0 && (
             <section className="rounded-2xl border border-eyay-border bg-eyay-surface p-5">
@@ -540,7 +752,7 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
           )}
 
           {/* ════════════════════════════════════════════════════════════
-              DOĞRULUK SKORU — geçmiş trade'ler
+              DOĞRULUK SKORU
              ════════════════════════════════════════════════════════════ */}
           {trading && trading.trade_count > 0 && (
             <section className="rounded-2xl border border-eyay-border bg-eyay-surface p-5">
@@ -550,52 +762,39 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
                   Sinyal Doğruluğum
                 </p>
               </div>
-
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Stat
                   label="WIN RATE"
                   value={accuracy.winRate !== null ? `${accuracy.winRate.toFixed(0)}%` : "—"}
                   color={accuracy.winRate !== null && accuracy.winRate >= 50 ? "text-emerald-300" : "text-amber-300"}
                 />
-                <Stat
-                  label="KAZANAN"
-                  value={String(accuracy.wins)}
-                  color="text-emerald-300"
-                />
-                <Stat
-                  label="KAYBEDEN"
-                  value={String(accuracy.losses)}
-                  color="text-red-300"
-                />
+                <Stat label="KAZANAN"  value={String(accuracy.wins)}   color="text-emerald-300" />
+                <Stat label="KAYBEDEN" value={String(accuracy.losses)} color="text-red-300" />
                 <Stat
                   label="REALIZED PNL"
                   value={fmtUsd(accuracy.totalRealized)}
                   color={accuracy.totalRealized >= 0 ? "text-emerald-300" : "text-red-300"}
                 />
               </div>
-
-              {/* Son kapanan trade'ler */}
               {trading.trades.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-eyay-border/40">
                   <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-2">
                     SON KAPANANLAR
                   </p>
                   <div className="space-y-1.5">
-                    {trading.trades.slice(-5).reverse().map((t) => (
+                    {trading.trades.slice(-5).reverse().map(t => (
                       <div key={t.id} className="flex items-center justify-between text-[10px] font-mono bg-eyay-raised rounded px-2 py-1.5">
                         <div className="flex items-center gap-2">
-                          <span className={`${t.side === "LONG" ? "text-emerald-400" : "text-red-400"}`}>
+                          <span className={t.side === "LONG" ? "text-emerald-400" : "text-red-400"}>
                             {t.side === "LONG" ? "▲" : "▼"}
                           </span>
                           <span className="text-eyay-text">{t.pair}</span>
                           <span className="text-eyay-faint">{timeAgo(t.exit_at)}</span>
                           <span className="text-eyay-faint">{t.duration_min}dk</span>
                         </div>
-                        <div className="text-right">
-                          <span className={`font-bold ${t.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                            {fmtUsd(t.pnl_usd)} ({t.pnl_pct >= 0 ? "+" : ""}{t.pnl_pct.toFixed(2)}%)
-                          </span>
-                        </div>
+                        <span className={`font-bold ${t.pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {fmtUsd(t.pnl_usd)} ({t.pnl_pct >= 0 ? "+" : ""}{t.pnl_pct.toFixed(2)}%)
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -607,17 +806,14 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
           {/* Footer */}
           <div className="pt-2 border-t border-eyay-border/40">
             <p className="text-[10px] font-mono text-eyay-faint text-center leading-relaxed">
-              🤖 Agent canlı izleme · 15 sn'de bir tazelenir · saf analiz (Groq'a istek yok)<br />
+              🤖 Agent canlı izleme · banner 30sn · insight 15sn · saf analiz (Groq yok)<br />
               PAPER_SAFE · NO_EXECUTION · tüm gerçek kararlar insana aittir
             </p>
           </div>
         </div>
 
         {/* Alt sabit kapat çubuğu */}
-        <div
-          className="sticky bottom-0 border-t border-eyay-border"
-          style={{ backgroundColor: "#15151c" }}
-        >
+        <div className="sticky bottom-0 border-t border-eyay-border" style={{ backgroundColor: "#15151c" }}>
           <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
             <span className="text-[10px] font-mono text-eyay-faint">
               ESC veya backdrop tıkla → kapat
