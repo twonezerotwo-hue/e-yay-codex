@@ -1866,7 +1866,12 @@ function buildTechnicalSummary(openSignal: Position["open_signal"]): string {
   }
   const parts: string[] = [];
   if (openSignal.technical) parts.push(openSignal.technical);
-  if (openSignal.confluence) parts.push(`Confluence: ${openSignal.confluence}`);
+  if (openSignal.confluence) {
+    const confStr = typeof openSignal.confluence === "string"
+      ? openSignal.confluence
+      : JSON.stringify(openSignal.confluence);
+    parts.push(`Confluence: ${confStr}`);
+  }
   return parts.join(" · ");
 }
 
