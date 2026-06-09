@@ -25,6 +25,70 @@ interface RiskPlan {
   explanation?: string;
 }
 
+// FAZ 3: Add Plan / Manual Override / Opening Explanation tipleri
+interface AddLevel {
+  id: string;
+  trigger_type: "price_pullback" | "breakout_confirm" | "pnl_drawdown" | "momentum_reclaim" | "manual";
+  trigger_price?: number | null;
+  trigger_pnl_pct?: number | null;
+  add_size_usd: number;
+  condition_text: string;
+  status: "waiting" | "ready" | "filled" | "blocked" | "manual_required";
+  requires_manual_confirmation?: boolean;
+  created_at?: string;
+  filled_at?: string | null;
+}
+
+interface AddPlanControl {
+  allowed: boolean;
+  status: "allowed" | "manual_required" | "blocked" | "risk_warning";
+  reason: string;
+  risk_checks?: Record<string, boolean>;
+  warnings?: string[];
+  before_add?: { size_usd: number; average_entry: number; stop_loss: number; take_profit: number; rr: number; max_loss_usd?: number | null };
+  after_add_preview?: { size_usd: number; average_entry: number; stop_loss: number; take_profit: number; rr: number; max_loss_usd?: number | null };
+  manual_risk_override_active?: boolean;
+  evaluated_at?: string;
+}
+
+interface AddPlan {
+  mode: "off" | "manual" | "paper_auto";
+  current_size_usd: number;
+  max_position_size_usd: number;
+  remaining_add_capacity_usd: number;
+  average_entry_price: number;
+  add_levels: AddLevel[];
+  last_control_result?: AddPlanControl | null;
+  created_at?: string;
+}
+
+interface ManualRiskOverride {
+  is_manual_override: boolean;
+  previous_stop_loss: number;
+  previous_take_profit: number;
+  new_stop_loss: number;
+  new_take_profit: number;
+  previous_rr: number;
+  new_rr: number;
+  changed_at: string;
+  changed_by: "user";
+  reason: string;
+  auto_plan_backup?: { stop_loss: number; take_profit: number; rr: number; atr_multiplier?: number | null };
+  warnings?: string[];
+}
+
+interface OpeningExplanation {
+  primary_reason: string;
+  was_pattern_primary_reason: boolean;
+  pattern_summary: string;
+  pattern_notes: string[];
+  supporting_layers: Record<string, string>;
+  opposing_signals: string[];
+  why_trade_opened_anyway: string;
+  invalidation_summary: string[];
+  generated_at?: string;
+}
+
 interface Position {
   pair: string;
   side: "LONG" | "SHORT";
@@ -40,6 +104,21 @@ interface Position {
   //   "PAPER"  → otomatik pending → 60sn'lik onay penceresi sonunda açıldı
   //   "MANUAL" → 'Açılmaya Hazır' kuyruğundan kullanıcı elle açtı
   opened_by?: "PAPER" | "MANUAL";
+  // FAZ 3
+  add_plan?: AddPlan;
+  manual_risk_override?: ManualRiskOverride;
+  opening_explanation?: OpeningExplanation;
+  average_entry_price?: number;
+  // Open signal — teknik/haber/timeframe karar kaynağı
+  open_signal?: {
+    technical?: string;
+    confluence?: string;
+    multi_tf?: string;
+    timeframe_decision?: Record<string, any>;  // 15m/1h/4h/1d ayrıntıları
+    pattern?: string;
+    news?: string[];
+    aggression_context?: string;
+  };
 }
 
 interface ChartPatternSummary {
@@ -77,6 +156,12 @@ interface ManualReadyTrade {
   fingerprint?: string;
 }
 
+interface StateAnomaly {
+  active: boolean;
+  reasons: string[];
+  action: "OK" | "REPAIR_OR_RESET_REQUIRED";
+}
+
 interface TradingState {
   starting_balance: number;
   equity: number;
@@ -89,6 +174,7 @@ interface TradingState {
   trade_count: number;
   last_event: TradeEvent | null;
   last_event_at: string | null;
+  state_anomaly?: StateAnomaly;
 }
 
 interface AlertEvent {
@@ -309,9 +395,74 @@ export default function PaperTradingTicker() {
   const pendingOrders = state.pending_orders ?? [];
   const manualReadyTrades = state.manual_ready_trades ?? [];
   const showWidget = !agentOpen;
+  const anomalyActive = !!state.state_anomaly?.active;
   const equityPct = ((state.equity - state.starting_balance) / state.starting_balance) * 100;
   const dailyColor = state.daily_pnl_usd >= 0 ? "text-emerald-300" : "text-red-300";
   const equityColor = equityPct >= 0 ? "text-emerald-400" : "text-red-400";
+
+  // Anomaly banner — açık pozisyon varsa kartların ALTINA, yoksa stats üstüne.
+  // Tek satır kompakt; reset/repair butonları inline.
+  const handleAnomalyReset = async () => {
+    if (!window.confirm(
+      "Paper trading state TAM SIFIRLANACAK. Önce backup alınır.\n\nDevam edilsin mi?",
+    )) return;
+    try {
+      const r = await fetch("/api/backend/trading/state/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "ui_manual_reset" }),
+        cache: "no-store",
+      });
+      if (r.ok) {
+        const body = await r.json();
+        window.alert(`Reset tamam.\nBackup: ${body.backup_path ?? "(yok)"}\nYeni equity: $${body.equity ?? 100000}`);
+        await loadState();
+      } else {
+        window.alert(`Reset başarısız: HTTP ${r.status}`);
+      }
+    } catch (e) {
+      window.alert(`Reset hatası: ${String(e).slice(0, 200)}`);
+    }
+  };
+  const handleAnomalyRepair = async (dryRun: boolean) => {
+    try {
+      const r = await fetch("/api/backend/trading/state/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dry_run: dryRun }),
+        cache: "no-store",
+      });
+      const body = await r.json();
+      if (!r.ok) {
+        window.alert(`Repair HTTP ${r.status}: ${JSON.stringify(body).slice(0, 200)}`);
+        return;
+      }
+      if (body.status === "repair_not_safe") {
+        window.alert("Repair güvenli değil (tüm trade kayıtları bozuk).\nReset gerekli.");
+        return;
+      }
+      const summary = [
+        `${dryRun ? "Dry-run" : "Apply"} sonucu:`,
+        `  Eski realized: $${body.old_realized_pnl}`,
+        `  Yeni realized: $${body.corrected_realized_pnl}`,
+        `  Yeni equity:   $${body.new_equity}`,
+        `  Sağlıklı trade: ${body.sane_trade_count}`,
+        `  Anomalous trade: ${body.anomalous_trade_count}`,
+        body.backup_path ? `  Backup: ${body.backup_path}` : "",
+      ].filter(Boolean).join("\n");
+      window.alert(summary);
+      if (!dryRun) await loadState();
+    } catch (e) {
+      window.alert(`Repair hatası: ${String(e).slice(0, 200)}`);
+    }
+  };
+  const anomalyBanner = anomalyActive && state.state_anomaly ? (
+    <StateAnomalyBanner
+      anomaly={state.state_anomaly}
+      onReset={handleAnomalyReset}
+      onRepair={handleAnomalyRepair}
+    />
+  ) : null;
 
   const rejectPendingOrder = async (pair: string) => {
     try {
@@ -372,27 +523,38 @@ export default function PaperTradingTicker() {
             className="bg-eyay-surface border border-eyay-border rounded-xl shadow-card px-3 py-2 hover:border-eyay-blue/40 transition-colors"
           >
             <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Equity</p>
-                <p className={`font-mono font-black text-sm leading-tight ${equityColor}`}>
-                  ${state.equity.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                </p>
-              </div>
+              {anomalyActive ? (
+                <div className="text-right">
+                  <p className="text-[8px] font-mono text-red-300 uppercase tracking-wider font-bold">⚠ Anomaly</p>
+                  <p className="font-mono font-black text-sm leading-tight text-red-400">
+                    Reset / Repair
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-right">
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Equity</p>
+                    <p className={`font-mono font-black text-sm leading-tight ${equityColor}`}>
+                      ${state.equity.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
 
-              <div className="w-px h-8 bg-eyay-border" />
+                  <div className="w-px h-8 bg-eyay-border" />
 
-              <div className="text-right">
-                <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Gunluk</p>
-                <p className={`font-mono font-bold text-sm leading-tight ${dailyColor}`}>
-                  {fmtUsd(state.daily_pnl_usd)}
-                </p>
-              </div>
+                  <div className="text-right">
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Günlük</p>
+                    <p className={`font-mono font-bold text-sm leading-tight ${dailyColor}`}>
+                      {fmtUsd(state.daily_pnl_usd)}
+                    </p>
+                  </div>
+                </>
+              )}
 
               {state.open_positions.length > 0 && (
                 <>
                   <div className="w-px h-8 bg-eyay-border" />
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Acik</p>
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Açık</p>
                     <p className="font-mono font-bold text-sm leading-tight text-eyay-blue">
                       {state.open_positions.length}
                     </p>
@@ -440,18 +602,27 @@ export default function PaperTradingTicker() {
                   overscroll-contain: panel içeriği üst/alt sınıra ulaştığında
                   scroll arkadaki dashboard'a "zincirlenmesin" (scroll chaining). */}
               <div className="overflow-y-auto overscroll-contain p-3 space-y-2">
+              {anomalyActive && state.open_positions.length === 0 && anomalyBanner}
               <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-eyay-border/40">
                 <div>
                   <p className="text-[8px] font-mono text-eyay-faint">REALIZED</p>
-                  <p className={`text-xs font-mono font-bold ${state.realized_pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {fmtUsd(state.realized_pnl_usd)}
-                  </p>
+                  {anomalyActive ? (
+                    <p className="text-xs font-mono font-bold text-eyay-faint italic">— gizli —</p>
+                  ) : (
+                    <p className={`text-xs font-mono font-bold ${state.realized_pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {fmtUsd(state.realized_pnl_usd)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[8px] font-mono text-eyay-faint">UNREALIZED</p>
-                  <p className={`text-xs font-mono font-bold ${state.unrealized_pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {fmtUsd(state.unrealized_pnl_usd)}
-                  </p>
+                  {anomalyActive ? (
+                    <p className="text-xs font-mono font-bold text-eyay-faint italic">— gizli —</p>
+                  ) : (
+                    <p className={`text-xs font-mono font-bold ${state.unrealized_pnl_usd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      {fmtUsd(state.unrealized_pnl_usd)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[8px] font-mono text-eyay-faint">TRADES</p>
@@ -462,7 +633,7 @@ export default function PaperTradingTicker() {
               {state.open_positions.length > 0 ? (
                 <div>
                   <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1.5">
-                    Acik Pozisyonlar
+                    Açık Pozisyonlar
                   </p>
                   <div className="space-y-2">
                     {state.open_positions.map(p => (
@@ -472,15 +643,26 @@ export default function PaperTradingTicker() {
                         pattern={patterns[p.pair]}
                         isClosing={closing === p.pair}
                         onClose={() => handleManualClose(p.pair)}
+                        onRefresh={async () => {
+                          try {
+                            const res = await fetch("/api/backend/trading/state", { cache: "no-store" });
+                            if (res.ok) setState(await res.json());
+                          } catch { /* sessiz */ }
+                        }}
                       />
                     ))}
                   </div>
                 </div>
               ) : (
                 <p className="text-[10px] font-mono text-eyay-faint italic py-1.5 text-center">
-                  Acik pozisyon yok
+                  Açık pozisyon yok
                 </p>
               )}
+
+              {/* Anomaly banner — açık pozisyon varsa kartların ALTINA gelir
+                  (öncelik açık pozisyondur). Açık pozisyon yokken zaten yukarıda
+                  gösteriliyor (stats grid'in üstünde). */}
+              {anomalyActive && state.open_positions.length > 0 && anomalyBanner}
 
               {pendingOrders.length > 0 && (
                 <div className="pt-2 border-t border-eyay-border/40 space-y-1.5">
@@ -640,6 +822,80 @@ export default function PaperTradingTicker() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STATE ANOMALY BANNER
+// Realized PnL / equity başlangıç bakiyenin kat kat üzerinde, ya da günlük PnL
+// %50'yi aşıyorsa: paper trading state corrupt sayılır. UI burada banner basar,
+// yeni trade açılışı backend tarafından engellenir; kullanıcı reset veya
+// dry-run/apply repair seçebilir.
+// ─────────────────────────────────────────────────────────────────────────────
+function StateAnomalyBanner({
+  anomaly,
+  onReset,
+  onRepair,
+}: {
+  anomaly: StateAnomaly;
+  onReset: () => Promise<void>;
+  onRepair: (dryRun: boolean) => Promise<void>;
+}) {
+  const [detailOpen, setDetailOpen] = useState(false);
+  return (
+    <div className="rounded border border-red-700/60 bg-red-950/30 px-2 py-1.5 text-[10px] font-mono">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-red-200 font-bold whitespace-nowrap">
+          ⚠ Paper PnL paused
+        </span>
+        <span className="text-red-200/70 truncate">· State check required</span>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={onReset}
+            className="text-[9px] px-1.5 py-0.5 rounded border border-red-700/60 text-red-200 hover:bg-red-900/40"
+          >
+            Reset
+          </button>
+          <button
+            onClick={() => onRepair(true)}
+            className="text-[9px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
+          >
+            Repair
+          </button>
+          <button
+            onClick={() => setDetailOpen((v) => !v)}
+            className="text-[9px] px-1.5 py-0.5 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text"
+          >
+            Detay {detailOpen ? "▴" : "▾"}
+          </button>
+        </div>
+      </div>
+      {detailOpen && (
+        <div className="mt-1.5 pt-1.5 border-t border-red-800/40 space-y-1">
+          {anomaly.reasons.length > 0 && (
+            <ul className="text-[9px] text-red-100/80 list-disc list-inside space-y-0.5">
+              {anomaly.reasons.slice(0, 4).map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => onRepair(true)}
+              className="text-[9px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
+            >
+              Dry-run Repair
+            </button>
+            <button
+              onClick={() => onRepair(false)}
+              className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-700/60 text-emerald-200 hover:bg-emerald-950/30"
+            >
+              Apply Repair
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // OPEN POSITION CARD
 // Açık pozisyon kartı — 4 bölüm:
 //   A) Header  : asset, side, status badge (MANUEL/PAPER), PnL badge, Kapat
@@ -650,17 +906,518 @@ export default function PaperTradingTicker() {
 // Mobil: tek kolon. Desktop (sm+): B & C yan yana 2-col grid.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// FAZ 3: Position management helpers — küçük ve odaklı (UI'da debug panel YOK)
+
+function fmtUsdSigned(n: number): string {
+  return `${n >= 0 ? "+" : ""}$${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+}
+
+function StatusBadge({ status }: { status: AddPlanControl["status"] | AddLevel["status"] }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    allowed:         { cls: "border-emerald-700/60 bg-emerald-950/40 text-emerald-300", label: "Uygun" },
+    ready:           { cls: "border-emerald-700/60 bg-emerald-950/40 text-emerald-300", label: "Hazır" },
+    filled:          { cls: "border-sky-700/60 bg-sky-950/40 text-sky-300",             label: "Dolduruldu" },
+    waiting:         { cls: "border-eyay-border bg-eyay-raised/60 text-eyay-faint",     label: "Bekliyor" },
+    manual_required: { cls: "border-amber-700/60 bg-amber-950/40 text-amber-300",       label: "Manuel Onay" },
+    risk_warning:    { cls: "border-amber-700/60 bg-amber-950/40 text-amber-300",       label: "Riskli" },
+    blocked:         { cls: "border-red-700/60 bg-red-950/40 text-red-300",             label: "Bloklu" },
+  };
+  const m = map[status] ?? { cls: "border-eyay-border text-eyay-faint", label: status };
+  return (
+    <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${m.cls}`}>
+      {m.label}
+    </span>
+  );
+}
+
+async function _readJSON(res: Response): Promise<any> {
+  // İstek başarısız olsa bile JSON parse'a girip detail görmek istiyoruz
+  try {
+    return await res.json();
+  } catch {
+    return { __parse_error: true, status_code: res.status };
+  }
+}
+
+async function _wrap(res: Response): Promise<any> {
+  const body = await _readJSON(res);
+  if (!res.ok) {
+    // FastAPI 422 → body.detail (str | list[{msg, loc}]) · 404/500 → body.detail
+    let msg: string;
+    if (typeof body?.detail === "string") {
+      msg = body.detail;
+    } else if (Array.isArray(body?.detail) && body.detail.length > 0) {
+      msg = body.detail.map((d: any) => d?.msg || JSON.stringify(d)).join(" · ");
+    } else if (body?.__parse_error) {
+      msg = "Sunucu yanıtı okunamadı";
+    } else {
+      msg = JSON.stringify(body).slice(0, 200);
+    }
+    // status: "http_error" + reason: HTTP code + msg — caller bu alanları gösterir
+    return {
+      status: "http_error",
+      http_status: res.status,
+      reason: `HTTP ${res.status}: ${msg}` + (
+        res.status === 404
+          ? " · Backend yeniden başlatılması gerekebilir (yeni endpoint)"
+          : ""
+      ),
+    };
+  }
+  return body;
+}
+
+async function postJSON(url: string, body: unknown): Promise<any> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    return await _wrap(res);
+  } catch (e) {
+    return { status: "network_error", reason: `Ağ hatası: ${String(e).slice(0, 140)}` };
+  }
+}
+
+async function patchJSON(url: string, body: unknown): Promise<any> {
+  try {
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+    return await _wrap(res);
+  } catch (e) {
+    return { status: "network_error", reason: `Ağ hatası: ${String(e).slice(0, 140)}` };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AddToPositionModal — manuel ekleme
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ADD_PRESETS = [500, 1000, 2000, 5000];
+const ADD_REASONS = [
+  { value: "support_reaction",     label: "Destekten tepki" },
+  { value: "average_down",         label: "Ortalama düşürme" },
+  { value: "breakout_confirm",     label: "Kırılım teyidi" },
+  { value: "momentum_reclaim",     label: "Momentum geri alımı" },
+  { value: "manual_strategy",      label: "Manuel strateji" },
+  { value: "other",                label: "Diğer" },
+];
+
+function AddToPositionModal({
+  pair, position, onClose, onAdded,
+}: {
+  pair: string;
+  position: Position;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [size, setSize] = useState<number>(500);
+  const [customSize, setCustomSize] = useState<string>("");
+  const [reason, setReason] = useState<string>(ADD_REASONS[0].value);
+  const [preview, setPreview] = useState<AddPlanControl | null>(null);
+  const [busy, setBusy] = useState<boolean>(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const effectiveSize = customSize ? Number(customSize) || 0 : size;
+
+  // Preview her input değişikliğinde yeniden fetch et (debounce light)
+  useEffect(() => {
+    if (effectiveSize <= 0) { setPreview(null); return; }
+    let cancel = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await postJSON(
+          `/api/backend/trading/positions/${pair}/add/preview`,
+          { add_size_usd: effectiveSize, mode: "manual" },
+        );
+        if (!cancel && r?.control) setPreview(r.control);
+      } catch { /* sessiz */ }
+    }, 250);
+    return () => { cancel = true; clearTimeout(t); };
+  }, [effectiveSize, pair]);
+
+  async function submit() {
+    if (effectiveSize <= 0) { setErr("Geçerli bir miktar girin"); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await postJSON(
+        `/api/backend/trading/positions/${pair}/add`,
+        { add_size_usd: effectiveSize, reason, mode: "manual" },
+      );
+      if (r?.status === "added") {
+        onAdded();
+        onClose();
+      } else if (r?.status === "rejected") {
+        setErr(r?.control?.reason || "Risk gate engelledi");
+      } else {
+        setErr(r?.reason || r?.status || "Bilinmeyen hata");
+      }
+    } catch (e) {
+      setErr(String(e).slice(0, 140));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const beforeRR = preview?.before_add?.rr;
+  const afterRR = preview?.after_add_preview?.rr;
+  const beforeAvg = preview?.before_add?.average_entry;
+  const afterAvg = preview?.after_add_preview?.average_entry;
+  const beforeSize = preview?.before_add?.size_usd;
+  const afterSize = preview?.after_add_preview?.size_usd;
+  const maxLossBefore = preview?.before_add?.max_loss_usd;
+  const maxLossAfter = preview?.after_add_preview?.max_loss_usd;
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-eyay-surface border border-eyay-border rounded-xl max-w-md w-full p-4 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between">
+          <h3 className="text-sm font-mono font-bold text-eyay-text">
+            Manuel Ekle · {position.side} {pair}
+          </h3>
+          <button onClick={onClose} className="text-eyay-faint hover:text-eyay-text text-xs">✕</button>
+        </header>
+
+        {/* Miktar preset */}
+        <div>
+          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Eklenecek miktar</p>
+          <div className="flex flex-wrap gap-1.5">
+            {ADD_PRESETS.map(v => (
+              <button
+                key={v}
+                onClick={() => { setSize(v); setCustomSize(""); }}
+                className={`text-[10px] font-mono px-2 py-1 rounded border ${
+                  (!customSize && size === v)
+                    ? "border-eyay-blue bg-eyay-blue/20 text-eyay-blue"
+                    : "border-eyay-border text-eyay-faint hover:text-eyay-text"
+                }`}
+              >
+                ${v}
+              </button>
+            ))}
+            <input
+              type="number"
+              value={customSize}
+              onChange={(e) => setCustomSize(e.target.value)}
+              placeholder="Özel"
+              className="text-[10px] font-mono px-2 py-1 rounded border border-eyay-border bg-eyay-raised text-eyay-text w-20"
+            />
+          </div>
+        </div>
+
+        {/* Sebep */}
+        <div>
+          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Ekleme nedeni</p>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full text-[11px] font-mono bg-eyay-raised border border-eyay-border rounded px-2 py-1 text-eyay-text"
+          >
+            {ADD_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+
+        {/* Önizleme */}
+        {preview && (
+          <div className="rounded border border-eyay-border bg-eyay-raised/50 p-2 space-y-1 text-[10px] font-mono">
+            <div className="flex items-center justify-between">
+              <span className="text-eyay-faint">Durum</span>
+              <StatusBadge status={preview.status} />
+            </div>
+            {beforeSize != null && afterSize != null && (
+              <div className="flex justify-between">
+                <span className="text-eyay-faint">Boyut</span>
+                <span className="text-eyay-text">${beforeSize.toLocaleString()} → ${afterSize.toLocaleString()}</span>
+              </div>
+            )}
+            {beforeAvg != null && afterAvg != null && (
+              <div className="flex justify-between">
+                <span className="text-eyay-faint">Ortalama entry</span>
+                <span className="text-eyay-text">{beforeAvg.toFixed(4)} → {afterAvg.toFixed(4)}</span>
+              </div>
+            )}
+            {beforeRR != null && afterRR != null && (
+              <div className="flex justify-between">
+                <span className="text-eyay-faint">R / R</span>
+                <span className={`font-bold ${afterRR < 1 ? "text-red-300" : afterRR < beforeRR ? "text-amber-300" : "text-emerald-300"}`}>
+                  1 : {beforeRR.toFixed(2)} → 1 : {afterRR.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {maxLossBefore != null && maxLossAfter != null && (
+              <div className="flex justify-between">
+                <span className="text-eyay-faint">Max kayıp</span>
+                <span className="text-red-300">{fmtUsdSigned(-maxLossBefore)} → {fmtUsdSigned(-maxLossAfter)}</span>
+              </div>
+            )}
+            {preview.warnings && preview.warnings.length > 0 && (
+              <div className="text-amber-300 pt-1 border-t border-eyay-border/40">
+                ⚠ {preview.warnings.join(" · ")}
+              </div>
+            )}
+            {preview.reason && (
+              <p className="text-eyay-dim italic pt-1 border-t border-eyay-border/40">{preview.reason}</p>
+            )}
+          </div>
+        )}
+
+        {err && <p className="text-[10px] text-red-300">{err}</p>}
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 text-[11px] font-mono py-1.5 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text"
+          >
+            İptal
+          </button>
+          <button
+            onClick={submit}
+            disabled={busy || !preview?.allowed}
+            className="flex-1 text-[11px] font-mono py-1.5 rounded border border-emerald-700 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
+          >
+            {busy ? "Ekleniyor..." : "Onayla ve Ekle"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ManualRiskOverrideModal — SL/TP düzenleme
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RISK_REASONS = [
+  { value: "tighten_stop",      label: "Stop'u sıkılaştırmak istiyorum" },
+  { value: "earlier_profit",    label: "Karı daha erken almak istiyorum" },
+  { value: "structure_based",   label: "Teknik destek/direnç seviyesine göre ayarladım" },
+  { value: "volatility_change", label: "Volatilite arttı" },
+  { value: "manual_reduce_risk", label: "Manuel risk azaltma" },
+  { value: "post_add_adjust",   label: "Parçalı alım sonrası planı güncelliyorum" },
+  { value: "other",             label: "Diğer" },
+];
+
+function ManualRiskOverrideModal({
+  pair, position, onClose, onSaved,
+}: {
+  pair: string;
+  position: Position;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [sl, setSl] = useState<string>(String(position.stop_loss || ""));
+  const [tp, setTp] = useState<string>(String(position.take_profit || ""));
+  const [reason, setReason] = useState<string>(RISK_REASONS[0].value);
+  const [busy, setBusy] = useState<boolean>(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Türkçe locale comma desteği: "92,3282" → "92.3282"
+  const _parseLocaleNum = (s: string) => Number(String(s).replace(",", "."));
+  const slNum = _parseLocaleNum(sl) || 0;
+  const tpNum = _parseLocaleNum(tp) || 0;
+  const entry = position.average_entry_price || position.entry_price;
+  const risk = Math.abs(entry - slNum);
+  const reward = Math.abs(tpNum - entry);
+  const newRR = risk > 0 ? reward / risk : 0;
+  const slPct = entry > 0 ? Math.abs(((slNum - entry) / entry) * 100) : 0;
+  const tpPct = entry > 0 ? Math.abs(((tpNum - entry) / entry) * 100) : 0;
+  const dirOK = position.side === "LONG"
+    ? (slNum < entry && entry < tpNum)
+    : (tpNum < entry && entry < slNum);
+
+  async function submit() {
+    if (!dirOK) { setErr(`Yön hatalı: ${position.side} için SL/TP konumu yanlış`); return; }
+    if (slNum <= 0 || tpNum <= 0) { setErr("SL ve TP pozitif olmalı"); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await patchJSON(
+        `/api/backend/trading/positions/${pair}/risk-plan`,
+        { new_stop_loss: slNum, new_take_profit: tpNum, reason },
+      );
+      if (r?.status === "overridden") {
+        onSaved();
+        onClose();
+      } else {
+        setErr(r?.reason || r?.status || "Bilinmeyen hata");
+      }
+    } catch (e) {
+      setErr(String(e).slice(0, 140));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetAuto() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await postJSON(
+        `/api/backend/trading/positions/${pair}/risk-plan/reset`, {},
+      );
+      if (r?.status === "reset") {
+        onSaved();
+        onClose();
+      } else if (r?.status === "no_override") {
+        onClose();
+      } else {
+        setErr(r?.reason || r?.status || "Bilinmeyen hata");
+      }
+    } catch (e) {
+      setErr(String(e).slice(0, 140));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[300] bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-eyay-surface border border-eyay-border rounded-xl max-w-md w-full p-4 space-y-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between">
+          <h3 className="text-sm font-mono font-bold text-eyay-text">
+            SL/TP Düzenle · {position.side} {pair}
+          </h3>
+          <button onClick={onClose} className="text-eyay-faint hover:text-eyay-text text-xs">✕</button>
+        </header>
+
+        <div className="space-y-2 text-[11px] font-mono">
+          <div className="flex justify-between text-eyay-faint">
+            <span>Entry (ortalama)</span>
+            <span className="text-eyay-text">{entry.toFixed(4)}</span>
+          </div>
+          <div className="flex justify-between text-eyay-faint">
+            <span>Mevcut SL</span>
+            <span className="text-red-300">{position.stop_loss.toFixed(4)}</span>
+          </div>
+          <div className="flex justify-between text-eyay-faint">
+            <span>Mevcut TP</span>
+            <span className="text-emerald-300">{position.take_profit.toFixed(4)}</span>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni SL</p>
+          <input
+            type="number"
+            value={sl}
+            onChange={(e) => setSl(e.target.value)}
+            className="w-full text-[11px] font-mono bg-eyay-raised border border-eyay-border rounded px-2 py-1 text-eyay-text"
+          />
+        </div>
+        <div>
+          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni TP</p>
+          <input
+            type="number"
+            value={tp}
+            onChange={(e) => setTp(e.target.value)}
+            className="w-full text-[11px] font-mono bg-eyay-raised border border-eyay-border rounded px-2 py-1 text-eyay-text"
+          />
+        </div>
+
+        <div className="rounded border border-eyay-border bg-eyay-raised/50 p-2 space-y-1 text-[10px] font-mono">
+          <div className="flex justify-between">
+            <span className="text-eyay-faint">Stop mesafesi</span>
+            <span className={slPct < 0.5 ? "text-amber-300" : "text-eyay-text"}>
+              {position.side === "LONG" ? "-" : "+"}{slPct.toFixed(2)}%
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-eyay-faint">Hedef mesafesi</span>
+            <span className={tpPct < 0.5 ? "text-amber-300" : "text-eyay-text"}>
+              {position.side === "LONG" ? "+" : "-"}{tpPct.toFixed(2)}%
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-eyay-faint">Yeni R/R</span>
+            <span className={`font-bold ${newRR < 1 ? "text-red-300" : newRR < 1.5 ? "text-amber-300" : "text-emerald-300"}`}>
+              1 : {newRR.toFixed(2)}
+            </span>
+          </div>
+          {!dirOK && (
+            <p className="text-red-300 pt-1 border-t border-eyay-border/40">
+              ⚠ {position.side} pozisyonu için SL/TP yön sırası hatalı
+            </p>
+          )}
+          {newRR < 1 && dirOK && (
+            <p className="text-red-300 pt-1 border-t border-eyay-border/40">
+              ⚠ R/R 1:1 altında — yüksek risk
+            </p>
+          )}
+        </div>
+
+        <div>
+          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Değişiklik nedeni</p>
+          <select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="w-full text-[11px] font-mono bg-eyay-raised border border-eyay-border rounded px-2 py-1 text-eyay-text"
+          >
+            {RISK_REASONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+
+        {err && <p className="text-[10px] text-red-300">{err}</p>}
+
+        <div className="flex gap-2">
+          {position.manual_risk_override?.is_manual_override && (
+            <button
+              onClick={resetAuto}
+              disabled={busy}
+              className="flex-1 text-[10px] font-mono py-1.5 rounded border border-sky-700 bg-sky-950/40 text-sky-300 hover:bg-sky-900/40 disabled:opacity-40"
+            >
+              Otomatik Plana Dön
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="flex-1 text-[11px] font-mono py-1.5 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text"
+          >
+            İptal
+          </button>
+          <button
+            onClick={submit}
+            disabled={busy || !dirOK}
+            className="flex-1 text-[11px] font-mono py-1.5 rounded border border-emerald-700 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
+          >
+            {busy ? "Kaydediliyor..." : "Onayla"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OpenPositionCard({
   position: p,
   pattern,
   isClosing,
   onClose,
+  onRefresh,
 }: {
   position: Position;
   pattern?: ChartPatternSummary;
   isClosing: boolean;
   onClose: () => void;
+  onRefresh: () => void;
 }) {
+  const [addOpen, setAddOpen]   = useState(false);
+  const [riskOpen, setRiskOpen] = useState(false);
+  const [explExpanded, setExplExpanded] = useState(false);
+  // Hotfix accordion'ları — default kapalı. Kullanıcı talebi:
+  //   ilk bakışta açık pozisyonun temel bilgileri görünür kalmalı;
+  //   pozisyon boyutu/SL-TP düzenleme ve açılma sebebi ihtiyaç hâlinde açılır.
+  const [addPlanOpen, setAddPlanOpen]   = useState(false);
+  const [explanOpen, setExplanOpen]     = useState(false);
   const fmt2 = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
   const fmt0 = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   const pctFromEntry = (level: number) =>
@@ -745,28 +1502,28 @@ function OpenPositionCard({
   return (
     <article className="bg-eyay-raised/40 rounded-lg border border-eyay-border/50 overflow-hidden font-mono">
       {/* ────────────── A) HEADER ────────────── */}
-      <header className="flex items-start justify-between gap-2 px-2.5 py-2 bg-eyay-surface/40 border-b border-eyay-border/40">
-        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+      <header className="flex items-start justify-between gap-2 px-3 py-2.5 bg-eyay-surface/40 border-b border-eyay-border/40">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className={`text-sm font-black ${sideTextClr}`}>
             {p.side === "LONG" ? "▲" : "▼"} {p.pair}
           </span>
-          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sideBadgeClr}`}>
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sideBadgeClr}`}>
             {p.side}
           </span>
           <span
-            className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sourceBadgeClr}`}
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sourceBadgeClr}`}
             title={sourceTooltip}
           >
-            {isManual ? "MANUEL AÇILDI" : "PAPER ENGINE"}
+            {isManual ? "MANUEL" : "PAPER"}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <div
-            className={`text-right px-1.5 py-0.5 rounded border ${pnlBadgeClr}`}
+            className={`text-right px-2 py-1 rounded border ${pnlBadgeClr}`}
             title="Açılış fiyatından bu yana gerçekleşmemiş kâr/zarar."
           >
-            <span className="block text-[10px] font-bold leading-none">{fmtUsd(p.pnl_usd)}</span>
-            <span className="block text-[8px] leading-none opacity-90">
+            <span className="block text-sm font-black leading-tight">{fmtUsd(p.pnl_usd)}</span>
+            <span className="block text-[10px] leading-tight opacity-90">
               {p.pnl_pct >= 0 ? "+" : ""}{p.pnl_pct.toFixed(2)}%
             </span>
           </div>
@@ -774,64 +1531,59 @@ function OpenPositionCard({
             onClick={onClose}
             disabled={isClosing}
             title="Pozisyonu anlık fiyattan elle kapat"
-            className="text-[8px] font-bold border border-red-800/40 text-red-300/80 hover:text-red-100 hover:bg-red-900/40 hover:border-red-600/60 px-1.5 py-1 rounded transition-colors disabled:opacity-40 leading-tight whitespace-nowrap"
+            className="text-[9px] font-bold border border-red-800/50 text-red-300 hover:text-red-100 hover:bg-red-900/40 hover:border-red-600/60 px-2 py-1 rounded transition-colors disabled:opacity-40 leading-tight whitespace-nowrap"
           >
-            {isClosing ? "···" : (
-              <span className="flex flex-col items-center gap-0.5">
-                <span>Manuel</span>
-                <span>Kapat</span>
-              </span>
-            )}
+            {isClosing ? "···" : "Kapat"}
           </button>
         </div>
       </header>
 
       {/* ────────────── B + C : 2-col on desktop, 1-col on mobile ────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5">
         {/* B) Pozisyon Özeti */}
-        <section className="bg-eyay-surface/30 rounded p-2 border border-eyay-border/30">
-          <h4 className="text-[8px] uppercase tracking-wider text-eyay-faint mb-1.5">
+        <section className="bg-eyay-surface/30 rounded-md p-2.5 border border-eyay-border/40">
+          <h4 className="text-[9px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
             Pozisyon Özeti
           </h4>
-          <dl className="space-y-0.5 text-[10px]">
-            <CardRow label="Entry" value={fmt2(p.entry_price)} valueClass="text-eyay-text" />
+          <dl className="space-y-1.5 text-[11px]">
+            <CardRow label="Entry" value={fmt2(p.entry_price)} valueClass="text-eyay-text font-semibold" />
             <CardRow
-              label="Current PnL"
-              value={`${p.pnl_pct >= 0 ? "+" : ""}${p.pnl_pct.toFixed(2)}%`}
-              valueClass={pnlPctClr + " font-bold"}
+              label="Anlık Fiyat"
+              value={p.current_price > 0 ? `$${fmt2(p.current_price)}` : "—"}
+              valueClass="text-sky-300 font-semibold"
             />
             <CardRow
               label="Boyut"
               value={p.size_usd != null ? `$${fmt0(p.size_usd)}` : "—"}
-              valueClass="text-eyay-text"
+              valueClass="text-eyay-text font-semibold"
             />
             <CardRow
               label="TF"
               labelTip="Sinyalin üretildiği ana zaman dilimi."
               value={tf}
-              valueClass="text-eyay-text"
+              valueClass="text-eyay-text font-semibold"
             />
-            <CardRow label="Beklenen tutuş" value={horizonText} valueClass="text-eyay-text" />
+            <CardRow label="Hedeflenen Pozisyon Süresi" value={horizonText} valueClass="text-eyay-text font-semibold" />
           </dl>
         </section>
 
         {/* C) Risk Planı */}
-        <section className="bg-eyay-surface/30 rounded p-2 border border-eyay-border/30">
-          <h4 className="text-[8px] uppercase tracking-wider text-eyay-faint mb-1.5">
+        <section className="bg-eyay-surface/30 rounded-md p-2.5 border border-eyay-border/40">
+          <h4 className="text-[9px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
             Risk Planı
           </h4>
-          <dl className="space-y-0.5 text-[10px]">
+          <dl className="space-y-1.5 text-[11px]">
             <CardRow
               label="Stop Loss"
               labelTip="Fiyat buraya gelirse zarar sınırlamak için kapanır."
               value={p.stop_loss > 0 ? `${fmt2(p.stop_loss)} (${slPct!.toFixed(1)}%)` : "—"}
-              valueClass="text-red-300"
+              valueClass="text-red-300 font-semibold"
             />
             <CardRow
               label="Take Profit"
               labelTip="Fiyat buraya gelirse hedef kâr alınır."
               value={p.take_profit > 0 ? `${fmt2(p.take_profit)} (+${tpPct!.toFixed(1)}%)` : "—"}
-              valueClass="text-emerald-300"
+              valueClass="text-emerald-300 font-semibold"
             />
             <CardRow
               label="R / R"
@@ -843,44 +1595,206 @@ function OpenPositionCard({
               label="ATR"
               labelTip="Ortalama fiyat oynaklığı; stop/target mesafesini ayarlamak için kullanılır."
               value={atrText}
-              valueClass="text-sky-300/80"
+              valueClass="text-sky-300 font-semibold"
             />
-            {slBasis && (
-              <CardRow label="Stop mantığı" value={slBasis} valueClass="text-eyay-faint text-[9px]" />
-            )}
           </dl>
+          {slBasis && (
+            <p className="mt-2 pt-2 border-t border-eyay-border/30 text-[10px] text-eyay-faint">
+              Stop mantığı: <span className="text-eyay-dim">{slBasis}</span>
+            </p>
+          )}
         </section>
       </div>
 
-      {/* ────────────── D) Pattern / Teknik Okuma ────────────── */}
-      {hasPattern && (
-        <section className="mx-2 mb-2 bg-eyay-surface/20 rounded p-2 border border-eyay-border/30">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <h4
-              className="text-[8px] uppercase tracking-wider text-eyay-faint"
-              title="Mum formasyonu / teknik yapı yorumu."
-            >
-              📊 Pattern / Teknik Okuma
+      {/* ────────────── Pozisyon Boyutu / SL-TP Düzenle (accordion) ────────────── */}
+      {p.add_plan && (
+        <section className="mx-2 mb-2 bg-eyay-surface/20 rounded border border-eyay-border/30">
+          <button
+            type="button"
+            onClick={() => setAddPlanOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 px-2.5 py-2 hover:bg-eyay-surface/30"
+          >
+            <h4 className="text-[11px] font-semibold text-eyay-text truncate">
+              ⚙ Pozisyon Boyutu / SL-TP Düzenle
             </h4>
-            <span
-              className={`text-[9px] font-bold ${biasColor}`}
-              title="Chart Pattern skoru -100..+100 aralığındadır. Consensus skoru (0-100) ile aynı değildir."
-            >
-              {pattern.bias}{" "}
-              {pattern.consolidated_score >= 0 ? "+" : ""}
-              {pattern.consolidated_score.toFixed(1)}
-              <span className="text-eyay-faint font-normal">/100</span>
+            <span className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-mono text-eyay-faint">
+                Mod: {p.add_plan.mode === "off" ? "Kapalı" : p.add_plan.mode === "manual" ? "Manuel" : "Paper Auto"}
+                {" · Kalan ekleme: "}
+                <span className={p.add_plan.remaining_add_capacity_usd > 0 ? "text-emerald-300" : "text-eyay-faint"}>
+                  ${p.add_plan.remaining_add_capacity_usd.toLocaleString()}
+                </span>
+              </span>
+              <span className="text-eyay-faint text-[10px]">{addPlanOpen ? "▴" : "▾"}</span>
             </span>
-          </div>
-          {activeP.length > 0 ? (
-            <PatternList items={activeP} />
-          ) : (
-            <p className="text-[9px] text-eyay-faint italic">Aktif pattern yok.</p>
+          </button>
+          {addPlanOpen && (
+            <div className="px-2 pb-2 border-t border-eyay-border/30 pt-2">
+              <dl className="space-y-0.5 text-[10px]">
+                <CardRow label="Mevcut boyut" value={`$${p.add_plan.current_size_usd.toLocaleString()}`} valueClass="text-eyay-text" />
+                <CardRow label="Maksimum pozisyon" value={`$${p.add_plan.max_position_size_usd.toLocaleString()}`} valueClass="text-eyay-text" />
+                <CardRow
+                  label="Kalan ekleme hakkı"
+                  value={`$${p.add_plan.remaining_add_capacity_usd.toLocaleString()}`}
+                  valueClass={p.add_plan.remaining_add_capacity_usd > 0 ? "text-emerald-300" : "text-eyay-faint"}
+                />
+                <CardRow label="Ortalama entry" value={p.add_plan.average_entry_price.toFixed(4)} valueClass="text-eyay-text" />
+              </dl>
+              {p.add_plan.add_levels.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-eyay-border/30 space-y-1">
+                  <p className="text-[8px] uppercase tracking-wider text-eyay-faint">Ekleme Seviyeleri</p>
+                  {p.add_plan.add_levels.map((lv, i) => (
+                    <div key={lv.id || i} className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                      <span className="text-eyay-text truncate">
+                        {lv.trigger_price ? lv.trigger_price.toFixed(2) : "—"} → +${lv.add_size_usd.toLocaleString()}
+                        {lv.condition_text && <span className="text-eyay-faint"> · {lv.condition_text}</span>}
+                      </span>
+                      <StatusBadge status={lv.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+              {p.add_plan.last_control_result?.reason && (
+                <p className="text-[9px] text-eyay-dim italic mt-1.5 leading-snug">
+                  Son kontrol: {p.add_plan.last_control_result.reason}
+                </p>
+              )}
+              <div className="flex gap-1.5 mt-2">
+                <button
+                  onClick={() => setAddOpen(true)}
+                  disabled={p.add_plan.mode === "off" || p.add_plan.remaining_add_capacity_usd <= 0}
+                  className="text-[9px] font-mono px-2 py-1 rounded border border-emerald-700/70 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
+                >
+                  Manuel Ekle
+                </button>
+                <button
+                  onClick={() => setRiskOpen(true)}
+                  className="text-[9px] font-mono px-2 py-1 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text hover:border-eyay-blue/60"
+                >
+                  SL/TP Düzenle
+                </button>
+              </div>
+            </div>
           )}
-          {pattern.bias === "NEUTRAL" && (
-            <p className="text-[9px] text-eyay-faint/80 italic mt-1.5 leading-snug">
-              Pattern yön teyidi vermiyor; pozisyon daha çok risk planına göre yönetiliyor.
-            </p>
+        </section>
+      )}
+
+      {/* ────────────── Manuel Risk Override notu (varsa ince satır) ────────────── */}
+      {p.manual_risk_override?.is_manual_override && (
+        <div className="mx-2 mb-2 px-2 py-1 rounded border border-violet-800/50 bg-violet-950/20 text-[10px] font-mono text-violet-300/90">
+          Manuel Risk Planı · R/R {p.manual_risk_override.previous_rr.toFixed(2)}
+          {" → "}{p.manual_risk_override.new_rr.toFixed(2)}
+          {p.manual_risk_override.reason && (
+            <span className="text-eyay-dim"> · {p.manual_risk_override.reason}</span>
+          )}
+          {p.manual_risk_override.warnings && p.manual_risk_override.warnings.length > 0 && (
+            <span className="text-amber-300"> · ⚠ {p.manual_risk_override.warnings[0]}</span>
+          )}
+        </div>
+      )}
+
+      {/* ────────────── İşlem Açılma Sebebi (accordion) ────────────── */}
+      {(p.opening_explanation || p.open_signal) && (
+        <section className="mx-2 mb-2 bg-eyay-surface/20 rounded border border-eyay-border/30">
+          <button
+            type="button"
+            onClick={() => setExplanOpen((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-eyay-surface/30"
+          >
+            <h4 className="text-[10px] font-mono text-eyay-text/90 truncate">
+              📖 İşlem Açılma Sebebi
+            </h4>
+            <span className="flex items-center gap-1.5 shrink-0">
+              {!explanOpen && (
+                <span className="text-[9px] font-mono text-eyay-faint truncate max-w-xs">
+                  {p.open_signal
+                    ? (() => {
+                        const tfEval = buildTimeframeEval(p.open_signal);
+                        const hasNews = p.open_signal.news && p.open_signal.news.length > 0;
+                        return `Teknik: ${tfEval.summary} · Haber: ${hasNews ? "var" : "kayıt yok"} · ${p.opening_explanation ? "Açıklama var" : "kayıt yok"}`;
+                      })()
+                    : "kayıt yok"}
+                </span>
+              )}
+              <span className="text-eyay-faint text-[9px]">{explanOpen ? "▴" : "▾"}</span>
+            </span>
+          </button>
+          {explanOpen && (
+            <div className="px-2 pb-2 border-t border-eyay-border/30 pt-2 space-y-2.5 text-[11px]">
+              {/* A) Teknik Veriler */}
+              <div>
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">A) Kullanılan Teknik Veriler</p>
+                <p className="text-[10px] text-eyay-text/90 leading-snug">
+                  {buildTechnicalSummary(p.open_signal)}
+                </p>
+              </div>
+
+              {/* B) Timeframe Değerlendirmesi */}
+              {p.open_signal && (
+                <div>
+                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">B) Timeframe Değerlendirmesi</p>
+                  <div className="space-y-0.5 text-[10px] font-mono">
+                    {(() => {
+                      const tfEval = buildTimeframeEval(p.open_signal);
+                      return tfEval.details.map(d => (
+                        <div key={d.tf} className="flex items-baseline justify-between gap-1">
+                          <span className="text-eyay-faint w-8 shrink-0">{d.tf}</span>
+                          <span className="text-eyay-text/90 flex-1">{d.verdict}</span>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                  <p className="text-[9px] text-eyay-dim italic mt-1">
+                    💡 {(() => {
+                      const tfEval = buildTimeframeEval(p.open_signal);
+                      const bullishCount = tfEval.details.filter(d => d.verdict.includes("BULLISH")).length;
+                      const bearishCount = tfEval.details.filter(d => d.verdict.includes("BEARISH")).length;
+                      if (bullishCount >= 2) return "4H/1D uyumu işlem yönünü destekledi.";
+                      if (bearishCount >= 2) return "Kısa vadeler karşı çıkıyor; risk kontrollü izlemeli.";
+                      return "Timeframe uyumu zayıf; manuel karar için detay izlemeli.";
+                    })()}
+                  </p>
+                </div>
+              )}
+
+              {/* C) Manuel Takip Notu */}
+              <div>
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">C) Manuel Takip Notu</p>
+                <p className="text-[10px] text-eyay-text/90 leading-snug italic">
+                  {(() => {
+                    if (!p.open_signal) return "Kayıt yok.";
+                    const tfEval = buildTimeframeEval(p.open_signal);
+                    const bullishCount = tfEval.details.filter(d => d.verdict.includes("BULLISH")).length;
+                    const bearishCount = tfEval.details.filter(d => d.verdict.includes("BEARISH")).length;
+                    if (bullishCount >= 2) {
+                      return "4H/1D uyumu var. 1H/15m trade'e karşı dönerse erken kapatma için izlemeli.";
+                    }
+                    if (bearishCount >= 2) {
+                      return "Kısa vade zayıf. 4H bozulmadıkça ana trade fikri korunuyor; 1H izlemeli.";
+                    }
+                    return "Timeframe uyumu karışık. 4H ve 1H kapanışları yakından izlemeli.";
+                  })()}
+                </p>
+              </div>
+
+              {/* D) Haber / Event Etkisi */}
+              <div>
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">D) Haber / Event Etkisi</p>
+                <p className="text-[10px] text-eyay-text/90 leading-snug">
+                  {buildNewsImpact(p.open_signal)}
+                </p>
+              </div>
+
+              {/* E) Karar (açıklama varsa) */}
+              {p.opening_explanation?.primary_reason && (
+                <div>
+                  <p className="text-[9px] font-mono text-emerald-300/80 uppercase tracking-wider mb-1">E) Karar Özeti</p>
+                  <p className="text-[10px] text-eyay-text/90 leading-snug italic">
+                    {p.opening_explanation.primary_reason}
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -894,8 +1808,74 @@ function OpenPositionCard({
           </span>
         )}
       </p>
+
+      {/* ────────────── Modallar ────────────── */}
+      {addOpen && (
+        <AddToPositionModal
+          pair={p.pair}
+          position={p}
+          onClose={() => setAddOpen(false)}
+          onAdded={onRefresh}
+        />
+      )}
+      {riskOpen && (
+        <ManualRiskOverrideModal
+          pair={p.pair}
+          position={p}
+          onClose={() => setRiskOpen(false)}
+          onSaved={onRefresh}
+        />
+      )}
     </article>
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// İşlem Açılma Sebebi — helper fonksiyonları
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Timeframe eval: 15m/1h/4h/1d için kısa özet oluştur
+function buildTimeframeEval(openSignal: Position["open_signal"]): {
+  summary: string;
+  details: Array<{ tf: string; verdict: string }>;
+} {
+  const tfd = openSignal?.timeframe_decision || {};
+  const tfs = ["15m", "1h", "4h", "1d"];
+  const details = tfs.map(tf => {
+    const info = tfd[tf];
+    if (!info) return { tf, verdict: "kayıt yok" };
+    // info = { bias, score, pattern, ... } gibi
+    const bias = info.bias || "—";
+    const score = info.score != null ? `${info.score}` : "—";
+    const pattern = info.pattern || "—";
+    return { tf, verdict: `${bias} / ${score} · ${pattern}` };
+  });
+  // Summary: hepsi bullish/bearish mi, mixed mi, harita çiz
+  const bullishCount = details.filter(d => d.verdict.includes("BULLISH")).length;
+  const bearishCount = details.filter(d => d.verdict.includes("BEARISH")).length;
+  const summ = bullishCount >= 2 ? "Bullish uyum" :
+               bearishCount >= 2 ? "Bearish uyum" :
+               "Mixed/nötr";
+  return { summary: summ, details };
+}
+
+// Teknik veriler: açıklaması
+function buildTechnicalSummary(openSignal: Position["open_signal"]): string {
+  if (!openSignal?.technical && !openSignal?.confluence) {
+    return "Teknik veri kaydı yok.";
+  }
+  const parts: string[] = [];
+  if (openSignal.technical) parts.push(openSignal.technical);
+  if (openSignal.confluence) parts.push(`Confluence: ${openSignal.confluence}`);
+  return parts.join(" · ");
+}
+
+// Haber/Event etkisi
+function buildNewsImpact(openSignal: Position["open_signal"]): string {
+  if (!openSignal?.news || openSignal.news.length === 0) {
+    return "Bu pozisyonun açılış snapshot'ında trade'i doğrudan tetikleyen doğrulanmış haber kaydı yok. Karar daha çok teknik yapı ve timeframe uyumu üzerinden oluştu.";
+  }
+  return `Haber kaynakları: ${openSignal.news.join(", ")}`;
 }
 
 // Tek satırlık etiket–değer rowu (Pozisyon Özeti / Risk Planı içinde)
@@ -913,12 +1893,12 @@ function CardRow({
   return (
     <div className="flex items-baseline justify-between gap-2">
       <dt
-        className="text-[9px] text-eyay-faint shrink-0 truncate"
+        className="text-[10px] text-eyay-dim shrink-0 truncate"
         title={labelTip}
       >
         {labelTip ? <span className="border-b border-dotted border-eyay-faint/40">{label}</span> : label}
       </dt>
-      <dd className={`text-right truncate ${valueClass}`}>{value}</dd>
+      <dd className={`text-right truncate font-mono ${valueClass}`}>{value}</dd>
     </div>
   );
 }
