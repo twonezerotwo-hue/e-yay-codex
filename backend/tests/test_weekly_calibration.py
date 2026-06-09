@@ -297,6 +297,12 @@ class TestLearningSignals:
             "stop_too_close_candidate",
             "good_confluence",
             "unexplained_loss",
+            # FAZ 11 — advanced technical
+            "low_volume_breakout",
+            "ema_stack_against_trade",
+            "market_structure_broken",
+            "vwap_rejection",
+            "candle_close_failed",
         }
         assert codes == expected
 

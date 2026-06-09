@@ -88,6 +88,8 @@ def _build_opening_context(position: dict) -> dict[str, Any]:
         "confluence_status":    str(confluence.get("status") or "unknown").lower(),
         "pattern_bias":         pattern_bias,
         "agent_thesis_context": sig.get("agent_thesis_context"),
+        # FAZ 11 — açılış anındaki ileri seviye teknik
+        "advanced_technical":   sig.get("advanced_technical") or {},
     }
 
 
@@ -308,6 +310,58 @@ def _run_checks(
             checks.append(_check(
                 "thesis_pair_context", "pass",
                 f"Thesis pair bias: {pair_bias!r} — pozisyonla uyumlu.",
+            ))
+
+    # ── FAZ 11 — Advanced technical değişim kontrolleri ─────────────────────
+    adv_open = opening_ctx.get("advanced_technical") or {}
+    if adv_open.get("available"):
+        # Açılışta bullish EMA + LONG iken şu an cur_1h BEARISH → uyarı
+        ema_open = str(adv_open.get("ema_stack") or "unavailable")
+        ms_open  = str(adv_open.get("market_structure") or "unavailable")
+        candle   = str(adv_open.get("candle_close_confirmation") or "unavailable")
+        vol_cf   = str(adv_open.get("volume_confirmation") or "unavailable")
+
+        mtf = current_ctx.get("mtf") or {}
+        cur_1h = str(mtf.get("1h") or "UNKNOWN").upper()
+
+        # EMA flip
+        if side == "LONG" and ema_open == "bullish" and cur_1h == "BEARISH":
+            checks.append(_check(
+                "ema_stack_flipped", "warn",
+                "Açılışta EMA bullish idi; şimdi 1H BEARISH'e döndü."
+                " EMA yapısı zayıflıyor.",
+            ))
+        elif side == "SHORT" and ema_open == "bearish" and cur_1h == "BULLISH":
+            checks.append(_check(
+                "ema_stack_flipped", "warn",
+                "Açılışta EMA bearish idi; şimdi 1H BULLISH'e döndü."
+                " EMA yapısı zayıflıyor.",
+            ))
+
+        # Structure flip
+        if side == "LONG" and ms_open == "HH_HL" and cur_1h == "BEARISH":
+            checks.append(_check(
+                "market_structure_broken", "warn",
+                "Açılışta yapı HH/HL idi; 1H şu an BEARISH. Yapı bozuluyor.",
+            ))
+        elif side == "SHORT" and ms_open == "LH_LL" and cur_1h == "BULLISH":
+            checks.append(_check(
+                "market_structure_broken", "warn",
+                "Açılışta yapı LH/LL idi; 1H şu an BULLISH. Yapı bozuluyor.",
+            ))
+
+        # Candle close fakeout uyarısı
+        if candle == "fakeout":
+            checks.append(_check(
+                "candle_close_fakeout", "warn",
+                "Açılışta candle close teyidi yoktu (fakeout) — sahte kırılım riski.",
+            ))
+
+        # Düşük hacim teyidi
+        if vol_cf in ("weak", "warning"):
+            checks.append(_check(
+                "volume_confirmation_weak", "warn",
+                f"Açılışta hacim teyidi zayıf ({vol_cf}). Düşük güven."
             ))
 
     return checks

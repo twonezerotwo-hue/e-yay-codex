@@ -235,7 +235,7 @@ def _extract_top_signals(ctx: dict[str, Any], mode: BannerMode) -> list[str]:
 # ── Contradictions ────────────────────────────────────────────────────────────
 
 def _extract_contradictions(ctx: dict[str, Any]) -> list[str]:
-    """Thesis'ten somut çelişkiler. Uydurma YOK."""
+    """Thesis + ileri seviye teknik çelişkileri. Uydurma YOK."""
     result: list[str] = []
     for item in ctx["thesis_contradictions"][:2]:
         if isinstance(item, str) and item.strip():
@@ -244,7 +244,29 @@ def _extract_contradictions(ctx: dict[str, Any]) -> list[str]:
             msg = item.get("message") or item.get("text") or item.get("description") or ""
             if msg.strip():
                 result.append(str(msg).strip())
-    return result
+
+    # FAZ 11 — Açık pozisyonların advanced_technical çelişkileri (audit-only)
+    try:
+        from app.services.advanced_technical_context import (  # noqa: PLC0415
+            build_advanced_technical_context,
+        )
+        for pos in (ctx.get("open_positions") or [])[:3]:
+            pair = (pos.get("pair") or "").upper()
+            if not pair:
+                continue
+            adv = build_advanced_technical_context(pair, "")
+            if not adv.get("available"):
+                continue
+            for c in adv.get("contradictions") or []:
+                msg = f"[{pair}] {c}"
+                if msg not in result:
+                    result.append(msg)
+            if len(result) >= 4:
+                break
+    except Exception:  # noqa: BLE001
+        pass
+
+    return result[:4]
 
 
 # ── Watch next ────────────────────────────────────────────────────────────────

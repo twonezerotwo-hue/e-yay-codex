@@ -30,6 +30,12 @@ from app.providers.technical_provider import (
     _score_zone,
     _score_volume,
     _is_insight_sane,
+    # FAZ 11 — ileri seviye teknik kontroller
+    _ema_stack,
+    _market_structure_label,
+    _vwap_position,
+    _volume_confirmation,
+    _candle_close_confirmation,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,6 +202,14 @@ def _compute_one(
     v_score = _score_volume(vol_ratio)
     total   = s_score + m_score + z_score + v_score
 
+    # ── FAZ 11 — İleri seviye teknik kontroller ──────────────────────────────
+    ema_lbl,  ema_sc  = _ema_stack(close)
+    ms_lbl,   ms_sc   = _market_structure_label(high, low)
+    vwap_lbl, vwap_sc, vwap_val = _vwap_position(high, low, close, volume)
+    vc_lbl,   vc_sc   = _volume_confirmation(close, volume)
+    cc_lbl,   cc_sc   = _candle_close_confirmation(high, low, close, support, resistance)
+    adv_score         = ema_sc + ms_sc + vwap_sc + vc_sc + cc_sc
+
     return TechnicalInsight(
         asset_code=asset_code,
         timeframe=tf,
@@ -210,6 +224,19 @@ def _compute_one(
         zone_score=z_score,
         volume_score=v_score,
         technical_score=total,
+        # ── İleri seviye
+        volume_confirmation       = vc_lbl,
+        volume_conf_score         = vc_sc,
+        ema_stack                 = ema_lbl,
+        ema_alignment_score       = ema_sc,
+        market_structure_label    = ms_lbl,
+        market_structure_score    = ms_sc,
+        vwap_position             = vwap_lbl,
+        vwap_score                = vwap_sc,
+        vwap_value                = vwap_val,
+        candle_close_confirmation = cc_lbl,
+        candle_close_score        = cc_sc,
+        advanced_technical_score  = adv_score,
     )
 
 

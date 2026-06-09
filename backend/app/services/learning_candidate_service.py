@@ -82,6 +82,9 @@ def _build_opening_evidence(position: dict) -> dict[str, Any]:
         sig.get("news_event_present") or sig.get("has_news_event") or False
     )
 
+    # FAZ 11 — advanced technical audit
+    adv_tech = sig.get("advanced_technical") or {}
+
     return {
         "final_score":          sig.get("final_score"),
         "primary_tf":           primary_tf,
@@ -92,6 +95,8 @@ def _build_opening_evidence(position: dict) -> dict[str, Any]:
         "pattern_score":        sig.get("pattern_score"),
         "news_event_present":   news_event_present,
         "agent_thesis_context": sig.get("agent_thesis_context"),
+        # ── FAZ 11 — açılış anındaki ileri seviye teknik snapshot
+        "advanced_technical":   adv_tech if isinstance(adv_tech, dict) else {},
     }
 
 
@@ -331,6 +336,61 @@ def _build_labels(  # noqa: PLR0912, PLR0913
             f"Stop bilgisi yok ama PnL {pnl_pct:.2f}% (≤{_STOP_HEURISTIC_PNL}%);"
             " stop yaklaşıyor olabilir. Aday kaydı — kesin karar kapanışta verilecek.",
         ))
+
+    # ── FAZ 11 — Advanced technical labels ──────────────────────────────────
+    adv = opening_ev.get("advanced_technical") or {}
+    if pnl_pct < 0 and adv.get("available"):
+        ema_st  = str(adv.get("ema_stack") or "unavailable")
+        ms      = str(adv.get("market_structure") or "unavailable")
+        vol_cf  = str(adv.get("volume_confirmation") or "unavailable")
+        vwap_p  = str(adv.get("vwap_position") or "unavailable")
+        candle  = str(adv.get("candle_close_confirmation") or "unavailable")
+
+        # low_volume_breakout
+        if vol_cf in ("weak", "warning"):
+            labels.append(_label(
+                "low_volume_breakout",
+                "warning",
+                f"Açılışta hacim teyidi zayıf ({vol_cf}); PnL {pnl_pct:.2f}%."
+                " Düşük hacimli giriş olabilir.",
+            ))
+
+        # ema_stack_against_trade
+        if (side == "LONG" and ema_st == "bearish") or (side == "SHORT" and ema_st == "bullish"):
+            labels.append(_label(
+                "ema_stack_against_trade",
+                "warning",
+                f"{side} açılırken EMA stack {ema_st} idi; PnL {pnl_pct:.2f}%."
+                " Trend yapısına aykırı giriş.",
+            ))
+
+        # market_structure_broken — açılış HH/HL iken şimdi LH/LL (veya tersi)
+        cur_1h = current_ev.get("one_hour_status", "UNKNOWN")
+        if (side == "LONG" and ms == "HH_HL" and cur_1h == "BEARISH") or \
+           (side == "SHORT" and ms == "LH_LL" and cur_1h == "BULLISH"):
+            labels.append(_label(
+                "market_structure_broken",
+                "warning",
+                f"Açılışta yapı {ms} idi; şimdi 1H={cur_1h}. Yapı bozuldu.",
+            ))
+
+        # vwap_rejection
+        if (side == "LONG" and vwap_p == "below") or (side == "SHORT" and vwap_p == "above"):
+            labels.append(_label(
+                "vwap_rejection",
+                "warning",
+                f"{side} açılırken VWAP {vwap_p} idi; PnL {pnl_pct:.2f}%."
+                " VWAP reddi olabilir.",
+            ))
+
+        # candle_close_failed
+        if candle == "fakeout":
+            labels.append(_label(
+                "candle_close_failed",
+                "warning",
+                "Açılışta candle close teyidi yoktu (fakeout);"
+                f" PnL {pnl_pct:.2f}%. Sahte kırılım olabilir.",
+            ))
 
     return labels
 

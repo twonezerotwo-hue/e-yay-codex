@@ -260,6 +260,43 @@ def _build_final_labels(  # noqa: PLR0912
             " Öğrenme analizi sınırlı (evidence_quality: limited).",
         ))
 
+    # ── FAZ 11 — Advanced technical confirmations ───────────────────────────
+    if result == "loss":
+        if "low_volume_breakout" in labels_seen:
+            labels.append(_flabel(
+                "low_volume_breakout_confirmed",
+                "mistake", "medium",
+                "Düşük hacimli giriş uyarısı haklı çıktı; trade loss oldu."
+                " Hacim teyidi olmadan breakout takibi riskli.",
+            ))
+        if "ema_stack_against_trade" in labels_seen:
+            labels.append(_flabel(
+                "ema_stack_warning_confirmed",
+                "mistake", "medium",
+                "EMA stack ters yönde idi; trade loss oldu."
+                " Trend yapısına aykırı giriş onaylandı.",
+            ))
+        if "market_structure_broken" in labels_seen:
+            labels.append(_flabel(
+                "structure_break_confirmed",
+                "mistake", "medium",
+                "Yapı bozulması (HH/HL → LH/LL) uyarısı haklı çıktı; trade loss oldu.",
+            ))
+        if "vwap_rejection" in labels_seen:
+            labels.append(_flabel(
+                "vwap_rejection_confirmed",
+                "mistake", "medium",
+                "VWAP reddi uyarısı haklı çıktı; trade loss oldu."
+                " VWAP karşı yönde iken giriş zayıf.",
+            ))
+        if "candle_close_failed" in labels_seen:
+            labels.append(_flabel(
+                "fakeout_close_confirmed",
+                "mistake", "high",
+                "Candle close teyidi yokken giriş yapıldı; trade loss oldu."
+                " Sahte kırılım (fakeout) onaylandı.",
+            ))
+
     return labels
 
 

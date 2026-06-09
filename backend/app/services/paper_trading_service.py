@@ -848,6 +848,18 @@ def _route_new_open_signal(
     except Exception:  # noqa: BLE001
         pass  # audit enrichment hatası trade açılışını bloke etmez
 
+    # FAZ 11 — Advanced Technical (audit only; karar motorunu etkilemez)
+    try:
+        from app.services.advanced_technical_context import (  # noqa: PLC0415
+            build_advanced_technical_context as _build_adv_tech,
+        )
+        signal_snapshot = {
+            **signal_snapshot,
+            "advanced_technical": _build_adv_tech(pair, primary_tf),
+        }
+    except Exception:  # noqa: BLE001
+        pass  # audit enrichment hatası trade açılışını bloke etmez
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (

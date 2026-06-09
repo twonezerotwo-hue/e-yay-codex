@@ -222,6 +222,81 @@ interface ChartReading {
   error?: string | null;
 }
 
+// FAZ 11 — İleri seviye teknik mini rozetler (EMA / Structure / Vol / VWAP / Close)
+function AdvancedTechBadges({ insight }: { insight: TechnicalInsight }) {
+  const ema     = insight.ema_stack;
+  const struct_ = insight.market_structure_label;
+  const vol     = insight.volume_confirmation;
+  const vwap    = insight.vwap_position;
+  const close   = insight.candle_close_confirmation;
+
+  // Hiçbir alan yoksa hiç render etme
+  const anyAvail = [ema, struct_, vol, vwap, close].some(
+    v => v && v !== "unavailable",
+  );
+  if (!anyAvail) return null;
+
+  const pill = (label: string, value: string, cls: string) => (
+    <span
+      className={`text-[8px] font-mono px-1 py-0.5 rounded border ${cls}`}
+      title={`${label}: ${value}`}
+    >
+      {label}:{value}
+    </span>
+  );
+
+  // Renk eşlemeleri (Bullish/Confirmed = emerald, Bearish/Fakeout = red, mixed/weak = amber)
+  const emaCls   = ema === "bullish" ? "border-emerald-700/60 text-emerald-300 bg-emerald-950/30"
+                : ema === "bearish" ? "border-red-700/60 text-red-300 bg-red-950/30"
+                : ema === "mixed"   ? "border-amber-700/40 text-amber-300 bg-amber-950/20"
+                : "border-eyay-border text-eyay-faint bg-eyay-raised/30";
+  const stCls    = struct_ === "HH_HL" ? "border-emerald-700/60 text-emerald-300 bg-emerald-950/30"
+                : struct_ === "LH_LL" ? "border-red-700/60 text-red-300 bg-red-950/30"
+                : struct_ === "MIXED" ? "border-amber-700/40 text-amber-300 bg-amber-950/20"
+                : "border-eyay-border text-eyay-faint bg-eyay-raised/30";
+  const volCls   = vol === "positive" ? "border-emerald-700/60 text-emerald-300 bg-emerald-950/30"
+                : vol === "warning"  ? "border-red-700/60 text-red-300 bg-red-950/30"
+                : vol === "weak"     ? "border-amber-700/40 text-amber-300 bg-amber-950/20"
+                : "border-eyay-border text-eyay-faint bg-eyay-raised/30";
+  const vwapCls  = vwap === "above" ? "border-emerald-700/60 text-emerald-300 bg-emerald-950/30"
+                : vwap === "below" ? "border-red-700/60 text-red-300 bg-red-950/30"
+                : vwap === "at"    ? "border-amber-700/40 text-amber-300 bg-amber-950/20"
+                : "border-eyay-border text-eyay-faint bg-eyay-raised/30";
+  const closeCls = close === "confirmed" ? "border-emerald-700/60 text-emerald-300 bg-emerald-950/30"
+                : close === "fakeout"   ? "border-red-700/60 text-red-300 bg-red-950/30"
+                : "border-eyay-border text-eyay-faint bg-eyay-raised/30";
+
+  const sshort = (s?: string) => {
+    if (!s || s === "unavailable") return "—";
+    if (s === "HH_HL") return "HH/HL";
+    if (s === "LH_LL") return "LH/LL";
+    if (s === "MIXED") return "MIX";
+    if (s === "bullish") return "BULL";
+    if (s === "bearish") return "BEAR";
+    if (s === "mixed") return "MIX";
+    if (s === "positive") return "OK";
+    if (s === "weak") return "WK";
+    if (s === "warning") return "WRN";
+    if (s === "above") return "ÜST";
+    if (s === "below") return "ALT";
+    if (s === "at") return "EŞT";
+    if (s === "confirmed") return "OK";
+    if (s === "fakeout") return "FAKE";
+    if (s === "no_breakout") return "—";
+    return s.toUpperCase().slice(0, 4);
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {ema     && ema     !== "unavailable" && pill("EMA",  sshort(ema),     emaCls)}
+      {struct_ && struct_ !== "unavailable" && pill("ST",   sshort(struct_), stCls)}
+      {vol     && vol     !== "unavailable" && pill("VOL",  sshort(vol),     volCls)}
+      {vwap    && vwap    !== "unavailable" && pill("VWAP", sshort(vwap),    vwapCls)}
+      {close   && close   !== "unavailable" && pill("CLS",  sshort(close),   closeCls)}
+    </div>
+  );
+}
+
 function CommandCard({
   signal, icon, statusLabel, techInsight,
 }: {
@@ -360,6 +435,9 @@ function CommandCard({
           <p className="text-[10px] text-eyay-dim leading-snug line-clamp-2 border-t border-white/5 pt-2">
             {signal.reason.replace(/\s*\[S:[^\]]+\]/g, "")}
           </p>
+
+          {/* FAZ 11 — İleri seviye teknik rozetler */}
+          {techInsight && <AdvancedTechBadges insight={techInsight} />}
 
           {/* Sade Paper Trading özeti — agent pipeline / open_signal burada GÖSTERİLMEZ,
               yalnızca İzle/Uygun/Bloklu görsel özeti sunulur. */}

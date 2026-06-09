@@ -138,6 +138,15 @@ export interface TechnicalInsight {
   zone_score:      number;   // 0-25
   volume_score:    number;   // 0-25
   technical_score: number;   // 0-100
+
+  // FAZ 11 — İleri seviye teknik kontroller (audit)
+  volume_confirmation?:       "positive" | "weak" | "warning" | "unavailable";
+  ema_stack?:                 "bullish" | "bearish" | "mixed" | "unavailable";
+  market_structure_label?:    "HH_HL" | "LH_LL" | "MIXED" | "unavailable";
+  vwap_position?:             "above" | "below" | "at" | "unavailable";
+  vwap_value?:                number | null;
+  candle_close_confirmation?: "confirmed" | "fakeout" | "no_breakout" | "unavailable";
+  advanced_technical_score?:  number;   // 0-25
 }
 
 // ---------------------------------------------------------------------------

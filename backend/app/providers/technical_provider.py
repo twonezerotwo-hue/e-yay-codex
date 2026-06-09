@@ -71,6 +71,26 @@ class TechnicalInsight:
     volume_score:    int   # 0-25
     technical_score: int   # 0-100 toplamı
 
+    # ── İleri seviye teknik kontroller (FAZ 11) ─────────────────────────────
+    # Defaults: "unavailable" / 0 → veri yetersizse downstream güvenli
+    volume_confirmation:       str = "unavailable"  # positive | weak | warning | unavailable
+    volume_conf_score:         int = 0              # 0-5
+
+    ema_stack:                 str = "unavailable"  # bullish | bearish | mixed | unavailable
+    ema_alignment_score:       int = 0              # 0-5
+
+    market_structure_label:    str = "unavailable"  # HH_HL | LH_LL | MIXED | unavailable
+    market_structure_score:    int = 0              # 0-5
+
+    vwap_position:             str = "unavailable"  # above | below | at | unavailable
+    vwap_score:                int = 0              # 0-5
+    vwap_value:                float | None = None
+
+    candle_close_confirmation: str = "unavailable"  # confirmed | fakeout | no_breakout | unavailable
+    candle_close_score:        int = 0              # 0-5
+
+    advanced_technical_score:  int = 0              # 0-25 (toplam ileri skor; technical_score'a karışmaz)
+
 
 # ---------------------------------------------------------------------------
 # OHLCV yapılandırması
@@ -434,6 +454,165 @@ def _score_volume(vol_ratio: float | None) -> int:
 
 
 # ---------------------------------------------------------------------------
+# FAZ 11 — İleri seviye teknik kontroller (audit; technical_score değişmez)
+# ---------------------------------------------------------------------------
+
+
+def _ema_stack(close: np.ndarray) -> tuple[str, int]:
+    """
+    EMA20 > EMA50 > EMA200 → bullish
+    EMA20 < EMA50 < EMA200 → bearish
+    Diğer durumlar              → mixed
+    Yetersiz veri (<200 bar)    → unavailable
+    """
+    if close is None or len(close) < 200:
+        return ("unavailable", 0)
+    try:
+        e20  = float(_ema(close, 20)[-1])
+        e50  = float(_ema(close, 50)[-1])
+        e200 = float(_ema(close, 200)[-1])
+    except Exception:  # noqa: BLE001
+        return ("unavailable", 0)
+    if e20 > e50 > e200:
+        return ("bullish", 5)
+    if e20 < e50 < e200:
+        return ("bearish", 5)
+    return ("mixed", 1)
+
+
+def _market_structure_label(
+    high: np.ndarray, low: np.ndarray
+) -> tuple[str, int]:
+    """
+    Swing noktalarına göre yapı:
+      HH + HL → "HH_HL"  (bullish)
+      LH + LL → "LH_LL"  (bearish)
+      diğer  → "MIXED"
+    Yetersiz veri → "unavailable".
+    """
+    n = len(high)
+    if n < 20:
+        return ("unavailable", 0)
+    lookback = min(60, n)
+    h = high[-lookback:]
+    l = low[-lookback:]
+    window = 4
+    sh: list[float] = []
+    sl: list[float] = []
+    for i in range(window, len(h) - window):
+        if h[i] >= np.max(h[max(0, i - window):i + window + 1]):
+            sh.append(float(h[i]))
+        if l[i] <= np.min(l[max(0, i - window):i + window + 1]):
+            sl.append(float(l[i]))
+    if len(sh) < 2 or len(sl) < 2:
+        return ("unavailable", 0)
+    hh = sh[-1] > sh[-2]
+    hl = sl[-1] > sl[-2]
+    lh = sh[-1] < sh[-2]
+    ll_ = sl[-1] < sl[-2]
+    if hh and hl:
+        return ("HH_HL", 5)
+    if lh and ll_:
+        return ("LH_LL", 5)
+    return ("MIXED", 1)
+
+
+def _vwap_position(
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    volume: np.ndarray | None,
+    window: int = 20,
+) -> tuple[str, int, float | None]:
+    """
+    Son `window` bardan rolling VWAP. Fiyat VWAP üstünde/altında/yakın:
+      above | below | at | unavailable
+    """
+    if volume is None or len(volume) < 5 or len(close) < 5:
+        return ("unavailable", 0, None)
+    n = min(window, len(close), len(volume))
+    h = high[-n:]
+    l = low[-n:]
+    c = close[-n:]
+    v = volume[-n:]
+    vol_sum = float(np.sum(v))
+    if vol_sum <= 0:
+        return ("unavailable", 0, None)
+    tp = (h + l + c) / 3.0
+    vwap_val = float(np.sum(tp * v) / vol_sum)
+    cur = float(close[-1])
+    if vwap_val <= 0:
+        return ("unavailable", 0, None)
+    if cur > vwap_val * 1.001:
+        return ("above", 5, round(vwap_val, 4))
+    if cur < vwap_val * 0.999:
+        return ("below", 5, round(vwap_val, 4))
+    return ("at", 2, round(vwap_val, 4))
+
+
+def _volume_confirmation(
+    close: np.ndarray, volume: np.ndarray | None
+) -> tuple[str, int]:
+    """
+    Son bar hacmi 20-bar ortalamasına göre:
+      ratio >= 1.5     → positive (güçlü)
+      ratio >= 1.0     → positive
+      büyük hareket + düşük hacim → warning (fakeout şüphesi)
+      diğer            → weak
+    Veri yoksa unavailable.
+    """
+    if volume is None or len(volume) < 21 or len(close) < 2:
+        return ("unavailable", 0)
+    avg20 = float(np.mean(volume[-21:-1]))
+    if avg20 <= 0:
+        return ("unavailable", 0)
+    ratio = float(volume[-1]) / avg20
+    move_pct = abs((close[-1] - close[-2]) / close[-2] * 100.0) if close[-2] != 0 else 0.0
+    if ratio >= 1.5:
+        return ("positive", 5)
+    if ratio >= 1.0:
+        return ("positive", 3)
+    if move_pct > 1.0 and ratio < 0.7:
+        return ("warning", 0)
+    return ("weak", 1)
+
+
+def _candle_close_confirmation(
+    high: np.ndarray,
+    low: np.ndarray,
+    close: np.ndarray,
+    support: float,
+    resistance: float,
+) -> tuple[str, int]:
+    """
+    Son bar bir destek/direnç kırılımıyla close ile teyitlendi mi?
+      confirmed   → close kırılım yönünde
+      fakeout     → wick kırdı ama close geri döndü
+      no_breakout → kırılım yok (normal bar)
+    """
+    if len(close) < 2:
+        return ("unavailable", 0)
+    cur_close  = float(close[-1])
+    cur_high   = float(high[-1])
+    cur_low    = float(low[-1])
+    prev_close = float(close[-2])
+
+    # Direnç kırılımı denemesi
+    if cur_high > resistance > prev_close:
+        if cur_close > resistance:
+            return ("confirmed", 5)
+        return ("fakeout", 0)
+
+    # Destek kırılımı denemesi
+    if cur_low < support < prev_close:
+        if cur_close < support:
+            return ("confirmed", 5)
+        return ("fakeout", 0)
+
+    return ("no_breakout", 2)
+
+
+# ---------------------------------------------------------------------------
 # Tek varlık işleme
 # ---------------------------------------------------------------------------
 
@@ -540,6 +719,14 @@ def _process_ticker(
     v_score = _score_volume(vol_ratio)
     total   = s_score + m_score + z_score + v_score
 
+    # ── FAZ 11 — İleri seviye teknik kontroller ──────────────────────────────
+    ema_lbl,   ema_sc   = _ema_stack(close)
+    ms_lbl,    ms_sc    = _market_structure_label(high, low)
+    vwap_lbl,  vwap_sc, vwap_val = _vwap_position(high, low, close, vol)
+    vc_lbl,    vc_sc    = _volume_confirmation(close, vol)
+    cc_lbl,    cc_sc    = _candle_close_confirmation(high, low, close, support, resistance)
+    adv_score           = ema_sc + ms_sc + vwap_sc + vc_sc + cc_sc
+
     return TechnicalInsight(
         asset_code    = asset_code,
         timeframe     = "1D",
@@ -554,6 +741,19 @@ def _process_ticker(
         zone_score      = z_score,
         volume_score    = v_score,
         technical_score = total,
+        # ── İleri seviye
+        volume_confirmation       = vc_lbl,
+        volume_conf_score         = vc_sc,
+        ema_stack                 = ema_lbl,
+        ema_alignment_score       = ema_sc,
+        market_structure_label    = ms_lbl,
+        market_structure_score    = ms_sc,
+        vwap_position             = vwap_lbl,
+        vwap_score                = vwap_sc,
+        vwap_value                = vwap_val,
+        candle_close_confirmation = cc_lbl,
+        candle_close_score        = cc_sc,
+        advanced_technical_score  = adv_score,
     )
 
 

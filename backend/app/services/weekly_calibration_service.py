@@ -62,6 +62,12 @@ _CANDIDATE_SIGNALS = frozenset({
     "temporary_pullback_possible",
     "news_not_confirmed",
     "stop_too_close_candidate",
+    # FAZ 11 — advanced technical
+    "low_volume_breakout",
+    "ema_stack_against_trade",
+    "market_structure_broken",
+    "vwap_rejection",
+    "candle_close_failed",
 })
 
 # final-label-based signals → gerçek final_label kodu
@@ -77,6 +83,12 @@ _MISTAKE_SIGNALS = frozenset({
     "news_not_confirmed",
     "stop_too_close_candidate",
     "unexplained_loss",
+    # FAZ 11 — advanced technical
+    "low_volume_breakout",
+    "ema_stack_against_trade",
+    "market_structure_broken",
+    "vwap_rejection",
+    "candle_close_failed",
 })
 
 # Success-oriented signals (yüksek kazanç oranı = sinyal işe yarıyor)
@@ -99,6 +111,12 @@ _SUGGESTED_ACTIONS: dict[str, str] = {
     "stop_too_close_candidate":          "widen_stop_distance",
     "good_confluence":                   "maintain_entry_standards",
     "unexplained_loss":                  "improve_candidate_recheck_coverage",
+    # FAZ 11 — advanced technical aksiyonları
+    "low_volume_breakout":               "require_volume_confirmation_before_entry",
+    "ema_stack_against_trade":           "require_ema_alignment_before_entry",
+    "market_structure_broken":           "wait_for_structure_reset",
+    "vwap_rejection":                    "require_vwap_alignment_before_entry",
+    "candle_close_failed":               "require_candle_close_confirmation",
 }
 
 

@@ -88,25 +88,56 @@ def _check_bias_vs_mtf(asset_bias: dict, issues: list) -> None:
             v for v in structs.values()
             if v and v not in ("NEUTRAL", "UNKNOWN")
         ]
-        if not non_neutral:
-            continue  # MTF verisi yok → kontrol yapılmaz
 
-        # Kural 6: cautious_long / long + all BEARISH → critical
-        if data.get("bias") in ("cautious_long", "long"):
-            if all(v == "BEARISH" for v in non_neutral):
-                tf_str = "/".join(sorted(structs.keys()))
+        if non_neutral:
+            # Kural 6: cautious_long / long + all BEARISH → critical
+            if data.get("bias") in ("cautious_long", "long"):
+                if all(v == "BEARISH" for v in non_neutral):
+                    tf_str = "/".join(sorted(structs.keys()))
+                    issues.append(_critical(
+                        "long_bias_against_all_bearish_mtf", code,
+                        f"Asset cautious_long ama {tf_str} MTF tamamı bearish.",
+                    ))
+
+            # Kural 7: avoid + all BULLISH → warning
+            elif data.get("bias") == "avoid":
+                if all(v == "BULLISH" for v in non_neutral):
+                    tf_str = "/".join(sorted(structs.keys()))
+                    issues.append(_warning(
+                        "avoid_bias_against_all_bullish_mtf", code,
+                        f"Asset avoid ama {tf_str} MTF tamamı bullish — sinyal tutarsız.",
+                    ))
+
+        # ── FAZ 11 — Advanced technical bias çelişkileri ────────────────────
+        # asset_bias[code].advanced_technical varsa (thesis builder eklerse)
+        # cautious_long ama EMA bearish + structure bearish ise critical
+        adv = data.get("advanced_technical") or {}
+        if adv:
+            ema    = str(adv.get("ema_stack") or "unavailable")
+            ms     = str(adv.get("market_structure") or "unavailable")
+            vol_cf = str(adv.get("volume_confirmation") or "unavailable")
+            candle = str(adv.get("candle_close_confirmation") or "unavailable")
+            bias   = data.get("bias")
+
+            # cautious_long / long + EMA bearish + structure LH_LL → critical
+            if bias in ("cautious_long", "long") and ema == "bearish" and ms == "LH_LL":
                 issues.append(_critical(
-                    "long_bias_against_all_bearish_mtf", code,
-                    f"Asset cautious_long ama {tf_str} MTF tamamı bearish.",
+                    "long_bias_against_ema_and_structure", code,
+                    f"{bias} bias ama EMA bearish + structure LH/LL — çelişki.",
                 ))
 
-        # Kural 7: avoid + all BULLISH → warning
-        elif data.get("bias") == "avoid":
-            if all(v == "BULLISH" for v in non_neutral):
-                tf_str = "/".join(sorted(structs.keys()))
+            # bullish thesis bias + volume confirmation yok/weak → warning
+            if bias in ("long", "cautious_long") and vol_cf in ("weak", "warning"):
                 issues.append(_warning(
-                    "avoid_bias_against_all_bullish_mtf", code,
-                    f"Asset avoid ama {tf_str} MTF tamamı bullish — sinyal tutarsız.",
+                    "bullish_bias_without_volume_confirmation", code,
+                    f"{bias} bias ama hacim teyidi {vol_cf} — düşük güven.",
+                ))
+
+            # breakout senaryosu ama candle close fakeout → warning
+            if candle == "fakeout":
+                issues.append(_warning(
+                    "breakout_candle_close_failed", code,
+                    "Candle close teyidi yok (fakeout). Breakout güvenilmez.",
                 ))
 
 
