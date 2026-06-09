@@ -28,6 +28,25 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from app.services.aggression_awareness import (
+    AgentCommand,
+    AggressionContext,
+    PositionSizingDecision,
+    StopDecision,
+    TimeframeDecision,
+    aggression_sizing,
+    aggression_to_dict,
+    build_take_profit_plan,
+    choose_stop,
+    choose_timeframe,
+    derive_contradiction_score,
+    derive_event_risk_fallback,
+    derive_high_volatility_fallback,
+    maybe_promote_command,
+    pick_command,
+    score_aggression,
+)
+
 PositionSide = Literal["LONG", "SHORT"]
 TradeSignal = Literal["LONG", "SHORT", "CLOSE", None]
 
@@ -110,6 +129,20 @@ class AgentTradeDecision:
     reasons: list[str] = field(default_factory=list)
     auto_close: bool = False   # Trigger'dan kaynaklanan acil kapanış
     auto_close_reason: str = ""
+    # ── Controlled-Aggressive Decision Layer ──
+    # Aggregator hard-block GEÇMİŞ adaylar için aggression_awareness modülünden
+    # gelen profil; UI ve paper_trading_service tarafından okunur.
+    command: AgentCommand = "WAIT"
+    contradiction_score: int = 0
+    aggression: AggressionContext | None = None
+    sizing_decision: PositionSizingDecision | None = None
+    timeframe_decision: TimeframeDecision | None = None
+    stop_decision: StopDecision | None = None
+    # ── FAZ 2: event risk + volatility + take profit plan + promotion audit ──
+    event_risk_context: dict[str, Any] = field(default_factory=dict)
+    volatility_context: dict[str, Any] = field(default_factory=dict)
+    take_profit_plan: dict[str, Any] = field(default_factory=dict)
+    controlled_aggressive_promotion: dict[str, Any] = field(default_factory=dict)
 
 
 # ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────────
@@ -338,6 +371,195 @@ def aggregate_agent_decision(
     else:
         reasons.append(f"PASS: {block_reason or 'skor/yön yetersiz'}")
 
+    # ── 9. Aggression Awareness Layer ─────────────────────────────────────────
+    # Hard-block geçmiş tüm adaylar için (LONG/SHORT) controlled-aggressive
+    # profil çıkar; size_pct'yi agresifliğe göre yumuşatarak (aşağı yönlü) ezer.
+    # Mevcut block_reason'lara DOKUNMAZ — sadece sizing/timeframe/stop planı.
+    appetite_code = ""
+    appetite_obj = sig.get("risk_appetite") or sig.get("appetite") or {}
+    if isinstance(appetite_obj, dict):
+        appetite_code = str(
+            appetite_obj.get("status")
+            or appetite_obj.get("code")
+            or ""
+        ).upper()
+    elif isinstance(appetite_obj, str):
+        appetite_code = appetite_obj.upper()
+
+    contradiction = derive_contradiction_score(
+        sig, tf_alignment_label=tf_align.label, regime=raw_regime,
+    )
+
+    aggression = score_aggression(
+        sig,
+        pair=pair,
+        side=raw_side,
+        tf_alignment_label=tf_align.label,
+        regime=raw_regime,
+        appetite=appetite_code,
+        dqs_score=dqs_score,
+        contradiction_score=contradiction,
+    )
+
+    # ── FAZ 2: event risk + volatility fallback (gerçek news/VIX wiring değil) ─
+    # Aggregator artık sig + rejim + risk_appetite'tan fallback heuristik üretir.
+    # Aşağıdaki sizing/promotion adımları bu gerçek değerleri kullanır.
+    atr_value = float(sig.get("atr") or 0.0)
+    price_hint = float(sig.get("last_price") or sig.get("price") or 0.0)
+    event_ctx = derive_event_risk_fallback(
+        pair, sig,
+        regime=raw_regime, appetite=appetite_code,
+        side=raw_side,
+    )
+    vol_ctx = derive_high_volatility_fallback(
+        pair, sig, atr_value=atr_value, entry_price=price_hint,
+    )
+
+    # Event risk YÖNE TERS ise (örn. LONG BTCUSD + CRISIS): hard-block değil,
+    # mevcut soft path'e bırak (size küçülür, sizing 0.65× ile ezilir).
+    # Ama event risk DESTEKLİYORSA agg sizing içinde event_m=1.0 kalır.
+    event_risk_high = bool(event_ctx.get("event_risk_high"))
+    event_risk_direction = str(event_ctx.get("event_risk_direction") or "neutral_or_unknown")
+    if event_risk_direction == "against_trade":
+        # Sizing'de 0.65× çarpan uygulansın
+        event_risk_for_sizing = True
+    else:
+        # Asset yöne destek veriyorsa veya bilinmiyorsa, sadece event_risk_high'a göre
+        event_risk_for_sizing = event_risk_high
+    high_volatility = bool(vol_ctx.get("high_volatility"))
+
+    # Yön + blok yoksa → aggression-aware sizing devreye girer (sadece aşağı çekebilir)
+    sizing_dec: PositionSizingDecision | None = None
+    timeframe_dec: TimeframeDecision | None = None
+    stop_dec: StopDecision | None = None
+    tp_plan: dict[str, Any] = {}
+    if raw_side in ("LONG", "SHORT") and not block_reason:
+        sizing_dec = aggression_sizing(
+            base_size_multiplier=base_mult_from_score,
+            regime=raw_regime,
+            aggression=aggression,
+            contradiction_score=contradiction,
+            event_risk_high=event_risk_for_sizing,
+            high_volatility=high_volatility,
+        )
+        # Aggression-aware sonuç MEVCUT size_pct'den DAHA KÜÇÜK ise ezer
+        # (controlled-aggressive guard: hiçbir zaman büyütmez).
+        new_size = min(size_pct, sizing_dec.final_size_multiplier)
+        if new_size != size_pct:
+            reasons.append(
+                f"Aggression={aggression.aggression_level} (score {aggression.aggression_score}) "
+                f"→ size küçültüldü: {size_pct:.4f} → {new_size:.4f}"
+            )
+            size_pct = round(new_size, 4)
+
+        timeframe_dec = choose_timeframe(aggression, primary_tf)
+        # primary_tf score'undan support tahmini yapmıyoruz (None) — paper service
+        # mevcut ATR-bazlı SL'i kullanır; bu sadece audit/UI bilgisi
+        stop_dec = choose_stop(
+            aggression,
+            side=raw_side,
+            price=price_hint,
+            atr_value=atr_value,
+            support_level=None,
+        )
+
+        # Take profit plan — entry/stop fiyatları aggregator zamanında bilinmediği
+        # için stop_distance_pct üzerinden tahmini SL fiyatı kuruyoruz; paper
+        # trading service açılış anında entry ile yeniden hesaplayabilir.
+        if price_hint > 0 and stop_dec.stop_distance_pct > 0:
+            estimated_stop_price = (
+                price_hint * (1 - stop_dec.stop_distance_pct / 100.0)
+                if raw_side == "LONG"
+                else price_hint * (1 + stop_dec.stop_distance_pct / 100.0)
+            )
+        else:
+            estimated_stop_price = 0.0
+        tp_plan = build_take_profit_plan(
+            aggression, stop_dec,
+            side=raw_side,
+            entry_price=price_hint,
+            stop_price=estimated_stop_price,
+        )
+
+    command = pick_command(
+        side=raw_side,
+        confidence=confidence,
+        aggression_level=aggression.aggression_level,
+        contradiction_score=contradiction,
+        block_reason=block_reason,
+        risk_action=risk_action,
+    )
+
+    # ── Controlled-Aggressive Promotion ──────────────────────────────────────
+    # AGGRESSIVE_WATCH komutu uygun koşullarda SCALP_LONG_SETUP'a yükseltilir
+    # ve trade küçük boyutla açılır. Paper mode kontrol edilir.
+    paper_mode = __import__("os").environ.get(
+        "PAPER_TRADING_MODE", "controlled_aggressive",
+    ).lower()
+    # side_hint: command AGGRESSIVE_WATCH iken side=None olabilir; sig'den çek
+    side_hint = raw_side
+    if side_hint is None:
+        if final_direction == "bullish" and final_score >= MIN_SCORE_THRESHOLD - 6.0:
+            side_hint = "LONG"
+        elif final_direction == "bearish" and final_score <= (100 - MIN_SCORE_THRESHOLD + 6.0):
+            side_hint = "SHORT"
+    promotion = maybe_promote_command(
+        paper_mode=paper_mode,
+        command=command,
+        side_hint=side_hint,
+        aggression=aggression,
+        contradiction_score=contradiction,
+        block_reason=block_reason,
+        risk_action=risk_action,
+        dqs_score=dqs_score,
+        tf_alignment_label=tf_align.label,
+        atr_value=atr_value,
+        event_risk_direction=event_risk_direction,
+    )
+    if promotion.get("promoted"):
+        # Promotion: command'ı SCALP'e çevir, side'ı geri kazandır, size cap uygula
+        command = promotion["to"]
+        if side_hint in ("LONG", "SHORT"):
+            raw_side = side_hint
+        # Promotion size cap (default 0.25) — daha küçükse sizing_dec'i kabul et
+        promo_cap = float(promotion.get("new_size_cap") or 0.0)
+        if promo_cap > 0:
+            # Promotion sırasında size'ı en fazla cap kadar açar (sizing_dec'i yeniden hesapla)
+            if sizing_dec is None:
+                sizing_dec = aggression_sizing(
+                    base_size_multiplier=base_mult_from_score,
+                    regime=raw_regime,
+                    aggression=aggression,
+                    contradiction_score=contradiction,
+                    event_risk_high=event_risk_for_sizing,
+                    high_volatility=high_volatility,
+                )
+            promoted_size = min(promo_cap, sizing_dec.final_size_multiplier)
+            size_pct = round(promoted_size, 4)
+            # Soft block kalktı — trade açılır
+            if block_reason:
+                reasons.append(f"Promotion: '{block_reason}' soft-blok kaldırıldı")
+                block_reason = ""
+            reasons.append(promotion.get("reason", "Promotion uygulandı"))
+            # Timeframe/stop/tp planını promotion ile yeniden hesapla (henüz yoksa)
+            if timeframe_dec is None:
+                timeframe_dec = choose_timeframe(aggression, primary_tf)
+            if stop_dec is None:
+                stop_dec = choose_stop(
+                    aggression, side=raw_side, price=price_hint,
+                    atr_value=atr_value, support_level=None,
+                )
+            if not tp_plan and stop_dec is not None and price_hint > 0:
+                estimated_stop_price = (
+                    price_hint * (1 - stop_dec.stop_distance_pct / 100.0)
+                    if raw_side == "LONG"
+                    else price_hint * (1 + stop_dec.stop_distance_pct / 100.0)
+                )
+                tp_plan = build_take_profit_plan(
+                    aggression, stop_dec, side=raw_side,
+                    entry_price=price_hint, stop_price=estimated_stop_price,
+                )
+
     should_trade = (
         raw_side in ("LONG", "SHORT")
         and size_pct > 0.0
@@ -359,4 +581,73 @@ def aggregate_agent_decision(
         reasons=reasons,
         auto_close=auto_close,
         auto_close_reason=auto_close_reason,
+        command=command,
+        contradiction_score=contradiction,
+        aggression=aggression,
+        sizing_decision=sizing_dec,
+        timeframe_decision=timeframe_dec,
+        stop_decision=stop_dec,
+        event_risk_context=event_ctx,
+        volatility_context=vol_ctx,
+        take_profit_plan=tp_plan,
+        controlled_aggressive_promotion=promotion,
     )
+
+
+# ── open_signal helper'ı ─────────────────────────────────────────────────────
+
+def decision_to_open_signal_extras(decision: AgentTradeDecision) -> dict[str, Any]:
+    """AgentTradeDecision'dan open_signal'a yazılacak controlled-aggressive blok.
+
+    paper_trading_service yeni açılan pozisyonun open_signal'ına ekler:
+      open_signal["aggression_context"]   — full aggression profili
+      open_signal["agent_command"]        — komut etiketi
+      open_signal["contradiction_score"]  — 0-100
+      open_signal["timeframe_decision"]   — TF + holding + recheck
+      open_signal["stop_decision"]        — agresif stop planı (referans)
+    """
+    out: dict[str, Any] = {
+        "agent_command":       decision.command,
+        "contradiction_score": decision.contradiction_score,
+    }
+    if decision.aggression is not None:
+        out["aggression_context"] = aggression_to_dict(decision.aggression)
+    if decision.timeframe_decision is not None:
+        td = decision.timeframe_decision
+        out["timeframe_decision"] = {
+            "selected_timeframe":       td.selected_timeframe,
+            "reason":                   td.reason,
+            "max_holding_time":         td.max_holding_time,
+            "recheck_interval_minutes": td.recheck_interval_minutes,
+        }
+    if decision.stop_decision is not None:
+        sd = decision.stop_decision
+        out["stop_decision"] = {
+            "stop_distance_pct":  sd.stop_distance_pct,
+            "atr_multiplier":     sd.atr_multiplier,
+            "stop_type":          sd.stop_type,
+            "why_this_stop":      sd.why_this_stop,
+            "hard_invalidation":  list(sd.hard_invalidation),
+        }
+    if decision.sizing_decision is not None:
+        szd = decision.sizing_decision
+        out["sizing_decision"] = {
+            "base_size_multiplier":       szd.base_size_multiplier,
+            "aggression_multiplier":      szd.aggression_multiplier,
+            "regime_multiplier":          szd.regime_multiplier,
+            "contradiction_multiplier":   szd.contradiction_multiplier,
+            "event_risk_multiplier":      szd.event_risk_multiplier,
+            "volatility_multiplier":      szd.volatility_multiplier,
+            "final_size_multiplier":      szd.final_size_multiplier,
+            "reason":                     szd.reason,
+        }
+    # FAZ 2: TP planı, event risk + volatility fallback, promotion audit
+    if decision.take_profit_plan:
+        out["take_profit_plan"] = dict(decision.take_profit_plan)
+    if decision.event_risk_context:
+        out["event_risk_context"] = dict(decision.event_risk_context)
+    if decision.volatility_context:
+        out["volatility_context"] = dict(decision.volatility_context)
+    if decision.controlled_aggressive_promotion:
+        out["controlled_aggressive_promotion"] = dict(decision.controlled_aggressive_promotion)
+    return out

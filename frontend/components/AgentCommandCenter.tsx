@@ -292,7 +292,7 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: { onClos
               <div>
                 <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  AGENT · CANLI
+                  e-yAy AGENT
                 </p>
                 <h2 className="text-lg font-bold text-eyay-text mt-0.5 leading-tight">
                   Komut Merkezi

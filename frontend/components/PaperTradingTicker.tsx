@@ -109,15 +109,59 @@ interface Position {
   manual_risk_override?: ManualRiskOverride;
   opening_explanation?: OpeningExplanation;
   average_entry_price?: number;
-  // Open signal — teknik/haber/timeframe karar kaynağı
+  // Open signal — backend agent_decision_aggregator çıktısı (asdict ile serialize)
   open_signal?: {
-    technical?: string;
-    confluence?: string;
-    multi_tf?: string;
-    timeframe_decision?: Record<string, any>;  // 15m/1h/4h/1d ayrıntıları
-    pattern?: string;
+    // Temel sinyal metrikleri
+    primary_tf?: string;            // Sinyalin üretildiği TF (1h, 4h, 1d)
+    final_score?: number;           // Confluence sonrası nihai skor
+    final_direction?: string;       // bullish / bearish / neutral
+    contradiction_score?: number;   // 0-100
+    // Modül tabanlı consensus (base TF üzerinde hesaplandı)
+    base?: {
+      timeframe?: string;
+      consensus_score?: number;
+      direction?: string;
+      module_scores?: Record<string, number>;
+      contributions?: Record<string, {
+        score: number;
+        weight: number;
+        weighted_score: number;
+      }>;
+    };
+    // Çok-zaman-dilimi confluence
+    confluence?: {
+      original_score?: number;
+      adjusted_score?: number;
+      multiplier?: number;
+      status?: string;        // "aligned" | "opposing" | "skipped"
+      vote_count?: { aligned: number; opposing: number; neutral_ignored: number };
+      tf_directions?: Record<string, string>;  // {"4h":"bullish","1d":"bullish"}
+      warnings?: string[];
+    };
+    // Her TF için ayrı consensus signal
+    tf_signals?: Record<string, {
+      consensus_score?: number;
+      direction?: string;
+      module_scores?: Record<string, number>;
+    }>;
+    other_tf_scores?: Record<string, number>;  // {"4h": 64.1, "1d": 64.1}
+    // Aggression / izleme TF kararı
+    timeframe_decision?: {
+      selected_timeframe?: string;    // monitoring TF (4h)
+      reason?: string;
+      max_holding_time?: string;
+      recheck_interval_minutes?: number;
+    };
+    aggression_context?: {
+      aggression_level?: string;
+      aggression_score?: number;
+      recommended_timeframe?: string;
+      max_holding_time?: string;
+      summary?: string;
+    };
+    // Diğer context
     news?: string[];
-    aggression_context?: string;
+    agent_command?: string;
   };
 }
 
@@ -1721,59 +1765,84 @@ function OpenPositionCard({
           </button>
           {explanOpen && (
             <div className="px-2 pb-2 border-t border-eyay-border/30 pt-2 space-y-2.5 text-[11px]">
-              {/* A) Teknik Veriler */}
+              {/* A) Consensus Skoru Nasıl Oluştu */}
               <div>
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">A) Kullanılan Teknik Veriler</p>
-                <p className="text-[10px] text-eyay-text/90 leading-snug">
-                  {buildTechnicalSummary(p.open_signal)}
-                </p>
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">A) Consensus Skoru</p>
+                {p.open_signal ? (
+                  <>
+                    <pre className="text-[10px] text-eyay-text/90 leading-snug whitespace-pre-wrap font-mono">
+                      {buildConsensusExplanation(p.open_signal)}
+                    </pre>
+                    {/* Modül katkıları */}
+                    {buildModuleScores(p.open_signal) && (
+                      <p className="text-[9px] text-eyay-faint mt-1 leading-snug">
+                        Modül katkıları: {buildModuleScores(p.open_signal)}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[10px] text-eyay-faint">Kayıt yok.</p>
+                )}
               </div>
 
               {/* B) Timeframe Değerlendirmesi */}
-              {p.open_signal && (
-                <div>
-                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">B) Timeframe Değerlendirmesi</p>
-                  <div className="space-y-0.5 text-[10px] font-mono">
-                    {(() => {
-                      const tfEval = buildTimeframeEval(p.open_signal);
-                      return tfEval.details.map(d => (
-                        <div key={d.tf} className="flex items-baseline justify-between gap-1">
-                          <span className="text-eyay-faint w-8 shrink-0">{d.tf}</span>
-                          <span className="text-eyay-text/90 flex-1">{d.verdict}</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                  <p className="text-[9px] text-eyay-dim italic mt-1">
-                    💡 {(() => {
-                      const tfEval = buildTimeframeEval(p.open_signal);
-                      const bullishCount = tfEval.details.filter(d => d.verdict.includes("BULLISH")).length;
-                      const bearishCount = tfEval.details.filter(d => d.verdict.includes("BEARISH")).length;
-                      if (bullishCount >= 2) return "4H/1D uyumu işlem yönünü destekledi.";
-                      if (bearishCount >= 2) return "Kısa vadeler karşı çıkıyor; risk kontrollü izlemeli.";
-                      return "Timeframe uyumu zayıf; manuel karar için detay izlemeli.";
-                    })()}
-                  </p>
-                </div>
-              )}
+              <div>
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">B) Timeframe Değerlendirmesi</p>
+                {p.open_signal ? (() => {
+                  const tfEval = buildTimeframeEval(p.open_signal);
+                  return (
+                    <>
+                      <table className="w-full text-[10px] font-mono border-collapse">
+                        <thead>
+                          <tr className="text-eyay-faint text-[8px] uppercase tracking-wider">
+                            <th className="text-left pb-1 pr-2 w-8">TF</th>
+                            <th className="text-left pb-1 pr-2 w-16">Yön</th>
+                            <th className="text-left pb-1 pr-2 w-16">Skor</th>
+                            <th className="text-left pb-1">Not</th>
+                          </tr>
+                        </thead>
+                        <tbody className="space-y-0.5">
+                          {tfEval.details.map(d => (
+                            <tr key={d.tf} className={d.direction === "bullish" ? "text-emerald-300/90" : d.direction === "bearish" ? "text-red-300/90" : "text-eyay-faint"}>
+                              <td className="pr-2 align-top">{d.tf}</td>
+                              <td className="pr-2 align-top">{d.direction}</td>
+                              <td className="pr-2 align-top">{d.score !== "—" ? `${d.score}/100` : "—"}</td>
+                              <td className="text-eyay-faint text-[9px] align-top">{d.note}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-[9px] text-eyay-dim italic mt-1.5">
+                        💡 {
+                          tfEval.details.filter(d => d.direction === "bullish").length >= 2 ? "Birden fazla TF bullish — confluence işlem yönünü destekledi." :
+                          tfEval.details.filter(d => d.direction === "bearish").length >= 2 ? "Kısa vadeler karşı sinyal veriyor; risk kontrollü izlemeli." :
+                          "TF uyumu zayıf; manuel karar için 4H ve 1H kapanışlarını izlemeli."
+                        }
+                      </p>
+                      {/* TF anlamı — üç farklı TF kavramı */}
+                      <div className="mt-1.5 pt-1.5 border-t border-eyay-border/30 text-[9px] text-eyay-faint space-y-0.5">
+                        {p.open_signal?.primary_tf && (
+                          <p>Sinyal TF: <span className="text-eyay-dim">{p.open_signal.primary_tf.toUpperCase()}</span> (agent bu TF'de sinyal üretti)</p>
+                        )}
+                        {p.open_signal?.timeframe_decision?.selected_timeframe && (
+                          <p>İzleme TF: <span className="text-eyay-dim">{p.open_signal.timeframe_decision.selected_timeframe.toUpperCase()}</span> (aggression → monitoring)</p>
+                        )}
+                        {p.risk_plan?.timeframe && (
+                          <p>Risk TF: <span className="text-eyay-dim">{p.risk_plan.timeframe.toUpperCase()}</span> (SL/TP/horizon hesabı için)</p>
+                        )}
+                      </div>
+                    </>
+                  );
+                })() : (
+                  <p className="text-[10px] text-eyay-faint">Kayıt yok.</p>
+                )}
+              </div>
 
               {/* C) Manuel Takip Notu */}
               <div>
                 <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">C) Manuel Takip Notu</p>
-                <p className="text-[10px] text-eyay-text/90 leading-snug italic">
-                  {(() => {
-                    if (!p.open_signal) return "Kayıt yok.";
-                    const tfEval = buildTimeframeEval(p.open_signal);
-                    const bullishCount = tfEval.details.filter(d => d.verdict.includes("BULLISH")).length;
-                    const bearishCount = tfEval.details.filter(d => d.verdict.includes("BEARISH")).length;
-                    if (bullishCount >= 2) {
-                      return "4H/1D uyumu var. 1H/15m trade'e karşı dönerse erken kapatma için izlemeli.";
-                    }
-                    if (bearishCount >= 2) {
-                      return "Kısa vade zayıf. 4H bozulmadıkça ana trade fikri korunuyor; 1H izlemeli.";
-                    }
-                    return "Timeframe uyumu karışık. 4H ve 1H kapanışları yakından izlemeli.";
-                  })()}
+                <p className="text-[10px] text-eyay-text/90 leading-snug">
+                  {buildManualFollowNote(p.open_signal)}
                 </p>
               </div>
 
@@ -1785,7 +1854,7 @@ function OpenPositionCard({
                 </p>
               </div>
 
-              {/* E) Karar (açıklama varsa) */}
+              {/* E) Karar Özeti (açıklama varsa) */}
               {p.opening_explanation?.primary_reason && (
                 <div>
                   <p className="text-[9px] font-mono text-emerald-300/80 uppercase tracking-wider mb-1">E) Karar Özeti</p>
@@ -1834,43 +1903,103 @@ function OpenPositionCard({
 // İşlem Açılma Sebebi — helper fonksiyonları
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Timeframe eval: 15m/1h/4h/1d için kısa özet oluştur
+// Timeframe eval — tf_signals + confluence.tf_directions okur
 function buildTimeframeEval(openSignal: Position["open_signal"]): {
   summary: string;
-  details: Array<{ tf: string; verdict: string }>;
+  details: Array<{ tf: string; direction: string; score: string; note: string }>;
 } {
-  const tfd = openSignal?.timeframe_decision || {};
-  const tfs = ["15m", "1h", "4h", "1d"];
-  const details = tfs.map(tf => {
-    const info = tfd[tf];
-    if (!info) return { tf, verdict: "kayıt yok" };
-    // info = { bias, score, pattern, ... } gibi
-    const bias = info.bias || "—";
-    const score = info.score != null ? `${info.score}` : "—";
-    const pattern = info.pattern || "—";
-    return { tf, verdict: `${bias} / ${score} · ${pattern}` };
+  const tfSigs = openSignal?.tf_signals ?? {};
+  const tfDirs = openSignal?.confluence?.tf_directions ?? {};
+  const primaryTf = openSignal?.primary_tf ?? "";
+
+  const details = ["15m", "1h", "4h", "1d"].map(tf => {
+    const sig = tfSigs[tf];
+    if (!sig) {
+      const note = tf === "15m" ? "sistem 15m sinyal hesaplamıyor" : "kayıt yok";
+      return { tf, direction: "—", score: "—", note };
+    }
+    const dir = sig.direction ?? tfDirs[tf] ?? "—";
+    const score = sig.consensus_score != null ? sig.consensus_score.toFixed(1) : "—";
+    const isPrimary = tf === primaryTf ? "sinyal TF" : "";
+    const confDir = tfDirs[tf];
+    const isConfluence = confDir && confDir !== "neutral" && tf !== primaryTf
+      ? `confluence: ${confDir}` : "";
+    const noteParts = [isPrimary, isConfluence].filter(Boolean);
+    return { tf, direction: dir, score, note: noteParts.join(" · ") };
   });
-  // Summary: hepsi bullish/bearish mi, mixed mi, harita çiz
-  const bullishCount = details.filter(d => d.verdict.includes("BULLISH")).length;
-  const bearishCount = details.filter(d => d.verdict.includes("BEARISH")).length;
-  const summ = bullishCount >= 2 ? "Bullish uyum" :
-               bearishCount >= 2 ? "Bearish uyum" :
-               "Mixed/nötr";
-  return { summary: summ, details };
+
+  const bullish = details.filter(d => d.direction === "bullish").length;
+  const bearish = details.filter(d => d.direction === "bearish").length;
+  const summary = bullish >= 2 ? "Bullish uyum" : bearish >= 2 ? "Bearish uyum" : "Mixed/nötr";
+  return { summary, details };
 }
 
-// Teknik veriler: açıklaması
-function buildTechnicalSummary(openSignal: Position["open_signal"]): string {
-  if (!openSignal?.technical && !openSignal?.confluence) {
-    return "Teknik veri kaydı yok.";
+// Consensus skoru nasıl oluştu — base × confluence multiplier
+function buildConsensusExplanation(openSignal: Position["open_signal"]): string {
+  const conf = openSignal?.confluence;
+  const base = openSignal?.base;
+  if (!conf && !base) return "Kayıt yok.";
+
+  const baseScore = conf?.original_score ?? base?.consensus_score;
+  const finalScore = conf?.adjusted_score ?? openSignal?.final_score;
+  const mult = conf?.multiplier ?? 1.0;
+  const status = conf?.status ?? "unknown";
+  const primaryTf = openSignal?.primary_tf ?? "?";
+
+  const lines: string[] = [];
+  lines.push(`Temel TF: ${primaryTf} → Base skor: ${baseScore?.toFixed(1) ?? "—"}`);
+
+  if (status === "aligned") {
+    const aligned = Object.entries(conf?.tf_directions ?? {})
+      .filter(([, v]) => v !== "neutral")
+      .map(([k, v]) => `${k}:${v}`)
+      .join(" + ");
+    lines.push(`Confluence: ${aligned} uyumu → ×${mult} → Final skor: ${finalScore?.toFixed(1) ?? "—"}`);
+  } else if (status === "skipped") {
+    lines.push(`Confluence skip (higher TF'ler nötr) → Çarpan uygulanmadı → Final skor: ${finalScore?.toFixed(1) ?? "—"}`);
+  } else if (status === "opposing") {
+    lines.push(`Confluence karşı sinyal (×${mult}) → Final skor: ${finalScore?.toFixed(1) ?? "—"}`);
   }
+
+  const votes = conf?.vote_count;
+  if (votes) {
+    lines.push(`Oy: ${votes.aligned} uyumlu · ${votes.opposing} karşı · ${votes.neutral_ignored} nötr (sayılmadı)`);
+  }
+
+  const warnings = conf?.warnings ?? base?.["warnings" as keyof typeof base];
+  if (Array.isArray(warnings) && warnings.length > 0) {
+    lines.push(`⚠ ${(warnings as string[]).join(" · ")}`);
+  }
+
+  return lines.join("\n");
+}
+
+// Modül skorları — açıklayıcı satır
+function buildModuleScores(openSignal: Position["open_signal"]): string | null {
+  const scores = openSignal?.base?.module_scores;
+  if (!scores || Object.keys(scores).length === 0) return null;
+  const parts = Object.entries(scores).map(([mod, score]) =>
+    `${mod}: ${typeof score === "number" ? score.toFixed(1) : score}`
+  );
+  return parts.join(" · ");
+}
+
+// Manuel takip notu — timeframe_decision + aggression
+function buildManualFollowNote(openSignal: Position["open_signal"]): string {
+  const td = openSignal?.timeframe_decision;
+  const ac = openSignal?.aggression_context;
+
+  if (!td && !ac) return "Kayıt yok.";
+
   const parts: string[] = [];
-  if (openSignal.technical) parts.push(openSignal.technical);
-  if (openSignal.confluence) {
-    const confStr = typeof openSignal.confluence === "string"
-      ? openSignal.confluence
-      : JSON.stringify(openSignal.confluence);
-    parts.push(`Confluence: ${confStr}`);
+  if (td?.selected_timeframe) {
+    parts.push(`İzleme TF: ${td.selected_timeframe.toUpperCase()}`);
+    if (td.reason) parts.push(`(${td.reason})`);
+    if (td.max_holding_time) parts.push(`Max tutuş: ${td.max_holding_time}`);
+    if (td.recheck_interval_minutes) parts.push(`Recheck: ${td.recheck_interval_minutes} dk`);
+  } else if (ac?.recommended_timeframe) {
+    parts.push(`Önerilen TF: ${ac.recommended_timeframe.toUpperCase()}`);
+    if (ac.max_holding_time) parts.push(`Max tutuş: ${ac.max_holding_time}`);
   }
   return parts.join(" · ");
 }
@@ -1878,9 +2007,9 @@ function buildTechnicalSummary(openSignal: Position["open_signal"]): string {
 // Haber/Event etkisi
 function buildNewsImpact(openSignal: Position["open_signal"]): string {
   if (!openSignal?.news || openSignal.news.length === 0) {
-    return "Bu pozisyonun açılış snapshot'ında trade'i doğrudan tetikleyen doğrulanmış haber kaydı yok. Karar daha çok teknik yapı ve timeframe uyumu üzerinden oluştu.";
+    return "Bu pozisyonun açılış snapshot'ında trade'i doğrudan tetikleyen doğrulanmış haber kaydı yok. Karar teknik yapı ve timeframe uyumu üzerinden oluştu.";
   }
-  return `Haber kaynakları: ${openSignal.news.join(", ")}`;
+  return openSignal.news.join("\n");
 }
 
 // Tek satırlık etiket–değer rowu (Pozisyon Özeti / Risk Planı içinde)

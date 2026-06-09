@@ -99,6 +99,47 @@ _OHLCV_ASSETS: dict[str, dict] = {
 }
 
 # ---------------------------------------------------------------------------
+# Asset bazlı fiyat aralıkları — yfinance / paralel indirme bazen yanlış
+# ticker'a ait DataFrame iade edebiliyor (ör: BTC'ye XAG'ın bar'ları geliyor).
+# Bu durumda current_price/support/resistance asset için olası aralık dışında
+# kalır. _process_ticker çıkışında bu sanity guard çalışır ve yanlış mapping
+# olan insight'ı discard eder (None döner). Böylece downstream (asset_signals,
+# owner_actions, flip_conditions, paper trading) fallback sabit eşiği kullanır.
+# ---------------------------------------------------------------------------
+_ASSET_PRICE_BOUNDS: dict[str, tuple[float, float]] = {
+    "BTCUSD": (10_000.0,   1_000_000.0),
+    "XAUUSD": (1_000.0,    10_000.0),
+    "XAGUSD": (5.0,        300.0),
+    "XCUUSD": (2_000.0,    20_000.0),   # USD/MT — mult sonrası
+    "BRENT":  (10.0,       250.0),
+    "DXY":    (50.0,       200.0),
+    "VIX":    (5.0,        150.0),
+    "SP500":  (1_500.0,    10_000.0),
+    "HYG":    (20.0,       200.0),
+    "QQQ":    (100.0,      2_000.0),
+    "IWM":    (50.0,       500.0),
+    "LQD":    (50.0,       200.0),
+    "SMH":    (50.0,       500.0),
+    "XLF":    (15.0,       200.0),
+}
+
+
+def _is_insight_sane(asset_code: str, current_price: float, support: float, resistance: float) -> bool:
+    """current_price + S/R hepsi asset'in olası aralığında mı?"""
+    bounds = _ASSET_PRICE_BOUNDS.get(asset_code)
+    if not bounds:
+        return True
+    lo, hi = bounds
+    for label, v in (("current", current_price), ("support", support), ("resistance", resistance)):
+        if not (lo <= v <= hi):
+            logger.warning(
+                "TechnicalProvider: %s %s=%.4f aralık dışı [%.0f, %.0f] — insight discard",
+                asset_code, label, v, lo, hi,
+            )
+            return False
+    return True
+
+# ---------------------------------------------------------------------------
 # Süreç-içi önbellek
 # ---------------------------------------------------------------------------
 
@@ -461,6 +502,12 @@ def _process_ticker(
         current_price=current,   # fiyat kırılan seviyeyi otomatik döndürsün
         atr=atr,
     )
+
+    # Asset-specific sanity guard — yfinance bazen yanlış ticker'ı dönüyor;
+    # bound dışı current/S/R varsa discard et (downstream fallback kullanır).
+    if not _is_insight_sane(asset_code, current, support, resistance):
+        return None
+
     rsi       = _rsi(close)
     macd      = _macd_signal(close)
     structure = _market_structure(high, low, close)
@@ -522,7 +569,7 @@ class TechnicalProvider:
     """
 
     def compute(
-        self, max_workers: int = 6, force_refresh: bool = False
+        self, max_workers: int = 1, force_refresh: bool = False
     ) -> dict[str, TechnicalInsight]:
         """
         Tüm desteklenen varlıklar için TechnicalInsight sözlüğü döner.

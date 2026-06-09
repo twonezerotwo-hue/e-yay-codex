@@ -15,11 +15,18 @@ const config: Config = {
           border:   "#1e2d42",   // ince sınır
           muted:    "#2d3f56",   // muted border / placeholder
           text:     "#e2e8f0",   // ana metin
-          dim:      "#8899aa",   // ikincil metin
-          faint:    "#4a5d72",   // en soluk metin
+          dim:      "#a5b4c4",   // ikincil metin — kontrast artırıldı (#8899aa→#a5b4c4)
+          faint:    "#6b7d92",   // en soluk metin — kontrast artırıldı (#4a5d72→#6b7d92)
           blue:     "#60a5fa",   // vurgu
           teal:     "#2dd4bf",   // ikincil vurgu
         },
+        // Semantic tokens — yeni component'lerde tercih edilir.
+        // Mevcut emerald-/red-/amber- doğrudan kullanımlar değişmez.
+        profit:  "#34d399",
+        loss:    "#f87171",
+        warning: "#fbbf24",
+        danger:  "#ef4444",
+        neutral: "#cbd5e1",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

@@ -15,11 +15,14 @@ PAPER_SAFE / NO_EXECUTION — sadece simülasyon, gerçek emir YOK.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 PositionSide = Literal["LONG", "SHORT"]
 TradeEvent   = Literal["OPEN", "CLOSE"]
@@ -30,10 +33,114 @@ STARTING_BALANCE = 100_000.0
 POSITION_SIZE    = 25_000.0   # baz pozisyon büyüklüğü (consensus güveni ile ×0.6 .. ×1.5)
 TRADED_PAIRS     = ("BTCUSD", "XAUUSD", "XAGUSD", "BRENT")
 MARKET_HOURS_GATED_PAIRS = frozenset({"XAUUSD", "XAGUSD", "BRENT", "XCUUSD"})
+
+# ── Fiyat mantık sınırları (price sanity guard) ──────────────────────────────
+# Veri kaynağı (yfinance/pipeline) arızalandığında saçma fiyatlar pair'ler
+# arasında karışıyor (BTC için $7405, BRENT için $284, XAUUSD için $716 vs.).
+# Sınırları 2026 piyasa aralığına yakın tut — geniş kalsa bile cross-pair
+# karışmayı (örn. XAUUSD'ye XAGUSD fiyatı gelmesi) yine kaçırır, o yüzden
+# bu absolute bounds + price-jump guard (önceki sane fiyata göre %30 sapma)
+# BİRLİKTE kullanılır.
+PRICE_SANITY_BOUNDS: dict[str, tuple[float, float]] = {
+    "BTCUSD": (20_000.0, 500_000.0),
+    "XAUUSD": (1_500.0, 7_000.0),
+    "XAGUSD": (15.0, 150.0),
+    "BRENT":  (30.0, 200.0),
+}
+
+# Önceki sane tick fiyatına göre maksimum izin verilen sapma. Cross-pair
+# kontaminasyon (BTC→7405) anomaly'sini absolute bounds yakalayamayabiliyor,
+# çünkü 7405 BTC'nin tarihi-makul aralığındadır. Ama önceki tick BTC=64000 ise
+# %88'lik düşüş → kabul edilemez. ±%30 limit gerçek piyasada hiçbir tick için
+# aşılmaz; aşılırsa kesin veri arızasıdır.
+PRICE_MAX_JUMP_PCT: float = 30.0
+
+# ── State anomaly guard ───────────────────────────────────────────────────────
+# Bozuk fiyat verisi state'e zaten yazılmışsa (geçmiş trade'ler) realized_pnl/
+# equity başlangıç bakiyesinin kat kat üzerine çıkar. Böyle bir durumda yeni
+# paper trade açılışını durdurup kullanıcıyı UI'da uyarmak için kullanılır —
+# mevcut pozisyonları kapatmak/yönetmek ENGELLENMEZ.
+ANOMALY_EQUITY_MULTIPLIER = 3.0
+ANOMALY_DAILY_PNL_FRACTION = 0.5
+
+
+def _is_price_sane(
+    pair: str,
+    price: float,
+    *,
+    previous_price: float | None = None,
+) -> bool:
+    """Fiyat mantıklı bir aralıkta mı? Değilse pozisyon aç/kapat/yönet'e girmez.
+
+    İki kademeli kontrol:
+      1) Absolute bounds: PRICE_SANITY_BOUNDS içindeki [lo, hi] aralığı.
+         Sınır tanımlı olmayan pariteler için sadece pozitiflik kontrolü.
+      2) Price-jump guard: Opsiyonel previous_price verildiyse, yeni fiyat
+         önceki fiyata göre PRICE_MAX_JUMP_PCT'den fazla sapıyorsa reddet.
+         Cross-pair contamination yakalama amaçlı (BTC→7405 ABS-makul ama
+         önceki tick'e göre saçma).
+    """
+    if price <= 0:
+        return False
+    bounds = PRICE_SANITY_BOUNDS.get(pair)
+    if bounds is not None:
+        lo, hi = bounds
+        if not (lo <= price <= hi):
+            return False
+    if previous_price is not None and previous_price > 0:
+        pct = abs(price - previous_price) / previous_price * 100.0
+        if pct > PRICE_MAX_JUMP_PCT:
+            return False
+    return True
+
+
+def _detect_state_anomaly(
+    st: "TradingState",
+    *,
+    equity: float | None = None,
+    daily_pnl: float | None = None,
+) -> dict[str, Any]:
+    """Gerçekçi olmayan realized_pnl/equity/daily_pnl tespiti.
+
+    Kaynak veri (fiyat akışı) bozulduğunda realized_pnl/equity başlangıç
+    bakiyesinin kat kat üzerine çıkabilir. Tespit edilirse çağıran taraf
+    (tick_consensus) yeni trade açılışını durdurur, get_snapshot ise UI'da
+    uyarı banner'ı için sebepleri döner.
+    """
+    reasons: list[str] = []
+    base = st.starting_balance
+    if base > 0:
+        if abs(st.realized_pnl_usd) > base * ANOMALY_EQUITY_MULTIPLIER:
+            reasons.append(
+                f"Realized PnL (${st.realized_pnl_usd:,.2f}) başlangıç bakiyenin "
+                f"{ANOMALY_EQUITY_MULTIPLIER:.0f} katını aşıyor (${base:,.2f})"
+            )
+        if equity is not None and equity > base * ANOMALY_EQUITY_MULTIPLIER:
+            reasons.append(
+                f"Equity (${equity:,.2f}) başlangıç bakiyenin "
+                f"{ANOMALY_EQUITY_MULTIPLIER:.0f} katını aşıyor (${base:,.2f})"
+            )
+        if daily_pnl is not None and abs(daily_pnl) > base * ANOMALY_DAILY_PNL_FRACTION:
+            reasons.append(
+                f"Günlük PnL (${daily_pnl:,.2f}) başlangıç bakiyenin "
+                f"%{ANOMALY_DAILY_PNL_FRACTION * 100:.0f}'ini aşıyor"
+            )
+    return {"detected": bool(reasons), "reasons": reasons}
 MARKET_CLOSE_FRIDAY_UTC_HOUR = 21
 MARKET_OPEN_SUNDAY_UTC_HOUR = 22
 OPEN_CONFIRMATION_WINDOW_SECONDS = 60
 DAILY_LOSS_LIMIT_USD = -5_000.0   # günlük zarar uyarı eşiği
+
+# ── Paper Trading Mode (Controlled-Aggressive) ───────────────────────────────
+# "conservative"          → eski davranış (yalnızca tam confirmed setup)
+# "balanced"              → orta — confidence yüksekse açar
+# "controlled_aggressive" → varsayılan: TACTICAL/SCALP setup'larını da açar
+#                           ama küçük boyut + yakın stop + kısa holding ile
+# Mod, sadece aggregator BLOCK demediği zaman aktiftir; DQS<55, kill_switch,
+# divergent TF, asset-adverse event gibi hard blok kuralları HER zaman geçerli.
+PAPER_TRADING_MODE: str = (
+    __import__("os").environ.get("PAPER_TRADING_MODE", "controlled_aggressive").lower()
+)
 
 # Consensus-driven karar eşikleri
 STRONG_LONG_THR   = 70.0   # consensus + confluence aligned ile → 1.5× pos
@@ -273,6 +380,25 @@ class Position:
     # "PAPER"  = otomatik pending → 60sn'lik onay penceresi sonunda açıldı
     # "MANUAL" = kullanıcı 'Açılmaya Hazır' kuyruğundan elle açtı (force_open_manual_ready)
     opened_by:   str = "PAPER"           # backward compat: eski state'lerde alan yoksa PAPER varsayılır
+    # ── FAZ 2: Aggression Execution Integration ──
+    # recheck_plan: pozisyon her N dakikada yeniden değerlendirilir; bu fazda
+    # otomatik close DEĞIL, sadece audit/flag/review yazılır.
+    # holding_plan: max_holding_until geldiğinde holding_status değişir; bu
+    # fazda otomatik close DEĞİL — sadece UI/audit "expired_needs_review".
+    recheck_plan: dict[str, Any] = field(default_factory=dict)
+    holding_plan: dict[str, Any] = field(default_factory=dict)
+    # ── FAZ 3: Position Management (parçalı alım + manuel SL/TP override) ──
+    # add_plan: parçalı alım planı — mod, max size, kademe seviyeleri, durum.
+    # manual_risk_override: kullanıcı SL/TP'yi elle değiştirdiyse; auto_plan_backup
+    # otomatik planı sakar, "Otomatik Plana Geri Dön" ile geri yüklenir.
+    # opening_explanation: işlemin neden açıldığına dair derive edilmiş açıklama.
+    add_plan: dict[str, Any] = field(default_factory=dict)
+    manual_risk_override: dict[str, Any] = field(default_factory=dict)
+    opening_explanation: dict[str, Any] = field(default_factory=dict)
+    # add_history: gerçekleşen parçalı alımlar (audit) — entry_price, size_usd, reason, ts
+    add_history: list[dict[str, Any]] = field(default_factory=list)
+    # average_entry_price: parçalı alım sonrası güncellenen ortalama giriş; entry_price ile birlikte tutulur
+    average_entry_price: float = 0.0
 
 
 @dataclass
@@ -357,6 +483,11 @@ class Trade:
     fingerprint:  str = ""       # benzer trade lookup için
     # ── SL/TP arkasındaki hikaye — kapanmış trade için audit ──
     risk_plan:    dict[str, Any] = field(default_factory=dict)
+    # ── Veri kalitesi bayrağı — repair sonrası ayıklama için ──
+    # "" = sağlıklı; "price_anomaly" = entry/exit fiyatı mantık dışı sınırlarda,
+    # repair script tarafından işaretlenmiştir, PnL audit için tutulur ama
+    # realized_pnl/equity hesabına dahil edilmez.
+    data_quality_flag: str = ""
 
 
 @dataclass
@@ -403,6 +534,15 @@ def _load_state() -> TradingState:
             v.setdefault("partial_tp_taken", False)
             v.setdefault("original_size_usd", 0.0)
             v.setdefault("opened_by", "PAPER")
+            # FAZ 2: recheck/holding plan defaults (eski state için)
+            v.setdefault("recheck_plan", {})
+            v.setdefault("holding_plan", {})
+            # FAZ 3: position management defaults (eski state için)
+            v.setdefault("add_plan", {})
+            v.setdefault("manual_risk_override", {})
+            v.setdefault("opening_explanation", {})
+            v.setdefault("add_history", [])
+            v.setdefault("average_entry_price", v.get("entry_price", 0.0))
             # Bilinmeyen alanları sessizce at (eski/yeni schema farkına dayanıklı)
             valid = {f.name for f in fields(Position)}
             v = {kk: vv for kk, vv in v.items() if kk in valid}
@@ -447,6 +587,7 @@ def _load_state() -> TradingState:
             t.setdefault("verdict", "")
             t.setdefault("fingerprint", "")
             t.setdefault("risk_plan", {})
+            t.setdefault("data_quality_flag", "")
             t2 = {kk: vv for kk, vv in t.items() if kk in valid_trade}
             trades.append(Trade(**t2))
 
@@ -899,6 +1040,104 @@ def _realize_partial_tp(
     )
 
 
+def _apply_recheck_and_holding_review(
+    cur: "Position",
+    pair: str,
+    sig: dict[str, Any] | None,
+    now_dt: datetime,
+    *,
+    dqs_score: int | None,
+    kill_switch: bool,
+) -> None:
+    """FAZ 2: Pozisyon recheck + max holding kontrolü.
+
+    Otomatik close YAPMAZ — sadece audit/flag/review yazar. Mevcut SL/TP
+    mekanizması bağımsız çalışmaya devam eder (kill switch ON ise burada
+    'exit_flag' işaretler ama actual close downstream'de).
+    """
+    plan = cur.recheck_plan or {}
+    holding = cur.holding_plan or {}
+
+    # ── Recheck kontrolü ───────────────────────────────────────────────────
+    next_iso = plan.get("next_recheck_at") or ""
+    if next_iso:
+        try:
+            next_dt = datetime.fromisoformat(next_iso)
+        except (TypeError, ValueError):
+            next_dt = None
+        if next_dt is not None and now_dt >= next_dt:
+            # Yeniden değerlendir
+            result = "ok"
+            reasons: list[str] = []
+
+            if kill_switch:
+                result = "exit_flag"
+                reasons.append("KILL_SWITCH aktif")
+            if dqs_score is not None and dqs_score < 55:
+                result = "exit_flag" if result != "exit_flag" else result
+                reasons.append(f"DQS düşük ({dqs_score})")
+
+            # Sig kontrolleri (varsa)
+            if isinstance(sig, dict):
+                # Yön karşıt mı?
+                sig_dir = (sig.get("final_direction") or "").lower()
+                if sig_dir == "bullish" and cur.side == "SHORT":
+                    result = "reduce_flag" if result == "ok" else result
+                    reasons.append("Sinyal yönü tersine döndü (bullish vs SHORT)")
+                elif sig_dir == "bearish" and cur.side == "LONG":
+                    result = "reduce_flag" if result == "ok" else result
+                    reasons.append("Sinyal yönü tersine döndü (bearish vs LONG)")
+
+                # Contradiction yüksek mi?
+                contradiction = sig.get("contradiction_score")
+                if isinstance(contradiction, (int, float)) and contradiction >= 80:
+                    result = "warning" if result == "ok" else result
+                    reasons.append(f"Contradiction yüksek ({contradiction})")
+
+                # Aggregator BLOCKED mu?
+                cmd = sig.get("agent_command") or ""
+                if cmd == "BLOCKED":
+                    result = "exit_flag"
+                    reasons.append("Aggregator BLOCKED")
+
+            # Plan'ı ileri al
+            interval = int(plan.get("recheck_interval_minutes") or 60)
+            plan["last_recheck_at"]    = now_dt.isoformat()
+            plan["last_recheck_result"] = result
+            plan["last_recheck_reason"] = " · ".join(reasons) if reasons else "Tüm gateler temiz"
+            plan["recheck_count"]      = int(plan.get("recheck_count") or 0) + 1
+            plan["next_recheck_at"]    = (now_dt + timedelta(minutes=interval)).isoformat()
+            cur.recheck_plan = plan
+
+            if result in ("reduce_flag", "exit_flag", "warning"):
+                _try_emit(
+                    "position_recheck_flag", "INFO",
+                    f"Recheck — {pair}",
+                    f"{cur.side} {pair} recheck sonucu: {result.upper()} · {plan['last_recheck_reason']}",
+                    pair=pair, side=cur.side, metadata={"recheck_result": result},
+                )
+
+    # ── Max holding kontrolü ──────────────────────────────────────────────
+    until_iso = holding.get("max_holding_until") or ""
+    status = holding.get("holding_status") or "active"
+    if until_iso and status == "active":
+        try:
+            until_dt = datetime.fromisoformat(until_iso)
+        except (TypeError, ValueError):
+            until_dt = None
+        if until_dt is not None and now_dt >= until_dt:
+            holding["holding_status"] = "expired_needs_review"
+            cur.holding_plan = holding
+            _try_emit(
+                "position_max_holding_expired", "INFO",
+                f"Max Holding Doldu — {pair}",
+                f"{cur.side} {pair} max holding süresi doldu ({holding.get('max_holding_time')}). "
+                f"Pozisyon kapatılmadı; inceleme/uzatma için işaretlendi.",
+                pair=pair, side=cur.side,
+                metadata={"holding_status": "expired_needs_review"},
+            )
+
+
 def _apply_risk_management(
     st: "TradingState",
     cur: "Position",
@@ -957,12 +1196,53 @@ def _apply_risk_management(
                 if cur.stop_loss == 0 or trail_sl < cur.stop_loss:
                     cur.stop_loss = round(trail_sl, 2)
 
-    # ── 2. Partial TP (TP1 = entry ± 1×ATR) ──────────────────────────────────
-    if atr > 0 and not cur.partial_tp_taken:
-        tp1 = (entry + atr) if is_long else (entry - atr)
-        tp1_hit = (is_long and price >= tp1) or (not is_long and price <= tp1)
-        if tp1_hit:
-            _realize_partial_tp(st, cur, pair, price, now_iso)
+    # ── 2. Partial TP — FAZ 3: take_profit_plan ÖNCELİKLİ, ATR fallback ────
+    if not cur.partial_tp_taken:
+        # FAZ 3: open_signal.take_profit_plan.partial_tp_price varsa onu kullan.
+        # Aggregator bunu açılış anında (aggression-aware) finalize ediyor.
+        tp_plan = (
+            cur.open_signal.get("take_profit_plan")
+            if isinstance(cur.open_signal, dict) else None
+        ) or {}
+        plan_partial_price = tp_plan.get("partial_tp_price")
+        plan_partial_enabled = tp_plan.get("partial_tp_enabled")
+
+        used_plan_partial = False
+        if (
+            plan_partial_enabled is True
+            and isinstance(plan_partial_price, (int, float))
+            and plan_partial_price > 0
+        ):
+            plan_hit = (
+                (is_long and price >= plan_partial_price)
+                or (not is_long and price <= plan_partial_price)
+            )
+            if plan_hit:
+                _realize_partial_tp(st, cur, pair, price, now_iso)
+                # Audit: hangi kaynak tetikledi (plan vs fallback)
+                cur.open_signal["partial_tp_execution"] = {
+                    "source":          "take_profit_plan",
+                    "partial_tp_price": plan_partial_price,
+                    "executed_at":     now_iso,
+                    "executed_price":  price,
+                    "reason":          "Aggression-aware partial TP target reached.",
+                }
+                used_plan_partial = True
+
+        # Fallback: take_profit_plan yoksa veya enabled=False ise eski ATR mantığı
+        if not used_plan_partial and atr > 0 and not cur.partial_tp_taken:
+            tp1 = (entry + atr) if is_long else (entry - atr)
+            tp1_hit = (is_long and price >= tp1) or (not is_long and price <= tp1)
+            if tp1_hit:
+                _realize_partial_tp(st, cur, pair, price, now_iso)
+                if isinstance(cur.open_signal, dict):
+                    cur.open_signal["partial_tp_execution"] = {
+                        "source":          "atr_fallback",
+                        "partial_tp_price": round(tp1, 4),
+                        "executed_at":     now_iso,
+                        "executed_price":  price,
+                        "reason":          "Legacy entry±ATR partial TP target reached (no take_profit_plan).",
+                    }
             # cur.stop_loss artık entry → trailing da aktif
 
     # ── 3. SL Kontrolü ────────────────────────────────────────────────────────
@@ -991,9 +1271,79 @@ def _open_position_from_pending(
     current_price: float,
     opened_at: str,
 ) -> None:
+    from app.services.aggression_awareness import (
+        build_holding_plan,
+        build_recheck_plan,
+        build_take_profit_plan,
+        calc_aggression_aware_sl_tp,
+    )
     atr_val = pending.atr_value if pending.atr_value > 0 else None
-    sl, tp = _calc_sl_tp(pending.side, current_price, pending.pair, atr_val)
-    risk_plan = _build_risk_plan(pending.side, current_price, pending.pair, atr_val, sl=sl, tp=tp)
+    open_signal = dict(pending.open_signal) if isinstance(pending.open_signal, dict) else {}
+
+    # FAZ 2: aggression-aware SL/TP — open_signal.stop_decision varsa kullan
+    agg_sl_tp = calc_aggression_aware_sl_tp(
+        pending.side, current_price, pending.pair, atr_val, open_signal,
+    )
+    if agg_sl_tp is not None:
+        sl, tp, sl_meta = agg_sl_tp
+        risk_plan = _build_risk_plan(pending.side, current_price, pending.pair, atr_val, sl=sl, tp=tp)
+        # Aggression meta'yı risk_plan üzerine merge et (audit için)
+        risk_plan["aggression"] = sl_meta
+    else:
+        sl, tp = _calc_sl_tp(pending.side, current_price, pending.pair, atr_val)
+        risk_plan = _build_risk_plan(pending.side, current_price, pending.pair, atr_val, sl=sl, tp=tp)
+
+    # FAZ 2: open_signal'a finalized TP planını (gerçek entry/stop ile) yaz —
+    # aggregator zamanında price_hint vardı; şimdi gerçek entry biliniyor.
+    agg_block = open_signal.get("aggression_context") or {}
+    if isinstance(agg_block, dict) and agg_block.get("aggression_level"):
+        # Pure-function helper'lar için minimal ctx objesi taklit — aggression_context
+        # zaten dict; build_take_profit_plan ctx istiyor → AggressionContext oluştur
+        from app.services.aggression_awareness import AggressionContext
+        ctx_for_plan = AggressionContext(
+            aggression_level=str(agg_block.get("aggression_level") or "low"),  # type: ignore[arg-type]
+            aggression_score=int(agg_block.get("aggression_score") or 0),
+            why_aggressive=list(agg_block.get("why_aggressive") or []),
+            allowed_if_aggressive=bool(agg_block.get("allowed_if_aggressive", True)),
+            required_adjustments=dict(agg_block.get("required_adjustments") or {}),
+            recommended_timeframe=str(agg_block.get("recommended_timeframe") or "1d"),  # type: ignore[arg-type]
+            max_holding_time=str(agg_block.get("max_holding_time") or "48h"),
+            recheck_interval_minutes=int(agg_block.get("recheck_interval_minutes") or 240),
+            stop_style=str(agg_block.get("stop_style") or "structure_based"),  # type: ignore[arg-type]
+            summary=str(agg_block.get("summary") or ""),
+        )
+        # Final TP planı — entry & stop fiyatları artık gerçek
+        tp_plan_final = build_take_profit_plan(
+            ctx_for_plan, None,
+            side=pending.side, entry_price=current_price, stop_price=sl,
+        )
+        open_signal["take_profit_plan"] = tp_plan_final
+        # Recheck + holding planları — gerçek opened_at ile
+        recheck_plan = build_recheck_plan(ctx_for_plan, opened_at)
+        holding_plan = build_holding_plan(ctx_for_plan, opened_at)
+    else:
+        # Eski/legacy pozisyon → recheck/holding plan kurmuyoruz (backward compat)
+        recheck_plan = {}
+        holding_plan = {}
+
+    # FAZ 3: opening_explanation + default add_plan kur — açılış anında
+    try:
+        from app.services.position_management_service import (
+            build_opening_explanation,
+            initialize_default_add_plan,
+        )
+        opening_expl = build_opening_explanation(
+            open_signal, pair=pending.pair, side=pending.side,
+        )
+        default_add_plan = initialize_default_add_plan(
+            pending.size_usd,
+            position_size_constant=POSITION_SIZE,
+            average_entry=current_price,
+        )
+    except Exception:
+        opening_expl = {}
+        default_add_plan = {}
+
     st.positions[pending.pair] = Position(
         pair=pending.pair,
         side=pending.side,
@@ -1001,11 +1351,16 @@ def _open_position_from_pending(
         entry_at=opened_at,
         size_usd=pending.size_usd,
         last_signal=pending.last_signal,
-        open_signal=pending.open_signal,
+        open_signal=open_signal,
         fingerprint=pending.fingerprint,
         stop_loss=sl,
         take_profit=tp,
         risk_plan=risk_plan,
+        recheck_plan=recheck_plan,
+        holding_plan=holding_plan,
+        add_plan=default_add_plan,
+        opening_explanation=opening_expl,
+        average_entry_price=current_price,
     )
     st.last_event = {
         "type": "OPEN",
@@ -1270,12 +1625,24 @@ def tick_consensus(
     from app.services.learning_engine import (
         build_signal_fingerprint, should_avoid_or_boost,
     )
-    from app.services.agent_decision_aggregator import aggregate_agent_decision
+    from app.services.agent_decision_aggregator import (
+        aggregate_agent_decision,
+        decision_to_open_signal_extras,
+    )
 
     with _LOCK:
         st = _load_state()
         now_dt = _utc_now()
         now_iso = now_dt.isoformat()
+
+        # ── State anomaly guard ──────────────────────────────────────────
+        # Realized PnL / equity başlangıç bakiyenin kat kat üzerine çıktıysa
+        # state corrupt sayılır → YENİ pozisyon açma tamamen durur. Mevcut
+        # pozisyonların yönetimi (SL/TP/auto-close) çalışmaya devam eder,
+        # böylece kullanıcı reset/repair yapana kadar daha fazla bozulma
+        # birikmez ama hâlâ açık pozisyon güvenli kapatılabilir.
+        _anomaly_guard = _detect_state_anomaly(st)
+        _block_new_opens = bool(_anomaly_guard.get("detected"))
 
         for pair in TRADED_PAIRS:
             sig = consensus_signals.get(pair) or {}
@@ -1308,8 +1675,25 @@ def tick_consensus(
             )
             base_mult = decision.size_pct if decision.size_pct > 0.0 else raw_base_mult
 
+            # Controlled-Aggressive: aggression/command/timeframe/stop bloğunu
+            # sig snapshot'ına ekle — _route_new_open_signal / _queue_pending_open
+            # / _refresh_manual_ready bu zenginleşmiş snapshot'ı open_signal'a yazar.
+            # Block durumunda bile aggregator BLOCKED komutu üretir; audit için yine yazılır.
+            sig.update(decision_to_open_signal_extras(decision))
+
             price = current_prices.get(pair, 0.0)
-            if price <= 0:
+            # Fiyat mantık kontrolü: veri kaynağı bozulduğunda gelen saçma
+            # fiyatlar (örn. BTC için $7405, XAUUSD için $716) realized_pnl/
+            # equity'i bozar. İki kademeli kontrol: absolute bounds + önceki
+            # sane tick fiyatına göre %30 max sapma.
+            _prev = (st.last_tick_prices or {}).get(pair, 0.0)
+            if not _is_price_sane(pair, price, previous_price=_prev):
+                if price > 0:
+                    logger.warning(
+                        "paper_trading: %s için mantık dışı fiyat reddedildi: %.4f"
+                        " (sınır: %s, önceki: %.4f)",
+                        pair, price, PRICE_SANITY_BOUNDS.get(pair), _prev,
+                    )
                 continue
 
             # Açılmaya hazır (manual_ready) bir kayıt varsa HER tick'te taze
@@ -1428,6 +1812,12 @@ def tick_consensus(
                         pending = None
 
             if cur is not None:
+                # FAZ 2: Recheck + max holding review — audit/flag only (otomatik close YOK)
+                _apply_recheck_and_holding_review(
+                    cur, pair, sig, now_dt,
+                    dqs_score=dqs_score, kill_switch=kill_switch,
+                )
+
                 # ── S1/S2: SL / TP / Trailing Stop / Partial TP ──────────────
                 # Fiyat SL veya TP'ye dokunmuşsa otomatik kapat.
                 # Break-even + trailing stop güncelle.
@@ -1510,7 +1900,11 @@ def tick_consensus(
                         metadata={"pnl_usd": round(pnl_usd, 2), "pnl_pct": round(pnl_pct, 2), "verdict": verdict},
                     )
 
-                    if target in ("LONG", "SHORT") and _is_market_open(pair, now_dt):
+                    if (
+                        target in ("LONG", "SHORT")
+                        and not _block_new_opens
+                        and _is_market_open(pair, now_dt)
+                    ):
                         _route_new_open_signal(
                             st,
                             pair=pair,
@@ -1530,7 +1924,12 @@ def tick_consensus(
                         st.pending_orders.pop(pair, None)
                 continue
 
-            if target in ("LONG", "SHORT") and pending is None and _is_market_open(pair, now_dt):
+            if (
+                target in ("LONG", "SHORT")
+                and pending is None
+                and not _block_new_opens
+                and _is_market_open(pair, now_dt)
+            ):
                 _route_new_open_signal(
                     st,
                     pair=pair,
@@ -1559,7 +1958,15 @@ def tick_consensus(
 
         _maybe_warn_daily_loss(st, now_dt)
         # ── Read-only GET için tick snapshot'ı kaydet ──
-        st.last_tick_prices = dict(current_prices)
+        # Sadece mantıklı fiyatları persiste et — bozuk fiyat eski iyi
+        # değerleri ezmesin (sonraki tick yine garbage'la başlamamalı).
+        # Jump guard burada da uygulanır — abs bounds geçen ama önceki
+        # sane fiyattan %30+ sapan fiyat last_tick_prices'a yazılmaz.
+        prev_prices = dict(st.last_tick_prices or {})
+        for _p, _v in current_prices.items():
+            if _is_price_sane(_p, _v, previous_price=prev_prices.get(_p)):
+                prev_prices[_p] = _v
+        st.last_tick_prices = prev_prices
         st.last_tick_at = now_iso
         st.last_tick_signals = consensus_signals
         _save_state(st)
@@ -1819,18 +2226,52 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
     open_positions = []
     unrealized_total = 0.0
     from app.services.learning_engine import win_rate_for_fingerprint
+    # FAZ 3: position_management_service lazy import — circular avoidance
+    try:
+        from app.services.position_management_service import (
+            build_opening_explanation,
+            initialize_default_add_plan,
+        )
+    except Exception:
+        build_opening_explanation = None  # type: ignore[assignment]
+        initialize_default_add_plan = None  # type: ignore[assignment]
+
     for p in st.positions.values():
         cur_price = current_prices.get(p.pair, p.entry_price)
         pnl_usd, pnl_pct = _unrealized_pnl(p, cur_price)
         unrealized_total += pnl_usd
         # ── Bu pozisyonun fingerprint'inin geçmişi
         fp_history = win_rate_for_fingerprint(p.fingerprint, st.trades) if p.fingerprint else None
+
+        # FAZ 3: snapshot-only enrichment (state'i mutate ETMEZ).
+        # Eski pozisyonlarda add_plan/opening_explanation yoksa default doldur.
+        avg_entry = p.average_entry_price or p.entry_price
+        add_plan_view = p.add_plan
+        if (not add_plan_view) and initialize_default_add_plan is not None:
+            add_plan_view = initialize_default_add_plan(
+                p.size_usd,
+                position_size_constant=POSITION_SIZE,
+                average_entry=avg_entry,
+            )
+        opening_view = p.opening_explanation
+        if (not opening_view) and build_opening_explanation is not None:
+            try:
+                opening_view = build_opening_explanation(
+                    p.open_signal, pair=p.pair, side=p.side,
+                )
+            except Exception:
+                opening_view = {}
+
         open_positions.append({
             **asdict(p),
             "current_price": cur_price,
             "pnl_usd":  round(pnl_usd, 2),
             "pnl_pct":  round(pnl_pct, 2),
             "fingerprint_history": fp_history,
+            # Snapshot-only override'lar — state dosyasına yazılmaz
+            "add_plan":            add_plan_view,
+            "opening_explanation": opening_view,
+            "average_entry_price": avg_entry,
         })
 
     equity = st.starting_balance + st.realized_pnl_usd + unrealized_total
@@ -1876,6 +2317,12 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
         except Exception:
             tick_age_s = None
 
+    # State corruption / accounting anomaly tespiti — UI burada banner basar,
+    # tick_consensus yeni trade açılışını burdaki guard ile aynı eşiklerden
+    # bağımsız hesaplar (orada starting_balance + realized_pnl_usd yeter,
+    # equity/daily_pnl burada zaten elde olduğu için ekstra teyit ekleniyor).
+    anomaly = _detect_state_anomaly(st, equity=equity, daily_pnl=daily_pnl)
+
     return {
         "starting_balance": st.starting_balance,
         "realized_pnl_usd": round(st.realized_pnl_usd, 2),
@@ -1892,6 +2339,11 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
         "last_tick_at":     st.last_tick_at,
         "tick_age_seconds": round(tick_age_s, 1) if tick_age_s is not None else None,
         "traded_pairs":     list(TRADED_PAIRS),
+        "state_anomaly":    {
+            "active":  anomaly["detected"],
+            "reasons": anomaly["reasons"],
+            "action":  "REPAIR_OR_RESET_REQUIRED" if anomaly["detected"] else "OK",
+        },
     }
 
 
@@ -1912,6 +2364,150 @@ def reset_state() -> None:
             training_history=st.training_history,
         )
         _save_state(fresh)
+
+
+def _backup_state_file(reason: str = "manual") -> str | None:
+    """State dosyasını timestamp'li backup'a kopyalar. Path'i döner."""
+    if not _STATE_PATH.exists():
+        return None
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    backup_path = _STATE_PATH.with_name(
+        f"{_STATE_PATH.stem}_backup_{reason}_{ts}{_STATE_PATH.suffix}"
+    )
+    try:
+        backup_path.write_bytes(_STATE_PATH.read_bytes())
+    except OSError as exc:
+        logger.warning("paper_trading: state backup başarısız: %s", exc)
+        return None
+    return str(backup_path)
+
+
+def hard_reset_state(reason: str = "corrupt_state_manual_reset") -> dict[str, Any]:
+    """Bozuk state'i temizle: önce backup, sonra TAM sıfırla.
+
+    `reset_state()` weight_adjustments / training_history KORUR — corruption
+    durumunda bunlar da bozuk olabileceğinden hard_reset HEPSİNİ sıfırlar.
+    PAPER_SAFE / NO_EXECUTION — gerçek emir YOK.
+    """
+    with _LOCK:
+        backup_path = _backup_state_file(reason=reason)
+        _ATTRIBUTION_SEEN_IDS.clear()
+        fresh = TradingState()
+        _save_state(fresh)
+        return {
+            "status": "reset",
+            "reason": reason,
+            "backup_path": backup_path,
+            "starting_balance": fresh.starting_balance,
+            "equity": fresh.starting_balance,
+            "realized_pnl_usd": 0.0,
+            "open_positions": 0,
+            "trade_count": 0,
+        }
+
+
+def _compute_corrected_realized_pnl(
+    trades: list[Trade],
+) -> tuple[float, list[dict[str, Any]], list[dict[str, Any]]]:
+    """Trade history'den realized_pnl'i sağlıklı kayıtlardan yeniden hesapla.
+
+    Dönen:
+      (corrected_realized_pnl, sane_trades_summary, anomalous_trades_summary)
+
+    Bir trade'in entry/exit fiyatı PRICE_SANITY_BOUNDS dışındaysa "anomalous"
+    sayılır, realized_pnl toplamına dahil EDİLMEZ ve audit için döner.
+    """
+    sane: list[dict[str, Any]] = []
+    anomalous: list[dict[str, Any]] = []
+    corrected = 0.0
+    for t in trades:
+        entry_ok = _is_price_sane(t.pair, t.entry_price)
+        exit_ok = _is_price_sane(t.pair, t.exit_price)
+        if entry_ok and exit_ok:
+            corrected += float(t.pnl_usd)
+            sane.append({"id": t.id, "pair": t.pair, "pnl_usd": t.pnl_usd})
+        else:
+            anomalous.append({
+                "id": t.id,
+                "pair": t.pair,
+                "entry_price": t.entry_price,
+                "exit_price": t.exit_price,
+                "pnl_usd": t.pnl_usd,
+                "reasons": [
+                    *(["entry_out_of_bounds"] if not entry_ok else []),
+                    *(["exit_out_of_bounds"] if not exit_ok else []),
+                ],
+            })
+    return corrected, sane, anomalous
+
+
+def repair_state(*, dry_run: bool = True) -> dict[str, Any]:
+    """Bozuk realized_pnl'i sağlıklı trade'lerden yeniden hesapla.
+
+    Mantık:
+      * Trade history'deki her trade'in entry/exit fiyatı PRICE_SANITY_BOUNDS'a
+        karşı kontrol edilir.
+      * Sınır dışı trade'ler realized_pnl toplamına dahil edilmez ve
+        data_quality_flag="price_anomaly" ile işaretlenir (apply modunda).
+      * Eğer sağlıklı trade hiç kalmıyorsa repair güvenilir değildir; reset
+        önerilir.
+      * Açık pozisyonlar ESNEK BIRAKIR — repair burada pozisyon silmez, çünkü
+        canlı pozisyonlar tick'te yönetiliyor; corruption düzeldiğinde
+        anomaly guard otomatik kalkar.
+    PAPER_SAFE / NO_EXECUTION.
+    """
+    with _LOCK:
+        st = _load_state()
+        old_realized = float(st.realized_pnl_usd)
+        corrected_realized, sane, anomalous = _compute_corrected_realized_pnl(
+            st.trades
+        )
+        unrealized_total = 0.0
+        last_prices = st.last_tick_prices or {}
+        for p in st.positions.values():
+            cur = float(last_prices.get(p.pair, p.entry_price))
+            if _is_price_sane(p.pair, cur):
+                u, _ = _unrealized_pnl(p, cur)
+                unrealized_total += u
+        new_equity = st.starting_balance + corrected_realized + unrealized_total
+
+        if not sane and st.trades:
+            return {
+                "status": "repair_not_safe",
+                "reason": "closed_trade_records_corrupt",
+                "recommendation": "reset",
+                "old_realized_pnl": old_realized,
+                "anomalous_trades": len(anomalous),
+                "sane_trades": 0,
+            }
+
+        report = {
+            "status": "dry_run" if dry_run else "applied",
+            "old_realized_pnl": round(old_realized, 2),
+            "corrected_realized_pnl": round(corrected_realized, 2),
+            "delta": round(corrected_realized - old_realized, 2),
+            "new_equity": round(new_equity, 2),
+            "new_unrealized_pnl": round(unrealized_total, 2),
+            "starting_balance": st.starting_balance,
+            "sane_trade_count": len(sane),
+            "anomalous_trade_count": len(anomalous),
+            "anomalous_sample": anomalous[:10],
+            "backup_path": None,
+        }
+
+        if dry_run:
+            return report
+
+        backup_path = _backup_state_file(reason="repair")
+        for t in st.trades:
+            entry_ok = _is_price_sane(t.pair, t.entry_price)
+            exit_ok = _is_price_sane(t.pair, t.exit_price)
+            if not (entry_ok and exit_ok):
+                t.data_quality_flag = "price_anomaly"
+        st.realized_pnl_usd = corrected_realized
+        _save_state(st)
+        report["backup_path"] = backup_path
+        return report
 
 
 def force_close_position(pair: str, current_price: float, reason: str = "MANUEL") -> dict[str, Any]:

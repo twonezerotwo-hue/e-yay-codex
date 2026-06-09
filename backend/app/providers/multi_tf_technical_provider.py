@@ -29,6 +29,7 @@ from app.providers.technical_provider import (
     _score_momentum,
     _score_zone,
     _score_volume,
+    _is_insight_sane,
 )
 
 logger = logging.getLogger(__name__)
@@ -158,6 +159,11 @@ def _compute_one(
         current_price=current,
         atr=atr,
     )
+
+    # Asset-specific sanity guard — yfinance asset-asset kontaminasyonunu engelle
+    if not _is_insight_sane(asset_code, current, support, resistance):
+        return None
+
     rsi       = _rsi(close)
     macd      = _macd_signal(close)
     structure = _market_structure(high, low, close)
@@ -216,7 +222,7 @@ class MultiTimeframeTechnicalProvider:
 
     def compute(
         self,
-        max_workers: int = 8,
+        max_workers: int = 1,
         force_refresh: bool = False,
     ) -> dict[str, dict[str, TechnicalInsight]]:
         """Tüm asset × tf kombinasyonları için technical insight üret.

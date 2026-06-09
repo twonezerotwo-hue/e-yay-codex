@@ -66,7 +66,11 @@ export default function NewsPanel({ headlines }: { headlines: NewsHeadline[] }) 
   const low    = rest.filter(h => h.relevance === "LOW").slice(0, 2);
 
   return (
-    <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
+    <div
+      id="news"
+      data-section="news"
+      className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden scroll-mt-20"
+    >
       <div className="px-5 py-4 border-b border-eyay-border flex items-center justify-between">
         <div>
           <p className="text-2xs text-eyay-faint uppercase tracking-widest font-semibold">{t.news.sectionLabel}</p>

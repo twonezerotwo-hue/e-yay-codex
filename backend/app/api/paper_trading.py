@@ -22,12 +22,13 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.api.consensus import _build_full_signal, _build_pipeline
 from app.core.execution_boundary import boundary_status, require_paper_safe
 from app.providers.multi_tf_technical_provider import MTF_ASSETS
 from app.services import paper_trading_service as pts
+from app.services import position_management_service as pms
 
 _log = logging.getLogger(__name__)
 
@@ -245,6 +246,34 @@ def reset() -> dict:
     return {"status": "reset"}
 
 
+@router.post("/state/reset", dependencies=[Depends(require_paper_safe)])
+def hard_reset_state(payload: dict[str, Any] = Body(default={})) -> dict:
+    """Bozuk state'i tamamen temizle (önce backup) + temiz başlangıç.
+
+    weight_adjustments / training_history dahil HER ŞEY sıfırlanır (corruption
+    durumunda bunlar da bozuk olabileceği için).
+    """
+    reason = str(payload.get("reason") or "corrupt_state_manual_reset")
+    result = pts.hard_reset_state(reason=reason)
+    _invalidate_caches()
+    return result
+
+
+@router.post("/state/repair", dependencies=[Depends(require_paper_safe)])
+def repair_state(payload: dict[str, Any] = Body(default={})) -> dict:
+    """Realized PnL'i sağlıklı trade'lerden yeniden hesapla.
+
+    Payload:
+      {"dry_run": true}   → state'i değiştirmez, sadece rapor
+      {"dry_run": false}  → backup alır + state'i düzeltir
+    """
+    dry_run = bool(payload.get("dry_run", True))
+    result = pts.repair_state(dry_run=dry_run)
+    if not dry_run:
+        _invalidate_caches()
+    return result
+
+
 @router.post("/pending/{pair}/reject", dependencies=[Depends(require_paper_safe)])
 def reject_pending_trade(pair: str) -> dict:
     """Bekleyen pending'i reddet → 'Açılmaya Hazır İşlemler' listesine taşı.
@@ -336,6 +365,113 @@ def get_learning_report() -> dict:
 def get_boundary() -> dict:
     """Execution boundary durumu — READ-ONLY."""
     return {"status": "ok", **boundary_status()}
+
+
+# ── FAZ 3: Position management endpoints ─────────────────────────────────────
+
+@router.post("/positions/{pair}/add", dependencies=[Depends(require_paper_safe)])
+def add_to_position(
+    pair: str,
+    body: dict = Body(...),
+) -> dict:
+    """Manuel parçalı alım — risk gate'i geçerse pozisyon boyutu artar.
+
+    Payload:
+      add_size_usd: float (zorunlu)
+      reason: str (zorunlu)
+      mode: "manual"|"paper_auto" (varsayılan "manual")
+      add_price: float | None (yoksa last_tick_prices'tan alınır)
+
+    PAPER_SAFE: Gerçek emir YOK; sadece state.positions[pair].size_usd güncellenir.
+    """
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    add_size = float(body.get("add_size_usd") or 0.0)
+    if add_size <= 0:
+        raise HTTPException(status_code=400, detail="add_size_usd > 0 olmalı")
+    reason = str(body.get("reason") or "manual_add")
+    mode = str(body.get("mode") or "manual")
+    add_price = body.get("add_price")
+    add_price_f = float(add_price) if add_price is not None else None
+
+    result = pms.add_to_position(
+        pair_upper, add_size_usd=add_size, reason=reason, mode=mode,
+        add_price=add_price_f,
+    )
+    _invalidate_caches()
+    return result
+
+
+@router.post("/positions/{pair}/add/preview", dependencies=[Depends(require_paper_safe)])
+def preview_add_to_position(
+    pair: str,
+    body: dict = Body(...),
+) -> dict:
+    """Eklemeyi uygulamadan risk gate çıktısı dön — UI önizleme için."""
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    add_size = float(body.get("add_size_usd") or 0.0)
+    if add_size <= 0:
+        raise HTTPException(status_code=400, detail="add_size_usd > 0 olmalı")
+    mode = str(body.get("mode") or "manual")
+    add_price = body.get("add_price")
+    add_price_f = float(add_price) if add_price is not None else None
+    return pms.preview_add(pair_upper, add_size, add_price=add_price_f, mode=mode)
+
+
+@router.patch("/positions/{pair}/add-plan", dependencies=[Depends(require_paper_safe)])
+def update_add_plan(
+    pair: str,
+    body: dict = Body(...),
+) -> dict:
+    """Add planını güncelle — mod, max_position_size_usd, add_levels."""
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    result = pms.update_add_plan(
+        pair_upper,
+        mode=body.get("mode"),
+        max_position_size_usd=body.get("max_position_size_usd"),
+        add_levels=body.get("add_levels"),
+    )
+    _invalidate_caches()
+    return result
+
+
+@router.patch("/positions/{pair}/risk-plan", dependencies=[Depends(require_paper_safe)])
+def set_manual_risk_plan(
+    pair: str,
+    body: dict = Body(...),
+) -> dict:
+    """SL/TP'yi elle değiştir — otomatik plan backup olarak saklanır."""
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    new_sl = body.get("new_stop_loss")
+    new_tp = body.get("new_take_profit")
+    if new_sl is None or new_tp is None:
+        raise HTTPException(status_code=400, detail="new_stop_loss + new_take_profit zorunlu")
+    reason = str(body.get("reason") or "")
+    result = pms.set_manual_risk_override(
+        pair_upper,
+        new_stop_loss=float(new_sl), new_take_profit=float(new_tp),
+        reason=reason,
+    )
+    _invalidate_caches()
+    return result
+
+
+@router.post("/positions/{pair}/risk-plan/reset", dependencies=[Depends(require_paper_safe)])
+def reset_manual_risk_plan(pair: str) -> dict:
+    """Otomatik SL/TP planına geri dön."""
+    pair_upper = pair.upper()
+    if pair_upper not in pts.TRADED_PAIRS:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen parite: {pair_upper}")
+    result = pms.reset_to_auto_risk_plan(pair_upper)
+    _invalidate_caches()
+    return result
 
 
 __all__ = [name for name in globals() if not name.startswith("_")]

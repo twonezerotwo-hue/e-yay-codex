@@ -11,6 +11,7 @@ Katman 4: Tek karar        (AÇIL / BEKLE / KÜÇÜLT / KAPAT)
 from __future__ import annotations
 
 import dataclasses
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,8 +20,10 @@ from typing import Any, Literal
 from app.domain import AssetCode
 from app.domain.market_snapshot import MarketSnapshot
 from app.providers.news_provider import NewsHeadline
-from app.providers.technical_provider import TechnicalInsight
+from app.providers.technical_provider import TechnicalInsight, _is_insight_sane
 from app.services.event_calendar_service import CatalystEvent
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # YAML threshold loader — config/thresholds.yaml tek kaynak
@@ -82,6 +85,15 @@ class AssetSignal:
     delta_7d_pct: float | None = None   # 7 günlük % değişimi (≈10 iş günü)
     asset_action: AssetActionType = "NEUTRAL"   # per-asset eylem önerisi
     action_trigger: str = ""                     # eylem koşulu / beklenen tetikleyici
+    # ── Controlled-Aggressive UI etiketleri ──
+    # paper_trading_service'ten doldurulur (varsa); UI sadece dolu olduğunda
+    # küçük badge render eder ("Normal" / "Taktik" / "Agresif" / "Çok Agresif").
+    aggression_level: str = ""    # "" | "low" | "medium" | "high" | "extreme"
+    agent_command: str = ""       # "" | "WAIT" | "TACTICAL_LONG_SETUP" | ...
+    # FAZ 2: UI extension — timeframe + stop style + recheck (sade etiket için)
+    recommended_timeframe: str = ""    # "" | "15m" | "30m" | "1h" | "4h" | "1d"
+    stop_style: str = ""               # "" | "tight_atr" | "structure_based" | "hybrid_tight"
+    recheck_interval_minutes: int = 0  # 0 = veri yok
 
 
 @dataclass(frozen=True)
@@ -566,6 +578,14 @@ def _build_asset_signals(
 ) -> tuple[AssetSignal, ...]:
     signals:  list[AssetSignal] = []
     tech_map = tech_map or {}
+
+    # Defansif sanity guard: drift cross-check çalışmasa bile asset-bound dışı
+    # insight'ları filtrele. tech_map'in kendisini in-place yeniden bağla ki
+    # _tech_suffix(tech_map.get("XAUUSD")) gibi aşağı çağrılar da korunsun.
+    tech_map = {
+        code: ti for code, ti in tech_map.items()
+        if _is_insight_sane(code, ti.current_price, ti.levels.support, ti.levels.resistance)
+    }
 
     # ── ATR-adaptive eşikler — tech_map varsa canlı seviyeler, yoksa sabitler ──
     _btc_ti    = tech_map.get("BTCUSD")
@@ -1321,7 +1341,84 @@ def _build_asset_signals(
             for s in signals
         ]
 
+    # ── Controlled-Aggressive: paper trading'ten aggression_level + command çek ──
+    # Sadece o asset için aktif bir pozisyon/pending/manual_ready varsa dolar;
+    # hiçbir hard bağımlılık değil — paper_trading import edilemese sessiz pas geç.
+    try:
+        agg_map = _pull_aggression_from_paper_trading()
+        if agg_map:
+            signals = [
+                (
+                    dataclasses.replace(s, **agg_map[s.asset_code])
+                    if s.asset_code in agg_map else s
+                )
+                for s in signals
+            ]
+    except Exception:
+        pass
+
     return tuple(signals)
+
+
+def _pull_aggression_from_paper_trading() -> dict[str, dict[str, Any]]:
+    """Aktif paper trading state'inden pair → {aggression_level, agent_command,
+    recommended_timeframe, stop_style, recheck_interval_minutes}.
+
+    Sıralama: Position > PendingOpenOrder > ManualReadyTrade. Her birinin
+    open_signal["aggression_context"] alanını okur.
+    Hiçbir asset için kayıt yoksa boş dict döner.
+    """
+    try:
+        from app.services.paper_trading_service import get_snapshot
+    except Exception:
+        return {}
+    try:
+        snap = get_snapshot()
+    except Exception:
+        return {}
+
+    out: dict[str, dict[str, Any]] = {}
+
+    def _extract(open_signal: dict[str, Any] | None) -> dict[str, Any] | None:
+        if not isinstance(open_signal, dict):
+            return None
+        agg = open_signal.get("aggression_context") or {}
+        level = str(agg.get("aggression_level") or "")
+        command = str(open_signal.get("agent_command") or "")
+        if not level and not command:
+            return None
+        recommended_tf = str(agg.get("recommended_timeframe") or "")
+        stop_style = str(agg.get("stop_style") or "")
+        try:
+            recheck_min = int(agg.get("recheck_interval_minutes") or 0)
+        except (TypeError, ValueError):
+            recheck_min = 0
+        return {
+            "aggression_level":         level,
+            "agent_command":            command,
+            "recommended_timeframe":    recommended_tf,
+            "stop_style":               stop_style,
+            "recheck_interval_minutes": recheck_min,
+        }
+
+    for pos in snap.get("open_positions") or []:
+        info = _extract(pos.get("open_signal"))
+        if info:
+            out[pos.get("pair", "")] = info
+    for pend in snap.get("pending_orders") or []:
+        pair = pend.get("pair", "")
+        if pair and pair not in out:
+            info = _extract(pend.get("open_signal"))
+            if info:
+                out[pair] = info
+    for mr in snap.get("manual_ready_trades") or []:
+        pair = mr.get("pair", "")
+        if pair and pair not in out:
+            info = _extract(mr.get("open_signal"))
+            if info:
+                out[pair] = info
+
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -2119,6 +2216,76 @@ def _make_decision(
 
 
 # ---------------------------------------------------------------------------
+# Tech-insight × snapshot cross-validation
+# ---------------------------------------------------------------------------
+
+# yfinance bazen yanlış asset'in DataFrame'ini iade edebiliyor (BTC yerine XAG bar'ları gibi).
+# Bu durumda tech_insight.current_price gerçek market snapshot fiyatından çok farklı çıkar.
+# Burada eşik %5: bunun üstündeki fark "asset contamination" sinyali kabul edilir.
+_TECH_SNAPSHOT_DRIFT_TOLERANCE = 0.05
+
+# tech_map anahtarı (str) → snapshot AssetCode eşlemesi
+# Not: XCUUSD dahil edilmedi çünkü technical_provider USD/lb → USD/MT dönüşümü
+# (mult=2204.623) uyguluyor — snapshot ham USD/lb taşıyor, bu yüzden drift
+# yapay olarak büyük çıkar. XCU sanity'si _is_insight_sane bound guard'ına bırakıldı.
+_TECH_TO_SNAPSHOT_CODE: dict[str, AssetCode] = {
+    "BTCUSD": AssetCode.BTCUSD,
+    "XAUUSD": AssetCode.XAUUSD,
+    "XAGUSD": AssetCode.XAGUSD,
+    "BRENT":  AssetCode.BRENT,
+    "DXY":    AssetCode.DXY,
+    "VIX":    AssetCode.VIX,
+    "SP500":  AssetCode.SP500,
+    "HYG":    AssetCode.HYG,
+}
+
+
+def _validate_tech_map_against_snapshots(
+    tech_map: dict[str, "TechnicalInsight"],
+    snap_map: dict[AssetCode, "MarketSnapshot"],
+) -> dict[str, "TechnicalInsight"]:
+    """Her tech_insight.current_price'ı snapshot.value ile karşılaştır.
+
+    Sapma %_TECH_SNAPSHOT_DRIFT_TOLERANCE'ı aşıyorsa insight discard edilir.
+    Böylece BTC'ye sızmış XAG seviyeleri owner_actions, flip_conditions ve
+    asset_signals tarafında fallback sabit eşiklere düşer; yanlış değer ile
+    karar üretilmez.
+    """
+    if not tech_map:
+        return tech_map
+
+    validated: dict[str, "TechnicalInsight"] = {}
+    for code, ti in tech_map.items():
+        # 1) Asset-bound check — yfinance ticker bazen yanlış DF iade ediyor
+        if not _is_insight_sane(code, ti.current_price, ti.levels.support, ti.levels.resistance):
+            logger.warning(
+                "tech_map[%s] discard: current=%.4f S=%.4f R=%.4f asset-bound dışı",
+                code, ti.current_price, ti.levels.support, ti.levels.resistance,
+            )
+            continue
+
+        # 2) Snapshot drift check — bound içinde olabilir ama yanlış asset olabilir
+        snap_code = _TECH_TO_SNAPSHOT_CODE.get(code)
+        if snap_code is None:
+            validated[code] = ti
+            continue
+        snap = snap_map.get(snap_code)
+        snap_value = getattr(snap, "value", None) if snap is not None else None
+        if snap_value is None or snap_value <= 0:
+            validated[code] = ti
+            continue
+        drift = abs(ti.current_price - snap_value) / snap_value
+        if drift > _TECH_SNAPSHOT_DRIFT_TOLERANCE:
+            logger.warning(
+                "tech_map[%s] discard: tech.current=%.4f vs snapshot.value=%.4f drift=%.1f%%",
+                code, ti.current_price, snap_value, drift * 100.0,
+            )
+            continue
+        validated[code] = ti
+    return validated
+
+
+# ---------------------------------------------------------------------------
 # Ana Servis
 # ---------------------------------------------------------------------------
 
@@ -2139,7 +2306,7 @@ class RegimeReportService:
         snap_map: dict[AssetCode, MarketSnapshot] = {
             s.asset_symbol: s for s in snapshots
         }
-        tech_map = tech_insights or {}
+        tech_map = _validate_tech_map_against_snapshots(tech_insights or {}, snap_map)
 
         macro    = _analyze_macro(snap_map)
         appetite = _analyze_appetite(snap_map)

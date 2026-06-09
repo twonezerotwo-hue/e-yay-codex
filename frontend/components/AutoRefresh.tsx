@@ -111,10 +111,10 @@ export default function AutoRefresh({
       : "border-eyay-border text-eyay-faint bg-eyay-surface";
 
   const dotClass = refreshing
-    ? "bg-emerald-400 animate-pulse"
+    ? "bg-emerald-400 motion-safe:animate-pulse-soft"
     : paused
       ? "bg-amber-400"
-      : "bg-eyay-blue/60 animate-pulse";
+      : "bg-eyay-blue/60 motion-safe:animate-pulse-soft";
 
   // Saniye formatla — 60+ ise "1:23" gibi
   const fmt = (s: number) =>

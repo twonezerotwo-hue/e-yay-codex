@@ -16,6 +16,7 @@ import AIChatPanel from "@/components/AIChatPanel";
 import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
 import PaperTradingTicker from "@/components/PaperTradingTicker";
+import WarBreakingAlert from "@/components/WarBreakingAlert";
 import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
 // Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
@@ -130,7 +131,7 @@ export default async function HomePage() {
             <CapitalFlowWidget rotation={data.capital_rotation} />
 
             {/* 5 ── Senaryo  |  Teyit  |  Asimetri */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-start">
               <ScenarioPanel
                 scenarios={data.report.scenarios ?? []}
                 decision={data.report.decision}
@@ -153,6 +154,10 @@ export default async function HomePage() {
 
       {/* Paper Trading — 100k bakiye, agent sinyalleriyle otomatik long/short */}
       <PaperTradingTicker />
+
+      {/* Büyük "Breaking War Alert" — savaş/saldırı/ateşkes haberi tetikler.
+          Dedup için son 30 dakikada gösterilen alert tekrar açılmaz. */}
+      <WarBreakingAlert headlines={data?.report?.news_headlines ?? []} />
     </div>
   );
 }

@@ -16,6 +16,35 @@ import MiniChart, { type ChartTFView } from "./MiniChart";
 // Bu sadece görsel bir özet — agent karar zincirine yeni bir bağ eklemez.
 // ---------------------------------------------------------------------------
 
+// Aggression seviyesi → küçük renkli badge stilleri.
+// Backend (paper_trading_service) tarafından doldurulur; yoksa hiç render edilmez.
+const AGGRESSION_BADGE: Record<string, { cls: string }> = {
+  low:     { cls: "border-emerald-700/50 bg-emerald-950/40 text-emerald-300" },
+  medium:  { cls: "border-amber-700/50   bg-amber-950/40   text-amber-300"   },
+  high:    { cls: "border-orange-700/60  bg-orange-950/40  text-orange-300"  },
+  extreme: { cls: "border-red-700/60     bg-red-950/40     text-red-300"     },
+};
+
+// FAZ 2: stop stilini insan-okur kısa metne çevir (TR ağırlıklı, EN için harf farkı yok)
+const STOP_STYLE_LABEL: Record<string, string> = {
+  tight_atr:       "Çok Yakın Stop",
+  hybrid_tight:    "Yakın Stop",
+  structure_based: "Normal Stop",
+  no_trade:        "Stop Yok",
+};
+
+// "Agresif / 1H / Yakın Stop / 30dk" gibi sade etiket — alanlar boşsa atlanır
+function buildAggressionDetail(signal: AssetSignal, baseLabel: string): string {
+  const parts: string[] = [baseLabel];
+  const tf = signal.recommended_timeframe;
+  if (tf) parts.push(tf.toUpperCase());
+  const ss = signal.stop_style;
+  if (ss && STOP_STYLE_LABEL[ss]) parts.push(STOP_STYLE_LABEL[ss]);
+  const rc = signal.recheck_interval_minutes;
+  if (rc && rc > 0) parts.push(`${rc}dk`);
+  return parts.join(" / ");
+}
+
 function paperTradingSummary(
   signal: AssetSignal,
   labels: { watch: string; allowed: string; blocked: string },
@@ -143,11 +172,27 @@ function ActionChip({ action, trigger, size = "md" }: { action: AssetActionType;
 function formatPrice(value: number, unit: string): string {
   if (unit.includes("%") || unit === "pct" || unit === "yield_percent" || unit === "spread_percent")
     return `%${value.toFixed(2)}`;
-  if (value > 999_999) return `$${(value / 1_000_000).toFixed(2)}T`;
-  if (value > 9_999)   return `$${value.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
-  if (value > 999)     return `$${value.toFixed(0)}`;
-  if (value < 0.01)    return `${value.toFixed(4)}`;
+  // > 1M: "B" billion (önceki "T" yanlıştı; bakır $/MT skalasında bile billion'a ulaşmaz normalde)
+  if (value > 999_999_999) return `$${(value / 1_000_000_000).toFixed(2)}B`;
+  if (value > 999_999)     return `$${(value / 1_000_000).toFixed(2)}M`;
+  if (value > 9_999)       return `$${value.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}`;
+  if (value > 999)         return `$${value.toFixed(0)}`;
+  if (value < 0.01)        return `${value.toFixed(4)}`;
   return `${value.toFixed(2)}`;
+}
+
+/**
+ * techInsight'ın signal'a ait olduğunu doğrula. yfinance bazen asset-asset
+ * kontaminasyonu yapıyor; techInsight.current_price ile signal.value %5'ten
+ * fazla farklıysa S/R hatalı asset'ten geliyor → kullanma.
+ */
+function isTechInsightSane(
+  signalValue: number | null,
+  techCurrent: number | undefined,
+): boolean {
+  if (signalValue == null || !techCurrent || techCurrent <= 0) return false;
+  const pct = Math.abs(signalValue - techCurrent) / signalValue;
+  return pct <= 0.05;
 }
 
 function DeltaBadge({ delta, size = "md" }: { delta: number | null; size?: "sm" | "md" }) {
@@ -259,32 +304,43 @@ function CommandCard({
             </div>
           </div>
 
-          {signal.value !== null ? (
-            <div className="flex flex-col gap-0.5">
-              {techInsight && (() => {
-                const broken = signal.value >= techInsight.levels.resistance;
-                return (
-                  <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-emerald-400" : "text-eyay-faint/50"}`}>
-                    R {formatPrice(techInsight.levels.resistance, signal.unit)}{broken ? " ↑" : ""}
+          {signal.value !== null ? (() => {
+            const techSane = isTechInsightSane(signal.value, techInsight?.current_price);
+            return (
+              <div className="flex flex-col gap-0.5">
+                {techInsight && techSane && (() => {
+                  const broken = signal.value! >= techInsight.levels.resistance;
+                  return (
+                    <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-emerald-400" : "text-eyay-faint/50"}`}>
+                      R {formatPrice(techInsight.levels.resistance, signal.unit)}{broken ? " ↑" : ""}
+                    </p>
+                  );
+                })()}
+                <div>
+                  <p className={`font-mono font-black text-xl leading-none ${st.priceColor}`}>
+                    {formatPrice(signal.value!, signal.unit)}
                   </p>
-                );
-              })()}
-              <div>
-                <p className={`font-mono font-black text-xl leading-none ${st.priceColor}`}>
-                  {formatPrice(signal.value, signal.unit)}
-                </p>
-                <p className="text-[9px] font-mono text-eyay-faint mt-0.5">{signal.unit}</p>
+                  <p className="text-[9px] font-mono text-eyay-faint mt-0.5">{signal.unit}</p>
+                </div>
+                {techInsight && techSane && (() => {
+                  const broken = signal.value! <= techInsight.levels.support;
+                  return (
+                    <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-red-400" : "text-eyay-faint/50"}`}>
+                      S {formatPrice(techInsight.levels.support, signal.unit)}{broken ? " ↓" : ""}
+                    </p>
+                  );
+                })()}
+                {techInsight && !techSane && (
+                  <p
+                    className="text-[9px] font-mono text-amber-400/70 whitespace-nowrap"
+                    title={`techInsight.current=${techInsight.current_price} ≠ signal.value=${signal.value}; S/R asset karışmış olabilir.`}
+                  >
+                    S/R doğrulanamadı
+                  </p>
+                )}
               </div>
-              {techInsight && (() => {
-                const broken = signal.value <= techInsight.levels.support;
-                return (
-                  <p className={`text-[9px] font-mono whitespace-nowrap ${broken ? "text-red-400" : "text-eyay-faint/50"}`}>
-                    S {formatPrice(techInsight.levels.support, signal.unit)}{broken ? " ↓" : ""}
-                  </p>
-                );
-              })()}
-            </div>
-          ) : (
+            );
+          })() : (
             <p className="text-xs text-eyay-faint font-mono">—</p>
           )}
 
@@ -307,9 +363,26 @@ function CommandCard({
 
           {/* Sade Paper Trading özeti — agent pipeline / open_signal burada GÖSTERİLMEZ,
               yalnızca İzle/Uygun/Bloklu görsel özeti sunulur. */}
-          <p className={`text-[9px] font-mono ${ptSummary.cls}`}>
-            {ptSummary.text}
-          </p>
+          <div className="flex items-center justify-between gap-1 flex-wrap">
+            <p className={`text-[9px] font-mono ${ptSummary.cls}`}>
+              {ptSummary.text}
+            </p>
+            {/* Aggression badge — sadece paper_trading'te aktif/pending bir aday varsa dolar.
+                FAZ 2: timeframe + stop style + recheck varsa "Agresif / 1H / Yakın Stop / 30dk".
+                Internal label tooltip'te korunur (denetim için). */}
+            {signal.aggression_level && AGGRESSION_BADGE[signal.aggression_level] && (() => {
+              const baseLabel = t.assetGrid.aggression[signal.aggression_level] ?? signal.aggression_level;
+              const detailLabel = buildAggressionDetail(signal, baseLabel);
+              return (
+                <span
+                  className={`text-[8px] font-mono px-1 py-0.5 rounded border ${AGGRESSION_BADGE[signal.aggression_level].cls}`}
+                  title={`agent_command: ${signal.agent_command || "—"} · aggression_level: ${signal.aggression_level}`}
+                >
+                  {detailLabel}
+                </span>
+              );
+            })()}
+          </div>
 
           <p className="text-[9px] text-eyay-faint/60 italic text-center mt-auto">
             ⤺ grafiği görmek için tıkla
