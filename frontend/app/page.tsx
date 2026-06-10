@@ -3,9 +3,9 @@ import AIAnalystReportPanel from "@/components/AIAnalystReport";
 import DecisionBanner from "@/components/DecisionBanner";
 import ScenarioPanelShell from "@/components/ScenarioPanelShell";
 import MacroPanel from "@/components/MacroPanel";
-import AssetGrid from "@/components/AssetGrid";
+import CommandSignalsPanelShell from "@/components/CommandSignalsPanelShell";
 import AsymmetryCard from "@/components/AsymmetryCard";
-import CatalystSidebar from "@/components/CatalystSidebar";
+import EventCalendarPanelShell from "@/components/EventCalendarPanelShell";
 import ConfirmationStrip from "@/components/ConfirmationStrip";
 import NewsPanelShell from "@/components/NewsPanelShell";
 import Header from "@/components/Header";
@@ -101,7 +101,7 @@ export default async function HomePage() {
             />
 
             {/* 3 ── AI Yorumu  +  AI Sohbet (yan yana) */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-2 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-2 items-start">
               <AIAnalystReportPanel
                 report={aiReport}
                 error={aiError}
@@ -113,9 +113,9 @@ export default async function HomePage() {
             </div>
 
             {/* 3 ── Durum Odası + Makro  |  Takvim */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-2 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-2 items-start">
               <div className="flex flex-col gap-2">
-                <AssetGrid
+                <CommandSignalsPanelShell
                   signals={data.report.asset_signals}
                   techInsights={data.report.tech_insights ?? []}
                 />
@@ -129,7 +129,7 @@ export default async function HomePage() {
                 <SystemHealthPanel />
               </div>
               <div className="sticky top-16 self-start">
-                <CatalystSidebar catalysts={data.report.upcoming_catalysts ?? []} />
+                <EventCalendarPanelShell catalysts={data.report.upcoming_catalysts ?? []} />
               </div>
             </div>
 
@@ -137,7 +137,7 @@ export default async function HomePage() {
             <CapitalRotationPanelShell rotation={data.capital_rotation} />
 
             {/* 5 ── Senaryo  |  Teyit  |  Asimetri */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px_200px] gap-2 items-start">
               <ScenarioPanelShell
                 scenarios={data.report.scenarios ?? []}
                 decision={data.report.decision}
