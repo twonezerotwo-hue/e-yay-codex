@@ -119,7 +119,7 @@ const TR = {
   scenario: {
     title:    "Senaryo",
     dominant: "Baskın:",
-    footer:   "PAPER_SAFE · olasılıklar sinyal durumundan türetilir",
+    footer:   "PAPER_SAFE · senaryo ağırlıkları sinyal durumundan türetilir",
     labelMap: { "Boğa": "Boğa", "Baz": "Baz", "Ayı": "Ayı" } as Record<string, string>,
   },
   confirmation: { title: "Teyit Listesi" },
@@ -130,7 +130,7 @@ const TR = {
     loss:         "Kayıp:",
     upside:       "▲ Yukarı",
     downside:     "Aşağı ▼",
-    methodology:  "Senaryo olasılıkları × tahmini hareket büyüklüğü · beklenti analizi",
+    methodology:  "Senaryo ağırlıkları × tahmini hareket büyüklüğü · beklenti analizi",
   },
   news: {
     sectionLabel: "Haber Akışı",
@@ -276,7 +276,7 @@ const EN: typeof TR = {
   scenario: {
     title:    "Scenario",
     dominant: "Dominant:",
-    footer:   "PAPER_SAFE · probabilities derived from signal state",
+    footer:   "PAPER_SAFE · scenario weights derived from signal state",
     labelMap: { "Boğa": "Bull", "Baz": "Base", "Ayı": "Bear" },
   },
   confirmation: { title: "Confirmation List" },
@@ -287,7 +287,7 @@ const EN: typeof TR = {
     loss:         "Loss:",
     upside:       "▲ Upside",
     downside:     "Downside ▼",
-    methodology:  "Scenario probabilities × estimated move magnitude · expectation analysis",
+    methodology:  "Scenario weights × estimated move magnitude · expectation analysis",
   },
   news: {
     sectionLabel: "News Feed",

@@ -48,7 +48,10 @@ export default function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
             <span className="text-[10px] font-mono font-semibold text-eyay-dim tracking-widest uppercase">
               {t.scenario.title}
             </span>
-            <span className="text-[8px] font-mono text-eyay-faint/70 px-1.5 py-px rounded border border-eyay-border/60 bg-eyay-raised/30">
+            <span
+              className="text-[8px] font-mono text-eyay-faint/70 px-1.5 py-px rounded border border-eyay-border/60 bg-eyay-raised/30 cursor-help"
+              title="Bu oran istatistiksel tahmin değildir; mevcut karar, makro rejim, risk iştahı ve sinyal durumundan türetilmiş deterministik senaryo ağırlığıdır."
+            >
               Sinyal türetimi
             </span>
           </div>
@@ -61,7 +64,7 @@ export default function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
             </span>
             <span className="text-[9px] text-eyay-faint">·</span>
             <span className="text-[9px] font-mono text-amber-400/70">
-              olasılıklar sinyal durumundan türetilir
+              senaryo ağırlıkları sinyal durumundan türetilir
             </span>
           </div>
         </div>

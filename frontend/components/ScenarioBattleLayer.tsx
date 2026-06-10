@@ -415,7 +415,7 @@ export default function ScenarioBattleLayer({ scenarios, onDegraded }: Props) {
           </p>
           <p className="text-[9px] font-mono mt-0.5">
             <span style={{ color: domColor }}>● Baskın: {domSc.label}</span>
-            <span className="text-eyay-faint"> · olasılıklar sinyal durumundan türetilir</span>
+            <span className="text-eyay-faint"> · senaryo ağırlıkları sinyal durumundan türetilir</span>
           </p>
         </div>
       </div>
@@ -520,7 +520,7 @@ export default function ScenarioBattleLayer({ scenarios, onDegraded }: Props) {
       </div>
 
       <p className="relative text-[8px] font-mono text-eyay-faint/70 text-center pb-2.5 pt-0.5 border-t border-eyay-border/30 mx-3 mt-1">
-        PAPER_SAFE · olasılıklar sinyal durumundan türetilir
+        PAPER_SAFE · senaryo ağırlıkları sinyal durumundan türetilir
       </p>
     </div>
   );

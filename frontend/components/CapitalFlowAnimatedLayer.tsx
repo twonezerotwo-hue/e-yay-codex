@@ -102,8 +102,10 @@ function dirStyle(d: VisualNode["direction"]): {
   };
 }
 
+// NOT: Bu panel gerçek fon/ETF akışı değil; 30g fiyat momentumu + oran/korelasyon
+// türevidir. Bu yüzden "GİRİŞ/ÇIKIŞ" yerine göreli güçlenme/zayıflama dili kullanılır.
 const DIR_TR: Record<VisualNode["direction"], string> = {
-  in: "GİRİŞ", out: "ÇIKIŞ", neutral: "NÖTR",
+  in: "GÜÇLENME", out: "ZAYIFLAMA", neutral: "NÖTR",
 };
 
 function fmtPct(v: number): string {
@@ -252,7 +254,7 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
   // Üst metrikler
   const inCount  = data.nodes.filter(n => n.direction === "in").length;
   const outCount = data.nodes.filter(n => n.direction === "out").length;
-  const netDir   = outCount > inCount ? "ÇIKIŞ baskın" : inCount > outCount ? "GİRİŞ baskın" : "DENGELİ";
+  const netDir   = outCount > inCount ? "ZAYIFLAMA baskın" : inCount > outCount ? "GÜÇLENME baskın" : "DENGELİ";
   const topFlow  = data.flows.length > 0
     ? [...data.flows].sort((a, b) => b.strength - a.strength)[0]
     : null;
@@ -283,11 +285,14 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between gap-2 border-b border-eyay-border/40 pb-2">
         <div className="flex flex-col">
-          <span className="text-[10px] font-mono text-eyay-dim uppercase tracking-widest">
-            Animasyonlu Sermaye Akışı
+          <span
+            className="text-[10px] font-mono text-eyay-dim uppercase tracking-widest cursor-help"
+            title="Bu panel gerçek fon/ETF akışı değildir; son 30 günlük fiyat momentumu, çapraz oran trendleri ve korelasyonlardan türetilmiş rotasyon proxy'sidir."
+          >
+            30 Günlük Göreli Momentum Rotasyonu
           </span>
           <span className="text-[9px] font-mono text-eyay-faint">
-            {data.nodes.length} varlık · {data.flows.length} akış · {data.execution_mode}
+            {data.nodes.length} varlık · {data.flows.length} akış · proxy · {data.execution_mode}
           </span>
         </div>
         {/* Metrikler */}
@@ -296,8 +301,8 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
             Aktif Akış: {data.flows.length}
           </span>
           <span className={`rounded-md border px-2 py-0.5 text-[8px] font-mono ${
-            netDir === "ÇIKIŞ baskın" ? "border-red-800/50 bg-red-950/20 text-red-300"
-            : netDir === "GİRİŞ baskın" ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300"
+            netDir === "ZAYIFLAMA baskın" ? "border-red-800/50 bg-red-950/20 text-red-300"
+            : netDir === "GÜÇLENME baskın" ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300"
             : "border-amber-800/50 bg-amber-950/20 text-amber-200"
           }`}>
             Net Yön: {netDir}
@@ -395,7 +400,7 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
       {data.flows.length > 0 && (
         <div className="pt-2 border-t border-eyay-border/40 space-y-1">
           <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
-            Para akışları ({data.flows.length})
+            Göreli momentum akışları ({data.flows.length})
           </p>
           {data.flows.slice(0, 5).map((f, i) => (
             <div key={i} className="flex items-center gap-2 text-[10px] font-mono">
