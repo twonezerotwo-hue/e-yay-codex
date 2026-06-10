@@ -19,7 +19,7 @@
  */
 import { useEffect, useState } from "react";
 import AgentCommandCenter from "./AgentCommandCenter";
-import type { NewsHeadline } from "@/lib/types";
+import type { Decision, FlipCondition, NewsHeadline } from "@/lib/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,10 +102,17 @@ const SEVERITY_TO_MODE: Record<AgentInsight["severity"], BannerMode> = {
 
 // ── Bileşen ───────────────────────────────────────────────────────────────────
 
-export default function AgentInsightBar({ headlines = [], macro, appetite }: {
+export default function AgentInsightBar({
+  headlines = [], macro, appetite,
+  reportDecision, ownerActions = [], flipConditions = [],
+}: {
   headlines?: NewsHeadline[];
   macro?: import("@/lib/types").MacroLayer;
   appetite?: import("@/lib/types").RiskAppetiteLayer;
+  /** Karar Detayları accordion'u için — agent komut merkezine forward edilir. */
+  reportDecision?: Decision;
+  ownerActions?: string[];
+  flipConditions?: FlipCondition[];
 }) {
   // Banner endpoint (FAZ 10.1 — birincil)
   const [banner,   setBanner]   = useState<AgentBanner | null>(null);
@@ -250,7 +257,17 @@ export default function AgentInsightBar({ headlines = [], macro, appetite }: {
       </div>
 
       {/* AÇIK HAL — Agent Komut Merkezi (pipeline insights modalı) */}
-      {open && <AgentCommandCenter onClose={() => setOpen(false)} headlines={headlines} macro={macro} appetite={appetite} />}
+      {open && (
+        <AgentCommandCenter
+          onClose={() => setOpen(false)}
+          headlines={headlines}
+          macro={macro}
+          appetite={appetite}
+          reportDecision={reportDecision}
+          ownerActions={ownerActions}
+          flipConditions={flipConditions}
+        />
+      )}
     </>
   );
 }

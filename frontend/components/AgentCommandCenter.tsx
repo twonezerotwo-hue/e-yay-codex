@@ -15,7 +15,8 @@ import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
 import LearningPanel from "@/components/LearningPanel";
 import SystemHealthPanel from "@/components/SystemHealthPanel";
 import MacroPanel from "@/components/MacroPanel";
-import type { NewsHeadline } from "@/lib/types";
+import ActionCenter from "@/components/ActionCenter";
+import type { Decision, FlipCondition, NewsHeadline } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -306,14 +307,22 @@ function modeBorder(mode: BannerMode): string {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AgentCommandCenter({ onClose, headlines = [], macro, appetite }: {
+export default function AgentCommandCenter({
+  onClose, headlines = [], macro, appetite,
+  reportDecision, ownerActions = [], flipConditions = [],
+}: {
   onClose: () => void;
   headlines?: NewsHeadline[];
   /** FAZ 21 — Sistem Kontrolleri accordion için ek prop'lar; opsiyonel. */
   macro?: import("@/lib/types").MacroLayer;
   appetite?: import("@/lib/types").RiskAppetiteLayer;
+  /** Karar Detayları accordion'u (eski Launch Control Dock) için veri. */
+  reportDecision?: Decision;
+  ownerActions?: string[];
+  flipConditions?: FlipCondition[];
 }) {
   const [diagOpen, setDiagOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // ── State ──────────────────────────────────────────────────────────────────
   const [banner,    setBanner]    = useState<AgentBanner | null>(null);
   const [opinion,   setOpinion]   = useState<TradeOpinion | null>(null);
@@ -1029,6 +1038,49 @@ export default function AgentCommandCenter({ onClose, headlines = [], macro, app
               )}
             </section>
           )}
+
+          {/* ════════════════════════════════════════════════════════════
+              KARAR DETAYLARI — eski Launch Control Dock (ana dashboard'dan
+              taşındı). Default kapalı accordion; açılınca Aksiyon Planı /
+              İyileşme Koşulları / Risk Tetikleyicileri compact şekilde görünür.
+             ════════════════════════════════════════════════════════════ */}
+          <section className="rounded-2xl border border-eyay-border bg-eyay-surface/60 overflow-hidden"
+                   data-testid="agent-decision-details-accordion">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen(o => !o)}
+              aria-expanded={detailsOpen}
+              className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-cyan-400/80 text-xs">🧭</span>
+                <p className="text-[11px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
+                  Karar Detayları
+                </p>
+                <span className="text-[9px] font-mono text-eyay-faint truncate">
+                  · Aksiyon Planı · İyileşme Koşulları · Risk Tetikleyicileri
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-eyay-faint shrink-0">
+                {detailsOpen ? "▾ kapat" : "▸ aç"}
+              </span>
+            </button>
+            {detailsOpen && (
+              <div className="border-t border-eyay-border/40 p-4 bg-black/20">
+                {reportDecision ? (
+                  <ActionCenter
+                    decision={reportDecision}
+                    ownerActions={ownerActions}
+                    flipConditions={flipConditions}
+                  />
+                ) : (
+                  <p className="text-[10px] font-mono text-eyay-faint italic">
+                    Karar detayları: veri yok.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
 
           {/* FAZ 21 — Sistem Kontrolleri (diagnostic accordion, default kapalı) */}
           <section className="rounded-2xl border border-eyay-border bg-eyay-surface/60 overflow-hidden"
