@@ -5,6 +5,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @layer base {
+  html, body {
+    /* Browser zoom round-off / holografik sahne sub-pixel taşmaları için
+       global güvenlik — component'lar overflow-hidden olsa bile zoom
+       katsayılarında ~1px yatay scrollbar oluşabiliyor. */
+    overflow-x: hidden;
+  }
   body {
     background-color: #080c14;
     color: #e2e8f0;

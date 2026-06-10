@@ -259,7 +259,7 @@ export default function EventCalendar3DLayer({ catalysts }: Props) {
   return (
     <div
       data-testid="event-calendar-3d"
-      className="w-full min-w-0 overflow-hidden rounded-2xl border border-eyay-border bg-[#030c1a]"
+      className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-eyay-border bg-[#030c1a]"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}

@@ -114,8 +114,10 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* 3 ── Durum Odası (Macro/Risk Filter strip + Command Signals)  |  Takvim */}
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
+            {/* 3 ── Durum Odası (Macro/Risk Filter strip + Command Signals)  |  Takvim
+                lg: (1024px) breakpoint — zoom-in (1366px @ 125% → ~1093 logical px) ile
+                tek kolona düşmesin diye xl:'den lg:'ye düşürüldü. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-3 items-start">
               <div className="flex flex-col gap-2 min-w-0">
                 <MacroRiskFilterStrip
                   macro={data.report.macro_layer}
@@ -131,7 +133,7 @@ export default async function HomePage() {
                     Katman 2 (Makro) + Katman 3 (Risk İştahı) yukarıdaki
                     Macro/Risk Filter strip içinde accordion olarak gösterilir. */}
               </div>
-              <div className="xl:sticky xl:top-16 self-start min-w-0">
+              <div className="lg:sticky lg:top-16 self-start min-w-0">
                 <EventCalendarPanelShell catalysts={data.report.upcoming_catalysts ?? []} />
               </div>
             </div>
