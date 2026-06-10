@@ -380,8 +380,8 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
           {/* Kartlar — Desktop: 3D carousel; Mobile: prev/next + scroll */}
           {!isMobile ? (
             <div
-              className="relative z-10 h-[200px] overflow-hidden"
-              style={{ perspective: "1400px", perspectiveOrigin: "50% 38%" }}
+              className="relative z-10 h-[220px] overflow-hidden"
+              style={{ perspective: "1600px", perspectiveOrigin: "50% 42%" }}
               onMouseEnter={() => setPaused(true)}
               onMouseLeave={() => setPaused(false)}
               onFocusCapture={() => setPaused(true)}
@@ -393,11 +393,13 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
                 if (offset > n / 2) offset -= n;
                 if (offset < -n / 2) offset += n;
                 const abs = Math.abs(offset);
-                const tx  = offset * 22;       // % yatay (kompakt)
-                const tz  = -abs * 80;         // derinlik px
-                const ry  = offset * -10;      // hafif yaw
-                const sc  = abs === 0 ? 1 : abs === 1 ? 0.74 : 0.54;
-                const op  = abs === 0 ? 1 : abs === 1 ? 0.7  : 0.30;
+                // Px-based fan-out: side1 ±200px, side2 ±340px — kartlar geniş yayılır,
+                // arkadaki kartlar tamamen kaybolmaz, parent overflow-hidden ile güvende.
+                const tx  = abs === 0 ? 0 : (abs === 1 ? 200 : 340) * (offset > 0 ? 1 : -1);
+                const tz  = -abs * 50;
+                const ry  = offset * -7;
+                const sc  = abs === 0 ? 1.04 : abs === 1 ? 0.88 : 0.78;
+                const op  = abs === 0 ? 1    : abs === 1 ? 0.85 : 0.55;
                 return (
                   <div
                     key={p.code}
@@ -405,7 +407,7 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
                     style={{
                       width: "180px",
                       marginLeft: "-90px",
-                      transform: `translateX(${tx}%) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
+                      transform: `translateX(${tx}px) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
                       opacity: op,
                       zIndex: 100 - abs,
                       transformStyle: "preserve-3d",

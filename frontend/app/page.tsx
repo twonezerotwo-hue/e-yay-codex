@@ -2,7 +2,7 @@ import { fetchAIReport, fetchRegimeReport } from "@/lib/api";
 import AIAnalystReportPanel from "@/components/AIAnalystReport";
 import ActionSignalPanelShell from "@/components/ActionSignalPanelShell";
 import ScenarioPanelShell from "@/components/ScenarioPanelShell";
-import MacroPanel from "@/components/MacroPanel";
+import MacroRiskFilterStrip from "@/components/MacroRiskFilterStrip";
 import CommandSignalsPanelShell from "@/components/CommandSignalsPanelShell";
 import AsymmetryCard from "@/components/AsymmetryCard";
 import EventCalendarPanelShell from "@/components/EventCalendarPanelShell";
@@ -114,23 +114,24 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* 3 ── Durum Odası + Makro  |  Takvim */}
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_220px] gap-2 items-start">
-              <div className="flex flex-col gap-2">
+            {/* 3 ── Durum Odası (Macro/Risk Filter strip + Command Signals)  |  Takvim */}
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3 items-start">
+              <div className="flex flex-col gap-2 min-w-0">
+                <MacroRiskFilterStrip
+                  macro={data.report.macro_layer}
+                  appetite={data.report.appetite_layer}
+                />
                 <CommandSignalsPanelShell
                   signals={data.report.asset_signals}
                   techInsights={data.report.tech_insights ?? []}
                 />
-                <MacroPanel
-                  macro={data.report.macro_layer}
-                  appetite={data.report.appetite_layer}
-                  showUnified={false}
-                />
                 {/* FAZ 21 — LearningPanel, SystemHealthPanel ve "Birleşik Okuma"
                     Agent paneli altındaki "Sistem Kontrolleri" accordion'una
-                    taşındı. Backend/veri üretimi değişmedi. */}
+                    taşındı. Backend/veri üretimi değişmedi.
+                    Katman 2 (Makro) + Katman 3 (Risk İştahı) yukarıdaki
+                    Macro/Risk Filter strip içinde accordion olarak gösterilir. */}
               </div>
-              <div className="sticky top-16 self-start">
+              <div className="xl:sticky xl:top-16 self-start min-w-0">
                 <EventCalendarPanelShell catalysts={data.report.upcoming_catalysts ?? []} />
               </div>
             </div>
