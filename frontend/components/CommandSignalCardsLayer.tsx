@@ -108,7 +108,7 @@ function HoloCard({
         type="button"
         onClick={onClick}
         data-testid={`cs-card-${signal.asset_code}`}
-        className={`relative w-full text-left rounded-xl border backdrop-blur-md px-2.5 pt-2 pb-2 transition-all duration-500 min-h-[132px] ${tone.border} ${
+        className={`relative w-full text-left rounded-xl border backdrop-blur-md px-2.5 pt-2 pb-2 transition-all duration-500 h-[150px] ${tone.border} ${
           selected ? "z-20" : "opacity-90 hover:opacity-100"
         }`}
         style={{
@@ -198,13 +198,13 @@ function DetailPanel({ signal, tech }: { signal: AssetSignal; tech?: TechnicalIn
   const tone = TONE[toneOf(signal)];
   const dir  = dirOf(signal);
   return (
-    <div className="rounded-2xl border border-eyay-border/40 bg-black/30 p-3 space-y-2" data-testid="cs-detail-panel">
+    <div className="rounded-2xl border border-eyay-border/40 bg-black/30 p-3 space-y-2 overflow-y-auto max-h-full" data-testid="cs-detail-panel" style={{ scrollbarWidth: "thin" }}>
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-mono font-bold text-eyay-text">{signal.asset_code}</p>
         <span className={`rounded-md border px-1.5 py-0.5 text-[8px] font-mono font-bold ${dir.cls}`}>{dir.label}</span>
       </div>
       <p className={`text-lg font-mono font-bold ${tone.text}`}>{fmtVal(signal.value, signal.unit)}</p>
-      <p className="text-[9px] text-eyay-faint leading-snug">{signal.reason}</p>
+      <p className="text-[9px] text-eyay-faint leading-snug line-clamp-4">{signal.reason}</p>
       {tech && (
         <div className="pt-1">
           <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest mb-1">Teknik · {tech.timeframe}</p>
@@ -312,7 +312,7 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [], ma
 
   return (
     <div
-      className="w-full max-w-full min-w-0 rounded-2xl border border-eyay-border bg-[#030c1a] overflow-hidden"
+      className="w-full max-w-full min-w-0 h-full rounded-2xl border border-eyay-border bg-[#030c1a] overflow-hidden flex flex-col"
       data-testid="cs-cards-layer"
     >
       <style>{`
@@ -343,7 +343,7 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [], ma
         </span>
       </div>
 
-      <div className={isMobile ? "p-3 space-y-3" : "grid grid-cols-[minmax(0,1fr)_210px] gap-0"}>
+      <div className={isMobile ? "p-3 space-y-3" : "grid grid-cols-[minmax(0,1fr)_210px] gap-0 items-stretch"}>
         {/* Sol: holo sahne */}
         <div className="relative px-3 pt-3 pb-2 overflow-hidden"
              style={{
@@ -397,19 +397,22 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [], ma
                 if (offset > n / 2) offset -= n;
                 if (offset < -n / 2) offset += n;
                 const abs = Math.abs(offset);
-                const tx  = offset * 32;       // % yatay — fan-out genişledi
-                const tz  = -abs * 100;        // derinlik
-                const ry  = offset * -12;      // yaw
-                const sc  = abs === 0 ? 1.05 : abs === 1 ? 0.88 : 0.74;
-                const op  = abs === 0 ? 1 : abs === 1 ? 0.85 : 0.52;
+                // Pixel-tabanlı fan-out — container'a göre güvenli
+                const txPx = offset === 0 ? 0 : offset > 0
+                  ? (abs === 1 ? 220 : 400)
+                  : -(abs === 1 ? 220 : 400);
+                const tz   = -abs * 110;
+                const ry   = offset * -10;
+                const sc   = abs === 0 ? 1.03 : abs === 1 ? 0.88 : 0.76;
+                const op   = abs === 0 ? 1 : abs === 1 ? 0.88 : 0.62;
                 return (
                   <div
                     key={p.code}
                     className="absolute top-2 left-1/2 transition-all duration-700 ease-out"
                     style={{
-                      width: "190px",
-                      marginLeft: "-95px",
-                      transform: `translateX(${tx}%) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
+                      width: "210px",
+                      marginLeft: "-105px",
+                      transform: `translateX(${txPx}px) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
                       opacity: op,
                       zIndex: 100 - abs,
                       transformStyle: "preserve-3d",
@@ -536,7 +539,7 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [], ma
         {/* Sağ: detay paneli */}
         <div className={isMobile
           ? ""
-          : "relative border-l border-cyan-500/20 p-3 bg-gradient-to-b from-black/30 via-cyan-950/10 to-black/40"
+          : "relative border-l border-cyan-500/20 p-3 bg-gradient-to-b from-black/30 via-cyan-950/10 to-black/40 overflow-hidden flex flex-col min-h-0"
         }>
           {!isMobile && (
             <>

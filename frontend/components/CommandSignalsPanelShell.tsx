@@ -40,7 +40,7 @@ export default function CommandSignalsPanelShell({ signals, techInsights = [], m
   };
 
   return (
-    <div data-testid="command-signals-shell" className="w-full max-w-full min-w-0 overflow-hidden">
+    <div data-testid="command-signals-shell" className="w-full max-w-full min-w-0 overflow-hidden h-full flex flex-col">
       {/* ── Toggle bar ── */}
       <div className="flex items-center justify-between px-3 py-2 mb-1.5 bg-eyay-raised/60 border border-eyay-border/60 rounded-xl">
         <div className="flex items-center gap-2">

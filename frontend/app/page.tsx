@@ -118,8 +118,8 @@ export default async function HomePage() {
                 CommandSignalsPanelShell altındaki Macro/Risk Pulse banner +
                 detay accordion'da görünür. Detaylı sentez Agent paneli →
                 Sistem Kontrolleri accordion'unda da kalmaya devam ediyor. */}
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-3 items-start">
-              <div className="flex flex-col gap-2 min-w-0">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-3 items-stretch">
+              <div className="flex flex-col gap-2 min-w-0 h-full">
                 <CommandSignalsPanelShell
                   signals={data.report.asset_signals}
                   techInsights={data.report.tech_insights ?? []}
@@ -127,7 +127,7 @@ export default async function HomePage() {
                   appetite={data.report.appetite_layer}
                 />
               </div>
-              <div className="xl:sticky xl:top-16 xl:self-start">
+              <div className="h-full">
                 <EventCalendarPanelShell catalysts={data.report.upcoming_catalysts ?? []} />
               </div>
             </div>
