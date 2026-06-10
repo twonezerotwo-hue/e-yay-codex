@@ -87,7 +87,7 @@ export default function CapitalRotationPanelShell({ rotation }: Props) {
           className="text-[10px] font-mono text-amber-300/80 bg-amber-950/20 border border-amber-800/40 rounded-md px-3 py-1.5"
           data-testid="cap-degraded-warning"
         >
-          3D akış yüklenemedi, klasik görünüm kullanılıyor. ({degradedMsg})
+          Akış verisi okunamadı, klasik görünüm kullanılıyor. ({degradedMsg})
         </div>
       )}
 

@@ -1,15 +1,23 @@
 "use client";
 
 /**
- * FAZ 14 — Capital Flow Animated (3D-feel) Layer.
+ * FAZ 14 — Capital Flow Animated Layer (globe-centered).
  *
- * Hub-and-spoke SVG: merkez "Capital Flow" node, çevrede 7 asset node.
- * SVG animated path'ler out→merkez ve merkez→in için akar.
+ * Ortada parlak dijital dünya/globe; sermaye akışı merkez ile asset
+ * kartları arasında neon çizgilerle gösterilir.
+ *   Sol: güvenli liman / dolar / metaller (DXY, GLD, XAG)
+ *   Sağ: tahvil / emtia / kripto (TLT, OIL, BTC, HYG)
+ *   Alt: ana giriş node'u (SPY)
  *
  * Data source: GET /api/backend/capital-rotation/visual
- * Karar üretmez. Trade etmez. Auto tune etkilemez.
+ * Karar üretmez. Trade etmez. Yalnızca sunum katmanı.
+ * Fail/degraded → onDegraded ile Shell klasik görünüme döner.
  */
 import { useEffect, useState } from "react";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface VisualNode {
   id:          string;
@@ -44,14 +52,147 @@ interface Props {
   onDegraded?: (reason: string) => void;
 }
 
-// Sabit yerleşim sırası — saat 12'den başlayıp saat yönünde
-const ORBIT_ORDER = ["DXY", "TLT", "GLD", "XAG", "OIL", "BTC", "SPY", "HYG"];
+// ─────────────────────────────────────────────────────────────────────────────
+// Layout + style maps
+// ─────────────────────────────────────────────────────────────────────────────
 
-function colorFor(d: VisualNode["direction"]): { stroke: string; fill: string; glow: string } {
-  if (d === "in")  return { stroke: "#34d399", fill: "rgba(16,185,129,0.18)", glow: "rgba(16,185,129,0.55)" };
-  if (d === "out") return { stroke: "#f87171", fill: "rgba(239,68,68,0.16)",  glow: "rgba(239,68,68,0.55)"  };
-  return                  { stroke: "#fbbf24", fill: "rgba(245,158,11,0.14)", glow: "rgba(245,158,11,0.45)" };
+const LEFT_IDS   = ["DXY", "GLD", "XAG"];
+const RIGHT_IDS  = ["TLT", "OIL", "BTC", "HYG"];
+const BOTTOM_IDS = ["SPY"];
+
+const ASSET_META: Record<string, { icon: string; accent: string }> = {
+  DXY: { icon: "$",  accent: "bg-cyan-500/25 text-cyan-200" },
+  GLD: { icon: "Au", accent: "bg-amber-500/25 text-amber-200" },
+  XAG: { icon: "Ag", accent: "bg-slate-400/25 text-slate-100" },
+  OIL: { icon: "🛢", accent: "bg-orange-600/25 text-orange-200" },
+  BTC: { icon: "₿",  accent: "bg-purple-500/25 text-purple-200" },
+  SPY: { icon: "📊", accent: "bg-blue-500/25 text-blue-200" },
+  TLT: { icon: "🏛", accent: "bg-indigo-500/25 text-indigo-200" },
+  HYG: { icon: "HY", accent: "bg-rose-500/25 text-rose-200" },
+};
+
+function dirStyle(d: VisualNode["direction"]): {
+  border: string; shadow: string; text: string; bar: string; line: string; lineAnim: string;
+} {
+  if (d === "in")
+    return {
+      border: "border-emerald-400/50",
+      shadow: "shadow-[0_0_22px_rgba(34,211,238,0.30)]",
+      text:   "text-emerald-300",
+      bar:    "bg-cyan-400",
+      line:   "#22d3ee",
+      lineAnim: "cfal-dash",
+    };
+  if (d === "out")
+    return {
+      border: "border-red-500/50",
+      shadow: "shadow-[0_0_22px_rgba(239,68,68,0.30)]",
+      text:   "text-red-300",
+      bar:    "bg-red-400",
+      line:   "#f87171",
+      lineAnim: "cfal-dash-rev",
+    };
+  return {
+    border: "border-amber-500/40",
+    shadow: "shadow-[0_0_16px_rgba(245,158,11,0.22)]",
+    text:   "text-amber-200",
+    bar:    "bg-amber-400",
+    line:   "#fbbf24",
+    lineAnim: "cfal-dash",
+  };
 }
+
+const DIR_TR: Record<VisualNode["direction"], string> = {
+  in: "GİRİŞ", out: "ÇIKIŞ", neutral: "NÖTR",
+};
+
+function fmtPct(v: number): string {
+  return `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset kartı — glassmorphism + direction glow
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AssetCard({ n }: { n: VisualNode }) {
+  const ds   = dirStyle(n.direction);
+  const meta = ASSET_META[n.id] ?? { icon: n.id.slice(0, 2), accent: "bg-slate-500/25 text-slate-200" };
+  return (
+    <div className={`rounded-xl border bg-white/[0.04] backdrop-blur-sm px-3 py-2 ${ds.border} ${ds.shadow}`}>
+      <div className="flex items-center gap-2">
+        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${meta.accent}`}>
+          {meta.icon}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[9px] font-mono font-bold text-eyay-dim leading-tight truncate">{n.label}</p>
+          <p className="text-[8px] font-mono text-eyay-faint leading-tight">{n.id} · 30g</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className={`text-[11px] font-mono font-semibold leading-tight ${ds.text}`}>{fmtPct(n.value_pct)}</p>
+          <p className={`text-[8px] font-mono leading-tight ${ds.text}`}>{DIR_TR[n.direction]}</p>
+        </div>
+      </div>
+      <div className="mt-1.5 h-1 rounded bg-white/10 overflow-hidden">
+        <div
+          className={`h-full rounded transition-all duration-700 ${ds.bar}`}
+          style={{ width: `${Math.round(n.strength * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Globe — CSS radial gradient + grid overlay + halo
+// ─────────────────────────────────────────────────────────────────────────────
+
+function Globe({ animate, primaryFlow, conviction, small }: {
+  animate: boolean; primaryFlow: string; conviction: number; small?: boolean;
+}) {
+  const size = small ? "w-28 h-28" : "w-44 h-44";
+  return (
+    <div className={`relative ${size}`}>
+      {/* dış halo */}
+      <div
+        className="absolute -inset-4 rounded-full border border-cyan-400/20"
+        style={animate ? { animation: "cfal-pulse 3.2s ease-in-out infinite" } : undefined}
+      />
+      {/* dönen dashed ring */}
+      <div
+        className="absolute -inset-2 rounded-full border-2 border-dashed border-cyan-400/25"
+        style={animate ? { animation: "cfal-spin 26s linear infinite" } : undefined}
+      />
+      {/* küre */}
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          background: "radial-gradient(circle at 35% 30%, #7dd3fc 0%, #2563eb 45%, #0b1d40 85%)",
+          boxShadow: "0 0 60px rgba(56,189,248,0.40), inset 0 0 40px rgba(125,211,252,0.22)",
+        }}
+      />
+      {/* grid overlay */}
+      <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full opacity-35">
+        <circle  cx="50" cy="50" r="48"          fill="none" stroke="#a5f3fc" strokeWidth="0.6" />
+        <ellipse cx="50" cy="50" rx="48" ry="18" fill="none" stroke="#a5f3fc" strokeWidth="0.5" />
+        <ellipse cx="50" cy="50" rx="48" ry="34" fill="none" stroke="#a5f3fc" strokeWidth="0.5" />
+        <ellipse cx="50" cy="50" rx="18" ry="48" fill="none" stroke="#a5f3fc" strokeWidth="0.5" />
+        <ellipse cx="50" cy="50" rx="34" ry="48" fill="none" stroke="#a5f3fc" strokeWidth="0.5" />
+      </svg>
+      {/* merkez yazı */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="font-mono text-[10px] font-bold tracking-[0.2em] text-cyan-100 drop-shadow">CAPITAL</span>
+        <span className="font-mono text-[10px] font-bold tracking-[0.2em] text-cyan-100 drop-shadow">FLOW</span>
+        <span className="font-mono text-[7px] text-cyan-200/70 mt-1">
+          {primaryFlow || "—"} · {conviction}/5
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
   const [data, setData]       = useState<VisualPayload | null>(null);
@@ -102,30 +243,45 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
 
   if (error || !data) return null;
 
-  // Layout — merkez + yörünge
-  const W = 640, H = 360, CX = W / 2, CY = H / 2;
-  const R = isMobile ? 110 : 140;
-  const ordered = ORBIT_ORDER
-    .map(id => data.nodes.find(n => n.id === id))
-    .filter((n): n is VisualNode => !!n);
-  const N = ordered.length || 1;
+  const byId: Record<string, VisualNode> = Object.fromEntries(data.nodes.map(n => [n.id, n]));
+  const leftNodes   = LEFT_IDS.map(id => byId[id]).filter((n): n is VisualNode => !!n);
+  const rightNodes  = RIGHT_IDS.map(id => byId[id]).filter((n): n is VisualNode => !!n);
+  const bottomNodes = BOTTOM_IDS.map(id => byId[id]).filter((n): n is VisualNode => !!n);
+  const animate = !reduced && !isMobile;
 
-  const positions: Record<string, { x: number; y: number }> = {};
-  ordered.forEach((n, i) => {
-    const angle = -Math.PI / 2 + (i / N) * 2 * Math.PI;
-    positions[n.id] = { x: CX + R * Math.cos(angle), y: CY + R * Math.sin(angle) };
-  });
+  // Üst metrikler
+  const inCount  = data.nodes.filter(n => n.direction === "in").length;
+  const outCount = data.nodes.filter(n => n.direction === "out").length;
+  const netDir   = outCount > inCount ? "ÇIKIŞ baskın" : inCount > outCount ? "GİRİŞ baskın" : "DENGELİ";
+  const topFlow  = data.flows.length > 0
+    ? [...data.flows].sort((a, b) => b.strength - a.strength)[0]
+    : null;
 
-  const animate = !reduced;
+  // Desktop çizgi uç noktaları (viewBox 0-100, percent koordinat)
+  const CXp = 50, CYp = 44;
+  const slotY = (i: number, n: number) => 8 + ((i + 0.5) / Math.max(n, 1)) * 70;
+  const lineDefs: { x: number; y: number; node: VisualNode }[] = [
+    ...leftNodes.map((node, i)  => ({ x: 28, y: slotY(i, leftNodes.length),  node })),
+    ...rightNodes.map((node, i) => ({ x: 72, y: slotY(i, rightNodes.length), node })),
+    ...bottomNodes.map(node     => ({ x: 50, y: 86, node })),
+  ];
 
   return (
     <div
-      className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-4 space-y-2 min-h-[420px] relative"
+      className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-4 space-y-3 min-h-[420px] relative overflow-visible"
       data-testid="capital-flow-animated"
       data-reduced-motion={reduced ? "true" : "false"}
       data-mobile={isMobile ? "true" : "false"}
     >
-      <div className="flex items-center justify-between border-b border-eyay-border/40 pb-2 mb-1">
+      <style>{`
+        @keyframes cfal-dash     { to { stroke-dashoffset: -24; } }
+        @keyframes cfal-dash-rev { to { stroke-dashoffset: 24; } }
+        @keyframes cfal-spin     { to { transform: rotate(360deg); } }
+        @keyframes cfal-pulse    { 0%,100% { opacity: .45; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }
+      `}</style>
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 border-b border-eyay-border/40 pb-2">
         <div className="flex flex-col">
           <span className="text-[10px] font-mono text-eyay-dim uppercase tracking-widest">
             Animasyonlu Sermaye Akışı
@@ -134,127 +290,108 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
             {data.nodes.length} varlık · {data.flows.length} akış · {data.execution_mode}
           </span>
         </div>
-        <span className="text-[9px] font-mono text-eyay-faint">
-          conviction {data.conviction}/5 · {data.primary_flow}
-        </span>
+        {/* Metrikler */}
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <span className="rounded-md border border-eyay-border/50 bg-eyay-raised/40 px-2 py-0.5 text-[8px] font-mono text-eyay-dim">
+            Aktif Akış: {data.flows.length}
+          </span>
+          <span className={`rounded-md border px-2 py-0.5 text-[8px] font-mono ${
+            netDir === "ÇIKIŞ baskın" ? "border-red-800/50 bg-red-950/20 text-red-300"
+            : netDir === "GİRİŞ baskın" ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300"
+            : "border-amber-800/50 bg-amber-950/20 text-amber-200"
+          }`}>
+            Net Yön: {netDir}
+          </span>
+          {topFlow && (
+            <span className="rounded-md border border-cyan-800/50 bg-cyan-950/20 px-2 py-0.5 text-[8px] font-mono text-cyan-200">
+              En Güçlü: {topFlow.from}→{topFlow.to}
+            </span>
+          )}
+          <span className="rounded-md border border-eyay-border/50 bg-eyay-raised/40 px-2 py-0.5 text-[8px] font-mono text-eyay-dim">
+            Conviction: {data.conviction}/5
+          </span>
+        </div>
       </div>
 
-      {/* SVG hub-and-spoke */}
-      <div className="relative w-full" style={{ minHeight: 360 }}>
+      {/* ── Desktop: globe + yanlarda kartlar ── */}
+      <div className="hidden sm:block relative h-[400px]">
+        {/* Neon flow çizgileri — kartların altında */}
         <svg
-          viewBox={`0 0 ${W} ${H}`}
-          className="absolute inset-0 w-full h-full"
-          style={{ overflow: "visible" }}
-          preserveAspectRatio="xMidYMid meet"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 w-full h-full pointer-events-none z-0"
         >
-          <defs>
-            <radialGradient id="hubGrad" cx="50%" cy="50%" r="50%">
-              <stop offset="0%"  stopColor="rgba(59,130,246,0.55)" />
-              <stop offset="60%" stopColor="rgba(59,130,246,0.18)" />
-              <stop offset="100%" stopColor="rgba(59,130,246,0)" />
-            </radialGradient>
-            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="b" />
-              <feMerge>
-                <feMergeNode in="b" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Flows — out node → merkez, merkez → primary in node */}
-          {data.flows.map((f, i) => {
-            const src = positions[f.from];
-            if (!src) return null;
-            const dst = positions[f.to] || { x: CX, y: CY };
-            const strokeW = 1 + f.strength * 3;
-            const dur = animate ? `${Math.max(2, 5 - f.strength * 3)}s` : undefined;
+          {lineDefs.map(({ x, y, node }, i) => {
+            const ds  = dirStyle(node.direction);
+            const dur = Math.max(0.9, 3 - node.strength * 2.2);
             return (
-              <g key={`flow-${i}`}>
-                {/* base line */}
-                <line
-                  x1={src.x} y1={src.y} x2={CX} y2={CY}
-                  stroke="rgba(239,68,68,0.35)"
-                  strokeWidth={strokeW}
-                  strokeDasharray="6 6"
-                >
-                  {animate && (
-                    <animate
-                      attributeName="stroke-dashoffset"
-                      from="24" to="0" dur={dur} repeatCount="indefinite"
-                    />
-                  )}
-                </line>
-                {/* center → dst */}
-                {dst !== positions[f.from] && (
-                  <line
-                    x1={CX} y1={CY} x2={dst.x} y2={dst.y}
-                    stroke="rgba(16,185,129,0.40)"
-                    strokeWidth={strokeW}
-                    strokeDasharray="6 6"
-                  >
-                    {animate && (
-                      <animate
-                        attributeName="stroke-dashoffset"
-                        from="0" to="-24" dur={dur} repeatCount="indefinite"
-                      />
-                    )}
-                  </line>
-                )}
-              </g>
-            );
-          })}
-
-          {/* Hub */}
-          <circle cx={CX} cy={CY} r={62} fill="url(#hubGrad)" />
-          <circle cx={CX} cy={CY} r={42} fill="rgba(15,23,42,0.85)" stroke="rgba(96,165,250,0.6)" strokeWidth={2} filter="url(#softGlow)" />
-          <text x={CX} y={CY - 6} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#93c5fd" letterSpacing="1">
-            CAPITAL
-          </text>
-          <text x={CX} y={CY + 6} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#93c5fd" letterSpacing="1">
-            FLOW
-          </text>
-          <text x={CX} y={CY + 20} textAnchor="middle" fontSize="8" fontFamily="monospace" fill="rgba(148,163,184,0.7)">
-            {data.flows.length} akış
-          </text>
-
-          {/* Asset nodes — orbit */}
-          {ordered.map(n => {
-            const p = positions[n.id];
-            const c = colorFor(n.direction);
-            const r = 26 + n.strength * 8;
-            return (
-              <g key={n.id}>
-                {/* halo / glow */}
-                <circle
-                  cx={p.x} cy={p.y} r={r + 6}
-                  fill="none"
-                  stroke={c.glow}
-                  strokeWidth={1}
-                  opacity={0.6}
-                  filter="url(#softGlow)"
-                >
-                  {animate && n.direction !== "neutral" && (
-                    <animate attributeName="r" values={`${r + 4};${r + 10};${r + 4}`} dur="2.4s" repeatCount="indefinite" />
-                  )}
-                </circle>
-                {/* main */}
-                <circle cx={p.x} cy={p.y} r={r} fill={c.fill} stroke={c.stroke} strokeWidth={1.5}>
-                  <title>{`${n.label}: ${n.value_pct.toFixed(1)}% 30g`}</title>
-                </circle>
-                <text x={p.x} y={p.y - 3} textAnchor="middle" fontSize="10" fontFamily="monospace" fontWeight="bold" fill={c.stroke}>
-                  {n.id}
-                </text>
-                <text x={p.x} y={p.y + 10} textAnchor="middle" fontSize="9" fontFamily="monospace" fill={c.stroke}>
-                  {n.value_pct > 0 ? "+" : ""}{n.value_pct.toFixed(1)}%
-                </text>
-              </g>
+              <line
+                key={`l-${node.id}-${i}`}
+                x1={x} y1={y} x2={CXp} y2={CYp}
+                stroke={ds.line}
+                strokeWidth={1 + node.strength * 2.5}
+                strokeDasharray="3 3"
+                opacity={0.7}
+                vectorEffect="non-scaling-stroke"
+                style={animate ? { animation: `${ds.lineAnim} ${dur}s linear infinite` } : undefined}
+              />
             );
           })}
         </svg>
+
+        {/* Sol kartlar — güvenli liman / dolar / metaller */}
+        {leftNodes.map((n, i) => (
+          <div
+            key={n.id}
+            className="absolute left-0 w-[27%] z-10"
+            style={{ top: `${slotY(i, leftNodes.length)}%`, transform: "translateY(-50%)" }}
+          >
+            <AssetCard n={n} />
+          </div>
+        ))}
+
+        {/* Sağ kartlar — tahvil / emtia / kripto */}
+        {rightNodes.map((n, i) => (
+          <div
+            key={n.id}
+            className="absolute right-0 w-[27%] z-10"
+            style={{ top: `${slotY(i, rightNodes.length)}%`, transform: "translateY(-50%)" }}
+          >
+            <AssetCard n={n} />
+          </div>
+        ))}
+
+        {/* Alt kart — ana giriş node'u */}
+        {bottomNodes.map(n => (
+          <div
+            key={n.id}
+            className="absolute left-1/2 w-[30%] z-10"
+            style={{ top: "86%", transform: "translate(-50%,-50%)" }}
+          >
+            <AssetCard n={n} />
+          </div>
+        ))}
+
+        {/* Globe — merkez */}
+        <div
+          className="absolute z-10"
+          style={{ left: "50%", top: `${CYp}%`, transform: "translate(-50%,-50%)" }}
+        >
+          <Globe animate={animate} primaryFlow={data.primary_flow} conviction={data.conviction} />
+        </div>
       </div>
 
-      {/* Flow list */}
+      {/* ── Mobile: hafif static görünüm ── */}
+      <div className="sm:hidden space-y-3">
+        <div className="flex justify-center">
+          <Globe animate={false} primaryFlow={data.primary_flow} conviction={data.conviction} small />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {data.nodes.map(n => <AssetCard key={n.id} n={n} />)}
+        </div>
+      </div>
+
+      {/* Flow listesi */}
       {data.flows.length > 0 && (
         <div className="pt-2 border-t border-eyay-border/40 space-y-1">
           <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
@@ -272,8 +409,10 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
         </div>
       )}
 
+      {/* Disclaimer */}
       <p className="text-[8px] font-mono text-eyay-faint/40 pt-1">
-        {data.schema_version} · {data.execution_mode} · {data.decision_permission}
+        Akış gücü 30 günlük referans getiriye göre normalize edilir. Görsel katman yalnızca sunum amaçlıdır.
+        · {data.schema_version} · {data.execution_mode} · {data.decision_permission}
       </p>
     </div>
   );
