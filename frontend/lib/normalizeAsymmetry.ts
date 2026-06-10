@@ -91,11 +91,56 @@ export function smoothRatio(
   return result;
 }
 
-/** Backend ratio alanından 0–10 normalized score üretir (UI rozetleri için).
- *  ratio 0.5 → 2 puan, ratio 5+ → 10 puan; lineer olmayan eğri. */
+/** Backend ratio'sundan 0-100 canonical asimetri skoru üretir (log eğri).
+ *  Backend `report.asymmetry.score` doluysa o tercih edilmeli; bu helper
+ *  geriye uyum için fallback yoludur.
+ *  Eğri: 0.25× → 0, 1× → 50, 2× → 67, 4× → 83, 8× → 100 */
+export function ratioToScore100(ratio: number): number {
+  if (!isFinite(ratio) || ratio <= 0) return 50;
+  const clamped = Math.max(0.25, Math.min(8, ratio));
+  const s = 50 + Math.log2(clamped) * (50 / 3);
+  return Math.round(clamp(s, 0, 100));
+}
+
+/** Geriye uyum: eski 0-10 skala. */
 export function normalizeAsymmetryScore(ratio: number): number {
-  if (!isFinite(ratio) || ratio <= 0) return 0;
-  // log2 eğri: 1× → 5, 2× → 7, 4× → 9, 8× → 10
-  const score = 5 + Math.log2(Math.max(0.25, Math.min(8, ratio))) * 2;
-  return Math.round(clamp(score, 0, 10) * 10) / 10;
+  return Math.round(ratioToScore100(ratio) / 10 * 10) / 10;
+}
+
+/** Display smoothing for 0-100 score; en fazla maxStep puan oynar. */
+const SCORE_KEY = "eyay.asymmetry.lastDisplayedScore";
+
+export function loadPrevDisplayedScore(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SCORE_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return isFinite(n) && n >= 0 && n <= 100 ? n : null;
+  } catch { return null; }
+}
+
+export function savePrevDisplayedScore(v: number): void {
+  if (typeof window === "undefined") return;
+  if (!isFinite(v)) return;
+  try { window.localStorage.setItem(SCORE_KEY, String(v)); } catch { /* */ }
+}
+
+export function smoothScore(
+  raw: number,
+  prev: number | null,
+  maxStep: number = 8,
+): { displayed: number; raw: number; delta: number; smoothed: boolean } {
+  if (!isFinite(raw)) raw = 50;
+  raw = clamp(raw, 0, 100);
+  if (prev === null || !isFinite(prev)) {
+    return { displayed: raw, raw, delta: 0, smoothed: false };
+  }
+  const diff = raw - prev;
+  if (Math.abs(diff) <= maxStep) {
+    return { displayed: raw, raw, delta: diff, smoothed: false };
+  }
+  const direction = diff > 0 ? 1 : -1;
+  const displayed = clamp(prev + direction * maxStep, 0, 100);
+  return { displayed, raw, delta: diff, smoothed: true };
 }

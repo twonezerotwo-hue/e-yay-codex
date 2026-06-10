@@ -109,6 +109,13 @@ class AsymmetrySignal:
     """
     Risk/Ödül asimetrisi — mevcut sinyal durumundan türetilir.
     Olasılık-ağırlıklı beklenen kazanç vs beklenen kayıp oranı.
+
+    FAZ 23 — Canonical UI alanları eklendi:
+      score (0-100): ana göstergede gösterilen stabil değer
+      direction: "negative" | "neutral" | "positive"
+      confidence (0-100): hesap için kullanılan veri yeterliliği
+      data_quality: "ok" | "degraded" | "stale"
+    Eski alanlar (ratio/label/color/brief/expected_*) geriye uyum için korundu.
     """
     expected_gain_pct: float    # olasılık-ağırlıklı beklenen kazanç
     expected_loss_pct: float    # olasılık-ağırlıklı beklenen kayıp (pozitif değer)
@@ -116,6 +123,10 @@ class AsymmetrySignal:
     label: str                  # "Çok Olumlu" / "Olumlu" / "Dengeli" / "Olumsuz" / "Çok Olumsuz"
     color: str                  # "green" | "lime" | "yellow" | "orange" | "red"
     brief: str                  # 1 cümle yorum
+    score: int = 50             # 0-100 canonical (log-eğri map: 1×→50, 2×→67, 4×→83, 8×→100)
+    direction: str = "neutral"  # negative / neutral / positive
+    confidence: int = 60        # 0-100
+    data_quality: str = "ok"    # ok / degraded / stale
 
 
 @dataclass(frozen=True)
@@ -1642,6 +1653,27 @@ def _build_asymmetry(
         label, color = "Çok Olumsuz", "red"
         brief = f"Risk/Ödül oranı {ratio:.1f}× — olası kayıp kazancın çok üzerinde. Savunmacı kal, izlemede bekle."
 
+    # ── Canonical 0-100 score (FAZ 23) ─────────────────────────────────────
+    # Log eğri: 0.25× → 0, 1× → 50, 2× → 67, 4× → 83, 8× → 100
+    import math as _math
+    if not isinstance(ratio, (int, float)) or ratio <= 0 \
+       or _math.isinf(ratio) or _math.isnan(ratio):
+        _score = 50
+    else:
+        _clamped = max(0.25, min(8.0, ratio))
+        _score = int(round(max(0, min(100, 50 + _math.log2(_clamped) * (50.0 / 3.0)))))
+
+    if _score >= 56:
+        _direction = "positive"
+    elif _score < 45:
+        _direction = "negative"
+    else:
+        _direction = "neutral"
+
+    # Confidence: ATR/S-R bazlı hesap yapıldıysa daha yüksek
+    _confidence = 78 if weight_sum >= 0.5 else 55
+    _data_quality = "ok" if weight_sum >= 0.5 else "degraded"
+
     return AsymmetrySignal(
         expected_gain_pct=expected_gain,
         expected_loss_pct=expected_loss,
@@ -1649,6 +1681,10 @@ def _build_asymmetry(
         label=label,
         color=color,
         brief=brief,
+        score=_score,
+        direction=_direction,
+        confidence=_confidence,
+        data_quality=_data_quality,
     )
 
 

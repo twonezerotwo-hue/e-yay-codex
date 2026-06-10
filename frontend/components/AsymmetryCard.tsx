@@ -1,201 +1,144 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+/**
+ * FAZ 23 — Asimetri Kartı (sade premium tasarım).
+ *
+ * Ana göstergede 0-100 canonical score. Ratio yalnızca küçük alt satırda.
+ * report.asymmetry.score doluysa kullan; yoksa ratio'dan türet.
+ * Display smoothing: tek poll'da maks 8 puan oynar. Karar motoru ham ratio
+ * üzerinden çalışmaya devam eder.
+ */
+import { useEffect, useState } from "react";
+
 import type { AsymmetrySignal } from "@/lib/types";
-import { useLanguage } from "@/contexts/LanguageContext";
 import {
-  loadPrevDisplayedRatio,
-  savePrevDisplayedRatio,
-  smoothRatio,
-  type SmoothResult,
+  loadPrevDisplayedScore,
+  ratioToScore100,
+  savePrevDisplayedScore,
+  smoothScore,
 } from "@/lib/normalizeAsymmetry";
 
-const STYLES = {
-  green:  { ring: "border-emerald-700", label: "text-emerald-400", bar: "bg-emerald-500", glow: "shadow-emerald-900/40" },
-  lime:   { ring: "border-lime-700",    label: "text-lime-400",    bar: "bg-lime-500",    glow: "shadow-lime-900/40"    },
-  yellow: { ring: "border-amber-700",   label: "text-amber-400",   bar: "bg-amber-400",   glow: "shadow-amber-900/40"   },
-  orange: { ring: "border-orange-700",  label: "text-orange-400",  bar: "bg-orange-500",  glow: "shadow-orange-900/40"  },
-  red:    { ring: "border-red-700",     label: "text-red-400",     bar: "bg-red-500",     glow: "shadow-red-900/40"     },
-} as const;
+type Tone = "red" | "orange" | "amber" | "cyan" | "emerald";
 
-function isSuspect(a: AsymmetrySignal): boolean {
-  return (
-    a.ratio < 0.05 ||
-    a.ratio > 15 ||
-    a.expected_gain_pct < 0 ||
-    a.expected_gain_pct > 100 ||
-    a.expected_loss_pct <= 0 ||
-    a.expected_loss_pct > 100
-  );
+const TONE: Record<Tone, { ring: string; bar: string; text: string; soft: string; border: string }> = {
+  red:     { ring: "#f87171", bar: "bg-red-500",     text: "text-red-300",     soft: "rgba(248,113,113,0.15)", border: "border-red-700/50" },
+  orange:  { ring: "#fb923c", bar: "bg-orange-500",  text: "text-orange-300",  soft: "rgba(251,146,60,0.15)",  border: "border-orange-700/50" },
+  amber:   { ring: "#fbbf24", bar: "bg-amber-400",   text: "text-amber-300",   soft: "rgba(251,191,36,0.15)",  border: "border-amber-700/50" },
+  cyan:    { ring: "#22d3ee", bar: "bg-cyan-500",    text: "text-cyan-300",    soft: "rgba(34,211,238,0.15)",  border: "border-cyan-700/50" },
+  emerald: { ring: "#34d399", bar: "bg-emerald-500", text: "text-emerald-300", soft: "rgba(52,211,153,0.15)",  border: "border-emerald-700/50" },
+};
+
+function toneFor(score: number): Tone {
+  if (score <= 30) return "red";
+  if (score <= 45) return "orange";
+  if (score <= 55) return "amber";
+  if (score <= 70) return "cyan";
+  return "emerald";
 }
 
-export default function AsymmetryCard({ asymmetry }: { asymmetry: AsymmetrySignal }) {
-  const { t } = useLanguage();
-  const [showFormula, setShowFormula] = useState(false);
-  const prevRatioRef = useRef<number | null>(null);
-  // FAZ 23 — Display smoothing: gerçek raw ratio'yu sakla, UI'da yumuşatılmış değeri göster.
-  const [smooth, setSmooth] = useState<SmoothResult | null>(null);
+function labelFor(direction: string, score: number): string {
+  if (direction === "negative" || score <= 30) return "Negatif";
+  if (score <= 45) return "Temkinli";
+  if (score <= 55) return "Nötr";
+  if (score <= 70) return "Seçici pozitif";
+  return "Pozitif";
+}
 
-  const suspect   = !asymmetry || isSuspect(asymmetry);
-  const prevRatio = prevRatioRef.current;
-  const bigJump   =
-    !suspect &&
-    asymmetry != null &&
-    prevRatio !== null &&
-    (asymmetry.ratio / prevRatio > 2.5 || prevRatio / asymmetry.ratio > 2.5);
+function isSuspect(a: AsymmetrySignal): boolean {
+  if (!a) return true;
+  if (!isFinite(a.ratio) || a.ratio <= 0) return true;
+  if (a.expected_gain_pct < 0 || a.expected_gain_pct > 100) return true;
+  if (a.expected_loss_pct <= 0 || a.expected_loss_pct > 100) return true;
+  return false;
+}
+
+export default function AsymmetryCard({ asymmetry }: { asymmetry: AsymmetrySignal | null | undefined }) {
+  const [displayed, setDisplayed] = useState<number | null>(null);
+  const [smoothed, setSmoothed]   = useState(false);
+
+  // Canonical raw score: backend tercih, yoksa ratio fallback
+  const rawScore = asymmetry && !isSuspect(asymmetry)
+    ? (typeof asymmetry.score === "number" ? asymmetry.score : ratioToScore100(asymmetry.ratio))
+    : null;
 
   useEffect(() => {
-    if (!asymmetry || isSuspect(asymmetry)) return;
-    const prev = loadPrevDisplayedRatio();
-    const next = smoothRatio(asymmetry.ratio, prev);
-    setSmooth(next);
-    savePrevDisplayedRatio(next.displayed);
-    prevRatioRef.current = asymmetry.ratio;
-    if (next.rawJump && typeof console !== "undefined") {
-      console.warn(
-        `[asymmetry] raw jump: prev=${prev} → raw=${asymmetry.ratio} ` +
-        `(displayed clamp=${next.displayed}, smoothed=${next.smoothed})`,
-      );
-    }
-  }, [asymmetry?.ratio]);
+    if (rawScore === null) return;
+    const prev = loadPrevDisplayedScore();
+    const r = smoothScore(rawScore, prev);
+    setDisplayed(r.displayed);
+    setSmoothed(r.smoothed);
+    savePrevDisplayedScore(r.displayed);
+  }, [rawScore]);
 
-  if (!asymmetry) return null;
+  if (!asymmetry) {
+    return (
+      <div className="bg-eyay-surface rounded-2xl border border-eyay-border p-4">
+        <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">Asimetri</p>
+        <p className="text-[10px] font-mono text-eyay-faint italic mt-2">Asimetri verisi bekleniyor.</p>
+      </div>
+    );
+  }
 
-  const s      = STYLES[asymmetry.color] ?? STYLES.yellow;
-  const totalW = asymmetry.expected_gain_pct + asymmetry.expected_loss_pct;
-  const gainW  = totalW > 0 ? (asymmetry.expected_gain_pct / totalW) * 100 : 50;
-  const lossW  = 100 - gainW;
-  const computed = asymmetry.expected_loss_pct > 0
-    ? (asymmetry.expected_gain_pct / asymmetry.expected_loss_pct).toFixed(2)
-    : "—";
+  if (isSuspect(asymmetry) || rawScore === null) {
+    return (
+      <div className="bg-eyay-surface rounded-2xl border border-eyay-border p-4 space-y-1">
+        <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">Asimetri</p>
+        <p className="text-[10px] font-mono text-amber-400">⚠ Hesaplanamadı — veri aralık dışı</p>
+      </div>
+    );
+  }
+
+  const shown      = Math.round(displayed ?? rawScore);
+  const tone       = TONE[toneFor(shown)];
+  const direction  = asymmetry.direction ?? (shown >= 56 ? "positive" : shown < 45 ? "negative" : "neutral");
+  const label      = labelFor(direction, shown);
+  const confidence = asymmetry.confidence ?? 60;
+  const dataQ      = asymmetry.data_quality ?? "ok";
+  const dqDot      = dataQ === "ok" ? "#34d399" : dataQ === "degraded" ? "#fbbf24" : "#f87171";
 
   return (
     <div
-      className={`bg-eyay-surface rounded-2xl border ${
-        suspect ? "border-eyay-border" : `${s.ring} shadow-lg ${s.glow}`
-      } overflow-hidden flex flex-col`}
+      className={`bg-eyay-surface rounded-2xl border ${tone.border} p-4 flex flex-col`}
+      style={{ boxShadow: `0 0 14px ${tone.soft}` }}
+      data-testid="asymmetry-card"
     >
-      {/* ── Header ── */}
-      <div className="px-4 py-2.5 border-b border-eyay-border flex items-center justify-between">
-        <div>
-          <p className="text-[9px] text-eyay-faint uppercase tracking-widest font-semibold">
-            {t.asymmetry.sectionLabel}
-          </p>
-          <p className="text-xs font-semibold text-eyay-text mt-0.5">{t.asymmetry.title}</p>
-        </div>
-        {!suspect && (
-          <button
-            onClick={() => setShowFormula(v => !v)}
-            className="text-[9px] font-mono text-eyay-blue hover:text-blue-300 transition-colors"
-          >
-            {showFormula ? "▲" : "Formül ▼"}
-          </button>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">Asimetri</p>
+        <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded border ${tone.border}`}
+              style={{ color: tone.ring, background: tone.soft }}>
+          {label}
+        </span>
+      </div>
+
+      {/* Ana skor */}
+      <div className="flex items-baseline gap-1 mb-2">
+        <span className={`font-mono font-black text-4xl leading-none ${tone.text}`}
+              title={`Ham R/R: ${asymmetry.ratio.toFixed(2)}×${smoothed ? " (gösterim yumuşatıldı)" : ""}`}>
+          {shown}
+        </span>
+        <span className="text-[12px] font-mono text-eyay-faint">/ 100</span>
+        {smoothed && (
+          <span className="ml-auto text-[8px] font-mono text-amber-400/70" title="Tek poll'da büyük değişim — yumuşatıldı">
+            ⌛ stabilize
+          </span>
         )}
       </div>
 
-      <div className="p-4 flex-1">
-        {suspect ? (
-          /* ── Şüpheli / hesaplanamadı görünümü ── */
-          <div className="space-y-2">
-            <p className="text-[10px] font-mono text-amber-400 font-semibold">
-              ⚠ Asimetri hesaplanamadı
-            </p>
-            <p className="text-[9px] text-eyay-faint leading-snug">
-              Giriş değerleri sanity kontrolünden geçmedi. Güvenilir hesaplama için veri doğrulaması gerekiyor.
-            </p>
-            <div className="text-[9px] font-mono text-eyay-faint/50 space-y-0.5 pt-1 border-t border-eyay-border/40">
-              <div>
-                Oran: {asymmetry.ratio.toFixed(2)}×
-                {(asymmetry.ratio < 0.05 || asymmetry.ratio > 15) ? " ← aralık dışı" : ""}
-              </div>
-              <div>
-                Kazanç %{asymmetry.expected_gain_pct} · Kayıp %{asymmetry.expected_loss_pct}
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* ── Normal görünüm ── */
-          <div className="space-y-3">
-            {(bigJump || smooth?.rawJump) && prevRatio !== null && (
-              <div className="text-[9px] font-mono text-amber-400/80 border border-amber-900/40 bg-amber-950/20 rounded px-2 py-1 leading-snug"
-                   title={`Ham oran: ${asymmetry.ratio.toFixed(2)}× · Önceki: ${prevRatio.toFixed(2)}×`}>
-                ⚠ Ham asimetri değişimi yüksek (yumuşatıldı): {prevRatio.toFixed(1)}× → {asymmetry.ratio.toFixed(1)}×
-              </div>
-            )}
+      {/* Progress bar */}
+      <div className="h-2 rounded-full bg-black/40 overflow-hidden mb-2">
+        <div className={`h-full rounded-full ${tone.bar} transition-all duration-700`}
+             style={{ width: `${shown}%` }} />
+      </div>
 
-            {/* Büyük oran — display smoothed; raw tooltip'te */}
-            <div className="flex items-end justify-between gap-3">
-              <div>
-                <span
-                  className={`font-mono font-black text-3xl leading-none ${s.label}`}
-                  title={`Ham oran: ${asymmetry.ratio.toFixed(2)}×${smooth?.smoothed ? " (gösterim yumuşatıldı)" : ""}`}
-                >
-                  {(smooth?.displayed ?? asymmetry.ratio).toFixed(1)}
-                  <span className="text-base font-bold">×</span>
-                </span>
-                <p className={`text-[10px] font-semibold mt-1 ${s.label}`}>{asymmetry.label}</p>
-                {smooth?.smoothed && (
-                  <p className="text-[8px] font-mono text-amber-400/70 mt-0.5">
-                    ham: {asymmetry.ratio.toFixed(2)}×
-                  </p>
-                )}
-              </div>
-              <div className="text-right space-y-0.5">
-                <div className="text-[10px] font-mono">
-                  <span className="text-eyay-faint">{t.asymmetry.gain} </span>
-                  <span className="text-emerald-400 font-semibold">+{asymmetry.expected_gain_pct}%</span>
-                </div>
-                <div className="text-[10px] font-mono">
-                  <span className="text-eyay-faint">{t.asymmetry.loss} </span>
-                  <span className="text-red-400 font-semibold">−{asymmetry.expected_loss_pct}%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Görsel çubuk */}
-            <div>
-              <div className="flex h-2.5 rounded-full overflow-hidden gap-0.5">
-                <div
-                  className="bg-emerald-500 rounded-l-full transition-all duration-700"
-                  style={{ width: `${gainW}%` }}
-                />
-                <div
-                  className="bg-red-500 rounded-r-full transition-all duration-700"
-                  style={{ width: `${lossW}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-0.5">
-                <span className="text-[8px] font-mono text-emerald-400/60">{t.asymmetry.upside}</span>
-                <span className="text-[8px] font-mono text-red-400/60">{t.asymmetry.downside}</span>
-              </div>
-            </div>
-
-            {/* Kısa açıklama */}
-            <p className="text-[10px] text-eyay-dim leading-relaxed border-t border-eyay-border pt-2">
-              {asymmetry.brief}
-            </p>
-
-            {/* Formül detayı */}
-            {showFormula && (
-              <div className="border-t border-eyay-border/50 pt-2 space-y-1.5">
-                <p className="text-[9px] font-mono text-eyay-faint/80 font-semibold uppercase tracking-wide">
-                  Formül
-                </p>
-                <p className="text-[9px] font-mono text-eyay-faint">
-                  Asimetri = beklenen yukarı hareket / beklenen aşağı hareket
-                </p>
-                <div className="text-[9px] font-mono text-eyay-faint/70 space-y-0.5">
-                  <div>Yukarı: +{asymmetry.expected_gain_pct}%</div>
-                  <div>Aşağı: −{asymmetry.expected_loss_pct}%</div>
-                  <div>Hesaplanan: {computed}×</div>
-                </div>
-                <p className="text-[8px] font-mono text-eyay-faint/40 pt-0.5">
-                  {t.asymmetry.methodology}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+      {/* Compact alt satır */}
+      <div className="flex items-center gap-2 text-[9px] font-mono text-eyay-faint">
+        <span>Ham R/R: <span className="text-eyay-dim">{asymmetry.ratio.toFixed(2)}×</span></span>
+        <span>·</span>
+        <span>Güven: <span className="text-eyay-dim">{confidence}</span></span>
+        <span className="ml-auto flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: dqDot }} />
+          <span className="text-eyay-dim">{dataQ}</span>
+        </span>
       </div>
     </div>
   );

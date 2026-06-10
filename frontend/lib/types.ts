@@ -75,6 +75,11 @@ export interface AsymmetrySignal {
   label: string;
   color: "green" | "lime" | "yellow" | "orange" | "red";
   brief: string;
+  /** FAZ 23 — canonical 0-100 score; opsiyonel geriye uyum için. */
+  score?: number;
+  direction?: "negative" | "neutral" | "positive";
+  confidence?: number;
+  data_quality?: "ok" | "degraded" | "stale";
 }
 
 export interface Scenario {
