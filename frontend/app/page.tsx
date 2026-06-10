@@ -9,7 +9,6 @@ import ConfirmationStrip from "@/components/ConfirmationStrip";
 import NewsPanelShell from "@/components/NewsPanelShell";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import ActionCenter from "@/components/ActionCenter";
 import CapitalRotationPanelShell from "@/components/CapitalRotationPanelShell"
 import AIChatPanel from "@/components/AIChatPanel";
 import AgentInsightBar from "@/components/AgentInsightBar";
@@ -60,6 +59,9 @@ export default async function HomePage() {
         headlines={data?.report?.news_headlines ?? []}
         macro={data?.report?.macro_layer}
         appetite={data?.report?.appetite_layer}
+        decision={data?.report?.decision}
+        ownerActions={data?.report?.owner_actions ?? []}
+        flipConditions={data?.report?.flip_conditions ?? []}
       />
 
       <Header
@@ -94,12 +96,10 @@ export default async function HomePage() {
             {/* 1 ── Karar */}
             <ActionSignalPanelShell report={data.report} />
 
-            {/* 2 ── Operasyonel Merkez */}
-            <ActionCenter
-              decision={data.report.decision}
-              ownerActions={data.report.owner_actions ?? []}
-              flipConditions={data.report.flip_conditions ?? []}
-            />
+            {/* FAZ 25 — ActionCenter (Operasyonel Adımlar / İyileşme Sinyalleri /
+                Kriz Tetikleyicileri) Agent paneli → "Karar Detayları" accordion'una
+                taşındı. Veri (owner_actions, flip_conditions) korundu; sadece UI
+                yerleşimi değişti. */}
 
             {/* 3 ── AI Yorumu  +  AI Sohbet (yan yana) */}
             <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-2 items-start">

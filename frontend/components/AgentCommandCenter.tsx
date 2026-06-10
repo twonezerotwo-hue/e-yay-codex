@@ -11,11 +11,12 @@
  * PAPER_SAFE / NO_EXECUTION.
  */
 import { useEffect, useMemo, useState } from "react";
+import ActionCenter from "@/components/ActionCenter";
 import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
 import LearningPanel from "@/components/LearningPanel";
 import SystemHealthPanel from "@/components/SystemHealthPanel";
 import MacroPanel from "@/components/MacroPanel";
-import type { NewsHeadline } from "@/lib/types";
+import type { Decision, FlipCondition, NewsHeadline } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -306,14 +307,22 @@ function modeBorder(mode: BannerMode): string {
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function AgentCommandCenter({ onClose, headlines = [], macro, appetite }: {
+export default function AgentCommandCenter({
+  onClose, headlines = [], macro, appetite,
+  decision: reportDecision, ownerActions = [], flipConditions = [],
+}: {
   onClose: () => void;
   headlines?: NewsHeadline[];
   /** FAZ 21 — Sistem Kontrolleri accordion için ek prop'lar; opsiyonel. */
   macro?: import("@/lib/types").MacroLayer;
   appetite?: import("@/lib/types").RiskAppetiteLayer;
+  /** FAZ 25 — Karar Detayları accordion için ek prop'lar; opsiyonel. */
+  decision?: Decision;
+  ownerActions?: string[];
+  flipConditions?: FlipCondition[];
 }) {
-  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagOpen, setDiagOpen]     = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
   // ── State ──────────────────────────────────────────────────────────────────
   const [banner,    setBanner]    = useState<AgentBanner | null>(null);
   const [opinion,   setOpinion]   = useState<TradeOpinion | null>(null);
@@ -1025,6 +1034,41 @@ export default function AgentCommandCenter({ onClose, headlines = [], macro, app
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* FAZ 25 — Karar Detayları (default kapalı) — eski ActionCenter taşındı */}
+          {reportDecision && (
+            <section className="rounded-2xl border border-eyay-border bg-eyay-surface/60 overflow-hidden"
+                     data-testid="agent-decision-detail-accordion">
+              <button
+                type="button"
+                onClick={() => setDetailOpen(o => !o)}
+                aria-expanded={detailOpen}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-cyan-400/80 text-xs">🎯</span>
+                  <p className="text-[11px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
+                    Karar Detayları
+                  </p>
+                  <span className="text-[9px] font-mono text-eyay-faint truncate">
+                    · Aksiyon Planı · İyileşme Koşulları · Risk Tetikleyicileri
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-eyay-faint shrink-0">
+                  {detailOpen ? "▾ kapat" : "▸ aç"}
+                </span>
+              </button>
+              {detailOpen && (
+                <div className="border-t border-eyay-border/40 p-4 bg-black/20 max-h-[520px] overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+                  <ActionCenter
+                    decision={reportDecision}
+                    ownerActions={ownerActions}
+                    flipConditions={flipConditions}
+                  />
                 </div>
               )}
             </section>
