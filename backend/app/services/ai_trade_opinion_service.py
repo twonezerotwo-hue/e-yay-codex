@@ -480,26 +480,170 @@ def build_ai_trade_opinion(ctx: dict[str, Any] | None = None) -> dict[str, Any]:
            if best["asset"] != "NONE" else "Yeni trade için uygun setup yok.")
     )
 
+    # ── Ana karar motoru ile uyum (soft modifier için paper trading kullanır)
+    decision = str((_report(ctx).get("decision") or {}).get("verdict") or "").upper()
+    # System "AL/ARTTIR" → long_bias ile uyumlu; "KAPAT/KÜÇÜLT" → uyumsuz
+    long_biased = best.get("bias") == "long"
+    short_biased = best.get("bias") == "short"
+    agrees = True
+    disagreement = 0
+    if decision in ("KAPAT", "KÜÇÜLT") and long_biased:
+        agrees = False
+        disagreement = 70
+    elif decision in ("KAPAT", "KÜÇÜLT") and short_biased:
+        agrees = True
+        disagreement = 10
+    elif decision in ("AL", "ARTTIR") and short_biased:
+        agrees = False
+        disagreement = 60
+    elif decision == "BEKLE" and best.get("asset") != "NONE":
+        agrees = True
+        disagreement = 25
+
+    top_invalidation = (
+        best.get("risk") if best.get("asset") != "NONE"
+        else (change_mind[0] if change_mind else "")
+    )
+
     return {
-        "schema_version":          SCHEMA_VERSION,
-        "generated_at":            ctx.get("now") or datetime.now(UTC).isoformat(),
-        "execution_mode":          "PAPER_SAFE",
-        "live_execution_allowed":  False,
-        "overall_view":            _overall_view(ctx),
-        "market_opinion":          market_opinion,
-        "asset_opinions":          asset_ops,
-        "open_position_opinions":  pos_ops,
-        "best_candidate":          best,
-        "no_trade_reason":         no_trade_reason,
-        "next_3_triggers":         [t for t in next_triggers if t],
+        "schema_version":           SCHEMA_VERSION,
+        "generated_at":             ctx.get("now") or datetime.now(UTC).isoformat(),
+        "execution_mode":           "PAPER_SAFE",
+        "live_execution_allowed":   False,
+        "overall_view":             _overall_view(ctx),
+        "market_opinion":           market_opinion,
+        "asset_opinions":           asset_ops,
+        "open_position_opinions":   pos_ops,
+        "best_candidate":           best,
+        "no_trade_reason":          no_trade_reason,
+        "next_3_triggers":          [t for t in next_triggers if t],
+        "next_triggers":            [t for t in next_triggers if t],
         "what_would_change_my_mind": [c for c in change_mind if c][:5],
-        "owner_brief":             owner_brief,
+        "invalidation":             top_invalidation,
+        "owner_brief":              owner_brief,
+        "agrees_with_main_decision": agrees,
+        "disagreement_score":       disagreement,
     }
+
+
+# ── Paper-trading entegrasyonu için yardımcılar ───────────────────────────────
+
+def build_trade_opinion_context_for_signal(
+    pair: str,
+    side: str,
+    *,
+    opinion: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    `_route_new_open_signal` içine yazılacak hafif, deterministik context.
+
+    Dönen alanlar — paper trading bunlardan SADECE size_multiplier ve
+    route_recommendation'ı soft modifier olarak kullanır; risk gate / decision
+    her zaman üstündür.
+    """
+    if opinion is None:
+        try:
+            opinion = build_ai_trade_opinion()
+        except Exception:  # noqa: BLE001
+            opinion = None
+    if not opinion:
+        return {
+            "available": False,
+            "size_multiplier": 1.0,
+            "route_recommendation": "proceed",
+            "reason": "opinion_unavailable",
+        }
+
+    asset_op: dict[str, Any] = {}
+    for a in opinion.get("asset_opinions") or []:
+        if str(a.get("asset")) == pair:
+            asset_op = a
+            break
+
+    op_label   = str(asset_op.get("opinion") or "").upper()
+    conviction = str(asset_op.get("conviction") or "low").lower()
+
+    # Soft size modifier (max ±0.10)
+    multiplier = 1.0
+    route      = "proceed"
+    reason     = "neutral"
+
+    side_u = side.upper()
+    long_bias  = op_label == "LONG_BIAS"  and side_u == "LONG"
+    short_bias = op_label == "SHORT_BIAS" and side_u == "SHORT"
+    aligned    = long_bias or short_bias
+
+    if aligned and conviction == "high":
+        multiplier = 1.10
+        reason = f"{op_label} high conviction → +10% soft size"
+    elif aligned and conviction == "medium":
+        multiplier = 1.05
+        reason = f"{op_label} medium conviction → +5% soft size"
+    elif op_label == "AVOID":
+        multiplier = 0.0
+        route = "manual_ready"
+        reason = "AVOID — yeni trade önerilmiyor"
+    elif conviction == "low" and not aligned:
+        multiplier = 0.85
+        reason = "Low conviction → -15% soft size"
+    elif op_label in ("WAIT", "WAIT_EVENT_CONFIRMATION"):
+        multiplier = 0.90
+        reason = f"{op_label} → -10% soft size"
+
+    # Position-specific opinion (REDUCE_WATCH / CLOSE_WATCH varsa ek koruma)
+    pos_label = ""
+    for po in opinion.get("open_position_opinions") or []:
+        if str(po.get("pair")) == pair:
+            pos_label = str(po.get("opinion") or "").upper()
+            break
+    if pos_label in ("REDUCE_WATCH", "CLOSE_WATCH"):
+        route = "manual_ready"
+        multiplier = min(multiplier, 0.0)
+        reason = f"Açık pozisyon için {pos_label} — yeni add yok"
+
+    return {
+        "available":            True,
+        "schema_version":       opinion.get("schema_version"),
+        "asset_opinion":        op_label or "NONE",
+        "asset_conviction":     conviction,
+        "position_opinion":     pos_label or "NONE",
+        "size_multiplier":      multiplier,
+        "route_recommendation": route,
+        "reason":               reason,
+        "agrees_with_main_decision": opinion.get("agrees_with_main_decision"),
+        "disagreement_score":   opinion.get("disagreement_score"),
+        "best_candidate_asset": (opinion.get("best_candidate") or {}).get("asset"),
+        "invalidation":         asset_op.get("invalidation"),
+    }
+
+
+def build_position_opinion_view(pair: str, side: str) -> dict[str, Any]:
+    """Açık pozisyon için get_snapshot'ta gösterilecek hafif opinion özeti."""
+    try:
+        opinion = build_ai_trade_opinion()
+    except Exception:  # noqa: BLE001
+        return {"available": False}
+    if not opinion:
+        return {"available": False}
+    side_u = side.upper()
+    for po in opinion.get("open_position_opinions") or []:
+        if str(po.get("pair")) == pair and str(po.get("side")) == side_u:
+            return {
+                "available":   True,
+                "opinion":     po.get("opinion"),
+                "conviction":  po.get("conviction"),
+                "reason":      po.get("reason"),
+                "watch":       po.get("what_to_watch") or [],
+                "invalidation": po.get("invalidation"),
+            }
+    return {"available": True, "opinion": "MANUAL_REVIEW", "reason": "kayıt bulunamadı"}
 
 
 __all__ = [
     "SCHEMA_VERSION",
     "TRACKED_ASSETS",
     "build_ai_trade_opinion",
+    "build_position_opinion_view",
+    "build_trade_opinion_context_for_signal",
     "collect_opinion_context",
 ]

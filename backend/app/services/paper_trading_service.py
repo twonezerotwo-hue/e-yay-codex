@@ -871,6 +871,56 @@ def _route_new_open_signal(
     except Exception:  # noqa: BLE001
         pass  # sizing hatası trade açılışını bloke etmez
 
+    # FAZ 18 — AI Trade Opinion (context + soft modifier; hard gate DEĞİL)
+    # Risk gate ve system decision her zaman üstündür; opinion sadece size'ı
+    # ±%10 oynatır veya manual_ready'e yönlendirir. KAPAT/KÜÇÜLT kararında
+    # long bypass edilmez (alt blok); SHORT yönüne dokunulmaz.
+    try:
+        from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
+            build_trade_opinion_context_for_signal as _build_opinion_ctx,
+        )
+        opinion_ctx = _build_opinion_ctx(pair, side)
+        signal_snapshot = {**signal_snapshot, "agent_trade_opinion_context": opinion_ctx}
+
+        # Decision-level hard guard: KAPAT/KÜÇÜLT + LONG → açılış yok
+        agrees = opinion_ctx.get("agrees_with_main_decision")
+        if (
+            side == "LONG"
+            and opinion_ctx.get("available")
+            and agrees is False
+            and (opinion_ctx.get("disagreement_score") or 0) >= 60
+        ):
+            # Bu durumda yeni LONG açılmaz — manual_ready'e düşür
+            opinion_ctx = {**opinion_ctx, "route_recommendation": "manual_ready",
+                           "reason": "Main decision KAPAT/KÜÇÜLT; long bias bypass edilmez"}
+            signal_snapshot["agent_trade_opinion_context"] = opinion_ctx
+
+        # Soft size modifier
+        mult = float(opinion_ctx.get("size_multiplier") or 1.0)
+        mult = max(0.0, min(1.10, mult))  # tavanı %10 artış
+        if mult <= 0.0:
+            opinion_ctx = {**opinion_ctx, "route_recommendation": "manual_ready"}
+            signal_snapshot["agent_trade_opinion_context"] = opinion_ctx
+        else:
+            size_usd = round(size_usd * mult, 2)
+
+        # manual_ready route — DEFENSIVE/CRISIS akışıyla aynı kuyruğa
+        if opinion_ctx.get("route_recommendation") == "manual_ready":
+            now_iso = now_dt.isoformat()
+            st.pending_orders.pop(pair, None)
+            st.manual_ready_trades[pair] = ManualReadyTrade(
+                pair=pair, side=side,
+                requested_at=now_iso, rejected_at=now_iso,
+                last_signal=last_signal, size_usd=size_usd,
+                requested_price=price, open_signal=signal_snapshot,
+                fingerprint=fingerprint, atr_value=atr_value,
+                primary_tf=primary_tf, original_requested_price=price,
+                last_refreshed_at=now_iso,
+            )
+            return
+    except Exception:  # noqa: BLE001
+        pass  # opinion entegrasyonu hatası trade açılışını bloke etmez
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (
@@ -2324,6 +2374,15 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
             except Exception:
                 opening_view = {}
 
+        # FAZ 18 — agent opinion read-only view (state'e yazılmaz)
+        try:
+            from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
+                build_position_opinion_view as _pos_op,
+            )
+            opinion_view = _pos_op(p.pair, p.side)
+        except Exception:  # noqa: BLE001
+            opinion_view = {"available": False}
+
         open_positions.append({
             **asdict(p),
             "current_price": cur_price,
@@ -2334,6 +2393,7 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
             "add_plan":            add_plan_view,
             "opening_explanation": opening_view,
             "average_entry_price": avg_entry,
+            "agent_trade_opinion": opinion_view,
         })
 
     equity = st.starting_balance + st.realized_pnl_usd + unrealized_total
