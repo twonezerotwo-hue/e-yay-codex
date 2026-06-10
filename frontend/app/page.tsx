@@ -11,7 +11,7 @@ import NewsPanel from "@/components/NewsPanel";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ActionCenter from "@/components/ActionCenter";
-import CapitalFlowWidget from "@/components/CapitalFlowWidget"
+import CapitalRotationPanelShell from "@/components/CapitalRotationPanelShell"
 import AIChatPanel from "@/components/AIChatPanel";
 import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
@@ -134,7 +134,7 @@ export default async function HomePage() {
             </div>
 
             {/* 4 ── Sermaye Rotasyonu */}
-            <CapitalFlowWidget rotation={data.capital_rotation} />
+            <CapitalRotationPanelShell rotation={data.capital_rotation} />
 
             {/* 5 ── Senaryo  |  Teyit  |  Asimetri */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-start">
