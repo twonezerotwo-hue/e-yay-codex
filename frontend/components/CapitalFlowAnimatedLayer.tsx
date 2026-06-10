@@ -3,19 +3,13 @@
 /**
  * FAZ 14 — Capital Flow Animated (3D-feel) Layer.
  *
- * Mevcut CapitalFlowWidget bozulmaz. Bu komponent ayrı bir visual layer'dır
- * ve crash ederse Shell legacy görünüme döner.
+ * Hub-and-spoke SVG: merkez "Capital Flow" node, çevrede 7 asset node.
+ * SVG animated path'ler out→merkez ve merkez→in için akar.
  *
  * Data source: GET /api/backend/capital-rotation/visual
- *   → CapitalRotationVisualAdapter
- *
  * Karar üretmez. Trade etmez. Auto tune etkilemez.
  */
 import { useEffect, useState } from "react";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface VisualNode {
   id:          string;
@@ -36,7 +30,6 @@ interface VisualFlow {
 interface VisualPayload {
   status:              "ok" | "degraded";
   schema_version:      string;
-  source:              string;
   decision_permission: string;
   execution_mode:      string;
   visual_mode:         string;
@@ -51,27 +44,14 @@ interface Props {
   onDegraded?: (reason: string) => void;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Style helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// Sabit yerleşim sırası — saat 12'den başlayıp saat yönünde
+const ORBIT_ORDER = ["DXY", "TLT", "GLD", "XAG", "OIL", "BTC", "SPY", "HYG"];
 
-const NODE_ORDER: string[] = ["DXY", "TLT", "GLD", "XAG", "OIL", "BTC", "SPY", "HYG"];
-
-function nodeGlow(d: VisualNode["direction"]): string {
-  if (d === "in")  return "border-emerald-500/70 bg-emerald-950/40 text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.35)]";
-  if (d === "out") return "border-red-700/60 bg-red-950/30 text-red-300 shadow-[0_0_24px_rgba(239,68,68,0.30)]";
-  return "border-amber-700/40 bg-amber-950/20 text-amber-200/80 shadow-[0_0_18px_rgba(245,158,11,0.20)]";
+function colorFor(d: VisualNode["direction"]): { stroke: string; fill: string; glow: string } {
+  if (d === "in")  return { stroke: "#34d399", fill: "rgba(16,185,129,0.18)", glow: "rgba(16,185,129,0.55)" };
+  if (d === "out") return { stroke: "#f87171", fill: "rgba(239,68,68,0.16)",  glow: "rgba(239,68,68,0.55)"  };
+  return                  { stroke: "#fbbf24", fill: "rgba(245,158,11,0.14)", glow: "rgba(245,158,11,0.45)" };
 }
-
-function flowGradient(strength: number): string {
-  // 0 → soluk, 1 → parlak
-  const opacity = Math.max(0.25, Math.min(1, strength));
-  return `linear-gradient(90deg, rgba(239,68,68,${opacity}) 0%, rgba(245,158,11,${opacity * 0.8}) 50%, rgba(16,185,129,${opacity}) 100%)`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
   const [data, setData]       = useState<VisualPayload | null>(null);
@@ -79,36 +59,27 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
   const [reduced, setReduced] = useState<boolean>(false);
   const [isMobile, setMobile] = useState<boolean>(false);
 
-  // Reduced motion + mobile detection
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setReduced(mq.matches);
     const onChange = () => setReduced(mq.matches);
     mq.addEventListener?.("change", onChange);
-
     setMobile(window.innerWidth < 640);
     const onResize = () => setMobile(window.innerWidth < 640);
     window.addEventListener("resize", onResize);
-
     return () => {
       mq.removeEventListener?.("change", onChange);
       window.removeEventListener("resize", onResize);
     };
   }, []);
 
-  // Fetch
   useEffect(() => {
-    let alive    = true;
-    const ctrl   = new AbortController();
-    const timer  = setTimeout(() => ctrl.abort(), 6000);
-
-    const url = "/api/backend/capital-rotation/visual";
-    fetch(url, { signal: ctrl.signal, cache: "no-store" })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    let alive   = true;
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    fetch("/api/backend/capital-rotation/visual", { signal: ctrl.signal, cache: "no-store" })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: VisualPayload) => {
         if (!alive) return;
         if (j.status === "degraded") {
@@ -126,89 +97,172 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
         onDegraded?.(reason);
       })
       .finally(() => clearTimeout(timer));
-
     return () => { alive = false; ctrl.abort(); clearTimeout(timer); };
   }, [onDegraded]);
 
-  if (error || !data) {
-    // ErrorBoundary fallback aktive olmayacak — sadece null döner; shell uyarıyı gösterir
-    return null;
-  }
+  if (error || !data) return null;
 
-  const sortedNodes = [...data.nodes].sort(
-    (a, b) => NODE_ORDER.indexOf(a.id) - NODE_ORDER.indexOf(b.id),
-  );
+  // Layout — merkez + yörünge
+  const W = 640, H = 360, CX = W / 2, CY = H / 2;
+  const R = isMobile ? 110 : 140;
+  const ordered = ORBIT_ORDER
+    .map(id => data.nodes.find(n => n.id === id))
+    .filter((n): n is VisualNode => !!n);
+  const N = ordered.length || 1;
 
-  const animatedClass = reduced || isMobile ? "" : "animate-pulse-slow";
+  const positions: Record<string, { x: number; y: number }> = {};
+  ordered.forEach((n, i) => {
+    const angle = -Math.PI / 2 + (i / N) * 2 * Math.PI;
+    positions[n.id] = { x: CX + R * Math.cos(angle), y: CY + R * Math.sin(angle) };
+  });
+
+  const animate = !reduced;
 
   return (
     <div
-      className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-4 space-y-3"
+      className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-4 space-y-2 min-h-[420px] relative"
       data-testid="capital-flow-animated"
       data-reduced-motion={reduced ? "true" : "false"}
       data-mobile={isMobile ? "true" : "false"}
     >
-      <div className="flex items-center justify-between">
-        <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
-          🌐 Akış görünümü · {data.primary_flow || "—"}
-        </p>
-        <span className="text-[9px] font-mono text-eyay-faint/60">
-          conviction {data.conviction}/5
+      {/* DEBUG header — kullanıcı doğru component'ı gördüğünü teyit etsin */}
+      <div className="flex items-center justify-between border-b border-emerald-700/30 pb-2 mb-1">
+        <span className="text-[10px] font-mono text-emerald-300 uppercase tracking-widest">
+          🌐 Animated Layer ACTIVE · nodes: {data.nodes.length} · flows: {data.flows.length}
+        </span>
+        <span className="text-[9px] font-mono text-eyay-faint">
+          conviction {data.conviction}/5 · {data.primary_flow}
         </span>
       </div>
 
-      {/* Node grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {sortedNodes.map(n => (
-          <div
-            key={n.id}
-            className={`rounded-xl border px-3 py-2 transition-all duration-500 ${nodeGlow(n.direction)} ${n.direction !== "neutral" ? animatedClass : ""}`}
-            title={`${n.label}: ${n.value_pct.toFixed(1)}% 30g momentum`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] font-bold">{n.label}</span>
-              <span className={`w-1.5 h-1.5 rounded-full ${
-                n.direction === "in"  ? "bg-emerald-400" :
-                n.direction === "out" ? "bg-red-400"     : "bg-amber-400"
-              }`} />
-            </div>
-            <div className="mt-1 flex items-baseline justify-between">
-              <span className="font-mono text-[9px] opacity-70">{n.id}</span>
-              <span className="font-mono text-[11px] font-semibold">
-                {n.value_pct > 0 ? "+" : ""}{n.value_pct.toFixed(1)}%
-              </span>
-            </div>
-            {/* Strength bar */}
-            <div className="mt-1.5 h-0.5 w-full rounded bg-eyay-border/30">
-              <div
-                className={`h-full rounded transition-all duration-700 ${
-                  n.direction === "in"  ? "bg-emerald-400" :
-                  n.direction === "out" ? "bg-red-400"     : "bg-amber-400"
-                }`}
-                style={{ width: `${Math.round(n.strength * 100)}%` }}
-              />
-            </div>
-          </div>
-        ))}
+      {/* SVG hub-and-spoke */}
+      <div className="relative w-full" style={{ minHeight: 360 }}>
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          className="absolute inset-0 w-full h-full"
+          style={{ overflow: "visible" }}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <defs>
+            <radialGradient id="hubGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%"  stopColor="rgba(59,130,246,0.55)" />
+              <stop offset="60%" stopColor="rgba(59,130,246,0.18)" />
+              <stop offset="100%" stopColor="rgba(59,130,246,0)" />
+            </radialGradient>
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Flows — out node → merkez, merkez → primary in node */}
+          {data.flows.map((f, i) => {
+            const src = positions[f.from];
+            if (!src) return null;
+            const dst = positions[f.to] || { x: CX, y: CY };
+            const strokeW = 1 + f.strength * 3;
+            const dur = animate ? `${Math.max(2, 5 - f.strength * 3)}s` : undefined;
+            return (
+              <g key={`flow-${i}`}>
+                {/* base line */}
+                <line
+                  x1={src.x} y1={src.y} x2={CX} y2={CY}
+                  stroke="rgba(239,68,68,0.35)"
+                  strokeWidth={strokeW}
+                  strokeDasharray="6 6"
+                >
+                  {animate && (
+                    <animate
+                      attributeName="stroke-dashoffset"
+                      from="24" to="0" dur={dur} repeatCount="indefinite"
+                    />
+                  )}
+                </line>
+                {/* center → dst */}
+                {dst !== positions[f.from] && (
+                  <line
+                    x1={CX} y1={CY} x2={dst.x} y2={dst.y}
+                    stroke="rgba(16,185,129,0.40)"
+                    strokeWidth={strokeW}
+                    strokeDasharray="6 6"
+                  >
+                    {animate && (
+                      <animate
+                        attributeName="stroke-dashoffset"
+                        from="0" to="-24" dur={dur} repeatCount="indefinite"
+                      />
+                    )}
+                  </line>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Hub */}
+          <circle cx={CX} cy={CY} r={62} fill="url(#hubGrad)" />
+          <circle cx={CX} cy={CY} r={42} fill="rgba(15,23,42,0.85)" stroke="rgba(96,165,250,0.6)" strokeWidth={2} filter="url(#softGlow)" />
+          <text x={CX} y={CY - 6} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#93c5fd" letterSpacing="1">
+            CAPITAL
+          </text>
+          <text x={CX} y={CY + 6} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#93c5fd" letterSpacing="1">
+            FLOW
+          </text>
+          <text x={CX} y={CY + 20} textAnchor="middle" fontSize="8" fontFamily="monospace" fill="rgba(148,163,184,0.7)">
+            {data.flows.length} akış
+          </text>
+
+          {/* Asset nodes — orbit */}
+          {ordered.map(n => {
+            const p = positions[n.id];
+            const c = colorFor(n.direction);
+            const r = 26 + n.strength * 8;
+            return (
+              <g key={n.id}>
+                {/* halo / glow */}
+                <circle
+                  cx={p.x} cy={p.y} r={r + 6}
+                  fill="none"
+                  stroke={c.glow}
+                  strokeWidth={1}
+                  opacity={0.6}
+                  filter="url(#softGlow)"
+                >
+                  {animate && n.direction !== "neutral" && (
+                    <animate attributeName="r" values={`${r + 4};${r + 10};${r + 4}`} dur="2.4s" repeatCount="indefinite" />
+                  )}
+                </circle>
+                {/* main */}
+                <circle cx={p.x} cy={p.y} r={r} fill={c.fill} stroke={c.stroke} strokeWidth={1.5}>
+                  <title>{`${n.label}: ${n.value_pct.toFixed(1)}% 30g`}</title>
+                </circle>
+                <text x={p.x} y={p.y - 3} textAnchor="middle" fontSize="10" fontFamily="monospace" fontWeight="bold" fill={c.stroke}>
+                  {n.id}
+                </text>
+                <text x={p.x} y={p.y + 10} textAnchor="middle" fontSize="9" fontFamily="monospace" fill={c.stroke}>
+                  {n.value_pct > 0 ? "+" : ""}{n.value_pct.toFixed(1)}%
+                </text>
+              </g>
+            );
+          })}
+        </svg>
       </div>
 
-      {/* Flows */}
+      {/* Flow list */}
       {data.flows.length > 0 && (
-        <div className="space-y-1.5 pt-2 border-t border-eyay-border/40">
+        <div className="pt-2 border-t border-eyay-border/40 space-y-1">
           <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
-            Para akışları
+            Para akışları ({data.flows.length})
           </p>
-          {data.flows.slice(0, 4).map((f, i) => (
+          {data.flows.slice(0, 5).map((f, i) => (
             <div key={i} className="flex items-center gap-2 text-[10px] font-mono">
-              <span className="text-red-300/80 min-w-[40px]">{f.from}</span>
-              <div
-                className="flex-1 h-[3px] rounded"
-                style={{ background: flowGradient(f.strength) }}
-              />
-              <span className="text-emerald-300 min-w-[60px] text-right">{f.to}</span>
-              <span className="text-eyay-faint/70 text-[9px] hidden sm:inline ml-1 truncate max-w-[180px]">
-                {f.reason}
-              </span>
+              <span className="text-red-300/90 min-w-[36px]">{f.from}</span>
+              <span className="text-eyay-faint">→</span>
+              <span className="text-emerald-300 min-w-[60px]">{f.to}</span>
+              <span className="text-eyay-faint/70 text-[9px] truncate flex-1">{f.reason}</span>
+              <span className="text-eyay-dim text-[9px]">{Math.round(f.strength * 100)}%</span>
             </div>
           ))}
         </div>
