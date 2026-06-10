@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.agent_banner import router as agent_banner_router
+from app.api.breaking_news_visual import router as breaking_news_visual_router
 from app.api.capital_rotation_visual import router as capital_rotation_visual_router
 from app.api.agent_audit import router as agent_audit_router
 from app.api.agent_chart import router as agent_chart_router
@@ -149,6 +150,7 @@ app.include_router(scheduler_router, prefix=settings.api_prefix)
 app.include_router(system_health_router, prefix=settings.api_prefix)
 app.include_router(agent_banner_router, prefix=settings.api_prefix)
 app.include_router(capital_rotation_visual_router, prefix=settings.api_prefix)
+app.include_router(breaking_news_visual_router, prefix=settings.api_prefix)
 
 
 __all__ = [name for name in globals() if not name.startswith('_')]

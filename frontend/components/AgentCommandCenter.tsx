@@ -11,6 +11,7 @@
  * PAPER_SAFE / NO_EXECUTION.
  */
 import { useEffect, useMemo, useState } from "react";
+import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
 import type { NewsHeadline } from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -632,46 +633,9 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
           )}
 
           {/* ════════════════════════════════════════════════════════════
-              SON DAKİKA — ABD/İran/İsrail/Rusya/Çin savaş haberleri
+              SON DAKİKA — FAZ 15: Liste/Radar shell (legacy liste fallback)
              ════════════════════════════════════════════════════════════ */}
-          {warHeadlines.length > 0 && (
-            <section className="rounded-2xl border border-red-800/60 bg-red-950/20 p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                <span className="text-base">🚨</span>
-                <p className="text-[10px] font-mono text-red-300 uppercase tracking-widest font-black">
-                  Son Dakika · Savaş Gündemi
-                </p>
-                <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
-                  {warHeadlines.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {warHeadlines.map((h, i) => {
-                  const display = (h.title_tr && h.title_tr.trim()) || h.title;
-                  return (
-                    <a
-                      key={i}
-                      href={h.url || "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-start gap-3 p-3 rounded-lg bg-black/30 border border-red-900/40 hover:border-red-700/60 transition-colors group"
-                    >
-                      <span className="shrink-0 mt-0.5 text-[9px] font-mono font-black text-red-300 border border-red-800/60 bg-red-950/40 rounded px-1.5 py-0.5 uppercase tracking-widest">
-                        Son Dakika
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-eyay-text leading-relaxed group-hover:text-white transition-colors">
-                          {display}
-                        </p>
-                        <p className="text-[10px] text-eyay-faint mt-1">{h.source}</p>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+          <BreakingNewsPanelShell headlines={warHeadlines} />
 
           {/* ════════════════════════════════════════════════════════════
               AKTİF KARARLARIM (paper trading açık pozisyonlar)
