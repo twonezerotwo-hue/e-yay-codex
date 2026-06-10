@@ -318,6 +318,8 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
         @keyframes cs-scan    { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
         @keyframes cs-pulsering { 0%{transform:scale(0.95);opacity:0.6} 100%{transform:scale(1.4);opacity:0} }
         @keyframes cs-ticker  { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+        @keyframes cs-pulsecore { 0%,100%{transform:translateX(-50%) scale(1);opacity:0.85} 50%{transform:translateX(-50%) scale(1.25);opacity:1} }
+        @keyframes cs-platrot { from{transform:translateX(-50%) rotate(0)} to{transform:translateX(-50%) rotate(360deg)} }
       `}</style>
 
       {/* Header */}
@@ -339,7 +341,10 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
         </span>
       </div>
 
-      <div className={isMobile ? "p-3 space-y-3" : "grid grid-cols-[minmax(0,1fr)_210px] gap-0"}>
+      <div
+        className={isMobile ? "p-3 space-y-3" : "grid grid-cols-[minmax(0,1fr)_220px] gap-0"}
+        style={isMobile ? undefined : { height: "356px" }}
+      >
         {/* Sol: holo sahne */}
         <div className="relative px-3 pt-3 pb-2 overflow-hidden"
              style={{
@@ -398,8 +403,9 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
                 const tx  = abs === 0 ? 0 : (abs === 1 ? 200 : 340) * (offset > 0 ? 1 : -1);
                 const tz  = -abs * 50;
                 const ry  = offset * -7;
-                const sc  = abs === 0 ? 1.04 : abs === 1 ? 0.88 : 0.78;
-                const op  = abs === 0 ? 1    : abs === 1 ? 0.85 : 0.55;
+                const sc  = abs === 0 ? 1.04 : abs === 1 ? 0.88 : 0.76;
+                const op  = abs === 0 ? 1    : abs === 1 ? 0.78 : 0.50;
+                const blur = abs === 2 ? "blur(0.6px)" : abs === 1 ? "blur(0.2px)" : "none";
                 return (
                   <div
                     key={p.code}
@@ -412,6 +418,7 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
                       zIndex: 100 - abs,
                       transformStyle: "preserve-3d",
                       pointerEvents: abs > 2 ? "none" : "auto",
+                      filter: blur,
                     }}
                   >
                     <HoloCard
@@ -464,38 +471,115 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
             </div>
           )}
 
-          {/* Holografik komut masası — kompakt zemin */}
+          {/* Holographic command platform — sci-fi command deck */}
           {!isMobile && (
-            <div aria-hidden="true" className="relative h-[36px] mt-1 overflow-hidden">
+            <div aria-hidden="true" className="relative h-[76px] mt-2 overflow-hidden pointer-events-none">
+              {/* Outer atmospheric glow */}
               <div
                 className="absolute left-1/2 top-0 -translate-x-1/2 rounded-[50%]"
                 style={{
-                  width: "70%", height: "60px",
-                  background: "radial-gradient(ellipse at center, rgba(34,211,238,0.22), rgba(34,211,238,0.06) 55%, transparent 78%)",
-                  border: "1px solid rgba(34,211,238,0.30)",
-                  boxShadow: "0 0 28px rgba(34,211,238,0.18), inset 0 0 36px rgba(34,211,238,0.08)",
-                  animation: animate ? "cs-breathe 4s ease-in-out infinite" : undefined,
+                  width: "80%", height: "130px",
+                  background:
+                    "radial-gradient(ellipse at center, rgba(34,211,238,0.20), rgba(16,185,129,0.07) 42%, transparent 78%)",
+                  filter: "blur(1px)",
                 }}
               />
+              {/* Base disc — premium holo platform */}
               <div
-                className="absolute left-1/2 top-1.5 -translate-x-1/2 rounded-[50%] border border-cyan-400/25"
+                className="absolute left-1/2 top-2 -translate-x-1/2 rounded-[50%]"
                 style={{
-                  width: "50%", height: "40px",
-                  animation: animate ? "cs-spin 28s linear infinite" : undefined,
-                  borderStyle: "dashed",
+                  width: "62%", height: "82px",
+                  background:
+                    "radial-gradient(ellipse at center, rgba(34,211,238,0.26), rgba(34,211,238,0.05) 60%, transparent 86%)",
+                  border: "1px solid rgba(34,211,238,0.50)",
+                  boxShadow:
+                    "0 0 36px rgba(34,211,238,0.22), inset 0 0 34px rgba(34,211,238,0.12)",
+                  animation: animate ? "cs-breathe 5s ease-in-out infinite" : undefined,
                 }}
               />
-              <p className="absolute left-1/2 top-[14px] -translate-x-1/2 text-[7px] font-mono text-cyan-300/55 uppercase tracking-[0.35em] whitespace-nowrap">
+              {/* Mid neon ring */}
+              <div
+                className="absolute left-1/2 top-[18px] -translate-x-1/2 rounded-[50%]"
+                style={{
+                  width: "46%", height: "56px",
+                  border: "1px solid rgba(110,231,255,0.32)",
+                  boxShadow: "inset 0 0 18px rgba(34,211,238,0.16)",
+                }}
+              />
+              {/* Inner dashed ring (slow rotation) */}
+              <div
+                className="absolute left-1/2 top-[26px] -translate-x-1/2 rounded-[50%]"
+                style={{
+                  width: "32%", height: "40px",
+                  border: "1px dashed rgba(165,243,252,0.55)",
+                  animation: animate ? "cs-platrot 36s linear infinite" : undefined,
+                }}
+              />
+              {/* Radial spokes */}
+              <svg
+                className="absolute left-1/2 top-[10px] -translate-x-1/2"
+                width="62%" height="64"
+                viewBox="0 0 400 64"
+                preserveAspectRatio="none"
+              >
+                {[0, 1, 2, 3, 4, 5, 6].map(i => {
+                  const a = (i / 6) * Math.PI;
+                  return (
+                    <line
+                      key={i}
+                      x1="200" y1="32"
+                      x2={200 + Math.cos(a) * 196}
+                      y2={32 + Math.sin(a) * 26}
+                      stroke="rgba(34,211,238,0.12)"
+                      strokeWidth="1"
+                    />
+                  );
+                })}
+              </svg>
+              {/* Horizontal scanlines (masked to disc area) */}
+              <div
+                className="absolute inset-x-0 top-0 h-full"
+                style={{
+                  background:
+                    "repeating-linear-gradient(180deg, transparent 0px, transparent 3px, rgba(34,211,238,0.045) 3px, rgba(34,211,238,0.045) 4px)",
+                  maskImage:
+                    "radial-gradient(ellipse 46% 70% at 50% 56%, black 30%, transparent 80%)",
+                  WebkitMaskImage:
+                    "radial-gradient(ellipse 46% 70% at 50% 56%, black 30%, transparent 80%)",
+                }}
+              />
+              {/* Energy core */}
+              <div
+                className="absolute top-[32px] rounded-full"
+                style={{
+                  left: "50%",
+                  width: "14px", height: "14px",
+                  background:
+                    "radial-gradient(circle, #a5f3fc 0%, #22d3ee 45%, rgba(34,211,238,0) 75%)",
+                  boxShadow:
+                    "0 0 16px rgba(165,243,252,0.85), 0 0 32px rgba(34,211,238,0.45)",
+                  transform: "translateX(-50%)",
+                  animation: animate ? "cs-pulsecore 2.4s ease-in-out infinite" : undefined,
+                }}
+              />
+              {/* Label */}
+              <p
+                className="absolute left-1/2 -translate-x-1/2 bottom-[6px] text-[7.5px] font-mono uppercase tracking-[0.42em] whitespace-nowrap"
+                style={{
+                  color: "rgba(165,243,252,0.72)",
+                  textShadow: "0 0 8px rgba(34,211,238,0.45)",
+                }}
+              >
                 ◇ AI Trading Operations ◇
               </p>
             </div>
           )}
         </div>
 
-        {/* Sağ: detay paneli */}
+        {/* Sağ: detay paneli — sabit yükseklik içinde scroll, sahneye reflow yok */}
         <div className={isMobile
           ? ""
-          : "relative border-l border-cyan-500/20 p-3 bg-gradient-to-b from-black/30 via-cyan-950/10 to-black/40"
+          : "relative border-l border-cyan-500/20 p-3 bg-gradient-to-b from-black/30 via-cyan-950/10 to-black/40 min-h-0 h-full overflow-hidden flex flex-col"
         }>
           {!isMobile && (
             <>
@@ -503,11 +587,13 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
               <span aria-hidden="true" className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-cyan-400/40" />
             </>
           )}
-          <p className="text-[8px] font-mono text-cyan-300/70 uppercase tracking-[0.22em] mb-2 flex items-center gap-1.5">
+          <p className="text-[8px] font-mono text-cyan-300/70 uppercase tracking-[0.22em] mb-2 flex items-center gap-1.5 shrink-0">
             <span className="w-1 h-1 rounded-full bg-cyan-400" style={animate ? { boxShadow: "0 0 6px #22d3ee" } : undefined} />
             Sinyal Detayı
           </p>
-          <DetailPanel signal={selSig} tech={techBy[selCode]} />
+          <div className={isMobile ? "" : "flex-1 min-h-0 overflow-y-auto pr-1 -mr-1"}>
+            <DetailPanel signal={selSig} tech={techBy[selCode]} />
+          </div>
         </div>
       </div>
 
