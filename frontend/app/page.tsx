@@ -7,7 +7,7 @@ import AssetGrid from "@/components/AssetGrid";
 import AsymmetryCard from "@/components/AsymmetryCard";
 import CatalystSidebar from "@/components/CatalystSidebar";
 import ConfirmationStrip from "@/components/ConfirmationStrip";
-import NewsPanel from "@/components/NewsPanel";
+import NewsPanelShell from "@/components/NewsPanelShell";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ActionCenter from "@/components/ActionCenter";
@@ -147,7 +147,7 @@ export default async function HomePage() {
             </div>
 
             {/* 5 ── Haberler */}
-            <NewsPanel headlines={data.report.news_headlines} />
+            <NewsPanelShell headlines={data.report.news_headlines} />
 
             <Footer />
           </>

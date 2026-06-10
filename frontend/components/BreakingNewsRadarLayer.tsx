@@ -279,6 +279,11 @@ export default function BreakingNewsRadarLayer({ onDegraded }: Props) {
         @keyframes bnr-pulse { 0%,100% { opacity: .4; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
       `}</style>
 
+      {/* DEBUG — kaldırılacak */}
+      <p className="text-[8px] font-mono text-cyan-400/60">
+        Radar Layer ACTIVE · nodes: {data.nodes.length} · impacts: {data.asset_impacts.length} · links: {data.links.length}
+      </p>
+
       {/* Header */}
       <div className="flex items-start justify-between gap-2 border-b border-eyay-border/40 pb-2">
         <div className="flex flex-col">
