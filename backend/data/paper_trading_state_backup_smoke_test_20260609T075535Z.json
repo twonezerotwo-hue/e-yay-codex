@@ -1,0 +1,1438 @@
+{
+  "starting_balance": 100000.0,
+  "realized_pnl_usd": 0.0,
+  "positions": {},
+  "pending_orders": {},
+  "rejected_signals": {},
+  "manual_ready_trades": {},
+  "trades": [],
+  "last_event": null,
+  "last_event_at": null,
+  "weight_adjustments": {},
+  "last_trained_at_trade_count": 0,
+  "training_history": [],
+  "last_tick_prices": {
+    "XAGUSD": 79.54
+  },
+  "last_tick_at": "2026-06-09T07:55:18.342763+00:00",
+  "last_tick_signals": {
+    "BTCUSD": {
+      "symbol": "BTCUSD",
+      "final_score": 49.6833,
+      "final_direction": "neutral",
+      "confluence": {
+        "original_score": 49.6833,
+        "adjusted_score": 49.6833,
+        "multiplier": 1.0,
+        "status": "neutral_base",
+        "vote_count": {
+          "aligned": 0,
+          "opposing": 0,
+          "neutral_ignored": 0
+        },
+        "warnings": [
+          "Base skor nötr bantta (direction band) — confluence skip."
+        ]
+      },
+      "raw_regime": "TRANSITIONING",
+      "primary_tf": "1h",
+      "base": {
+        "source_engine": "E-YAY × Aegis",
+        "source_version": "1.0_revised",
+        "symbol": "BTCUSD",
+        "timeframe": "1h",
+        "raw_regime": "TRANSITIONING",
+        "weight_key": "default",
+        "primary_tf": "1h",
+        "weights_used": {
+          "touche": 0.1,
+          "fundamental": 0.2,
+          "news": 0.15,
+          "sentinel": 0.3,
+          "quantum": 0.15,
+          "chart_pattern": 0.1
+        },
+        "weights_trained": false,
+        "module_scores": {
+          "touche": 49.0,
+          "fundamental": 66.6667,
+          "news": 50.0,
+          "sentinel": 60.0,
+          "quantum": 8.0,
+          "chart_pattern": 47.5
+        },
+        "consensus_score": 49.6833,
+        "direction": "neutral",
+        "status": "OK",
+        "missing_modules": [],
+        "contributions": {
+          "touche": {
+            "score": 49.0,
+            "weight": 0.1,
+            "weighted_score": 4.9,
+            "source": "provided"
+          },
+          "fundamental": {
+            "score": 66.6667,
+            "weight": 0.2,
+            "weighted_score": 13.3333,
+            "source": "provided"
+          },
+          "news": {
+            "score": 50.0,
+            "weight": 0.15,
+            "weighted_score": 7.5,
+            "source": "provided"
+          },
+          "sentinel": {
+            "score": 60.0,
+            "weight": 0.3,
+            "weighted_score": 18.0,
+            "source": "provided"
+          },
+          "quantum": {
+            "score": 8.0,
+            "weight": 0.15,
+            "weighted_score": 1.2,
+            "source": "provided"
+          },
+          "chart_pattern": {
+            "score": 47.5,
+            "weight": 0.1,
+            "weighted_score": 4.75,
+            "source": "provided"
+          }
+        },
+        "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+        "final_decision": false,
+        "warnings": []
+      },
+      "tf_signals": {
+        "1h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BTCUSD",
+          "timeframe": "1h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 49.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 47.5
+          },
+          "consensus_score": 49.6833,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 49.0,
+              "weight": 0.1,
+              "weighted_score": 4.9,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 47.5,
+              "weight": 0.1,
+              "weighted_score": 4.75,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "4h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BTCUSD",
+          "timeframe": "4h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 71.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 36.3
+          },
+          "consensus_score": 50.7633,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 71.0,
+              "weight": 0.1,
+              "weighted_score": 7.1,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 36.3,
+              "weight": 0.1,
+              "weighted_score": 3.63,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "1d": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BTCUSD",
+          "timeframe": "1d",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 67.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 35.95
+          },
+          "consensus_score": 50.3283,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 67.0,
+              "weight": 0.1,
+              "weighted_score": 6.7,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 35.95,
+              "weight": 0.1,
+              "weighted_score": 3.595,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        }
+      },
+      "other_tf_scores": {
+        "4h": 50.7633,
+        "1d": 50.3283
+      },
+      "atr": 0.2687,
+      "agent_command": "WAIT",
+      "contradiction_score": 15,
+      "aggression_context": {
+        "aggression_level": "medium",
+        "aggression_score": 35,
+        "why_aggressive": [
+          "Makro rejim tam risk-on değil",
+          "TF sinyal verisi yetersiz",
+          "BTCUSD hızlı hareket eden asset — momentum erken setup"
+        ],
+        "allowed_if_aggressive": true,
+        "required_adjustments": {
+          "smaller_size": true,
+          "tighter_stop": false,
+          "shorter_timeframe": false,
+          "faster_recheck": false,
+          "partial_take_profit": true,
+          "hard_invalidation": false
+        },
+        "recommended_timeframe": "4h",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120,
+        "stop_style": "structure_based",
+        "summary": "BTCUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+      },
+      "event_risk_context": {
+        "event_risk_high": false,
+        "event_risk_direction": "neutral_or_unknown",
+        "reason": "Fallback heuristic: event risk göstergesi yok"
+      },
+      "volatility_context": {
+        "high_volatility": false,
+        "atr_pct": 0.0,
+        "reason": "Fallback heuristic: volatilite normal aralıkta"
+      },
+      "controlled_aggressive_promotion": {
+        "promoted": false,
+        "from": "WAIT",
+        "to": "WAIT",
+        "new_size_cap": 0.0,
+        "reason": "Promotion uygulanmaz: command=WAIT"
+      }
+    },
+    "XAUUSD": {
+      "symbol": "XAUUSD",
+      "final_score": 50.3283,
+      "final_direction": "neutral",
+      "confluence": {
+        "original_score": 50.3283,
+        "adjusted_score": 50.3283,
+        "multiplier": 1.0,
+        "status": "neutral_base",
+        "vote_count": {
+          "aligned": 0,
+          "opposing": 0,
+          "neutral_ignored": 0
+        },
+        "warnings": [
+          "Base skor nötr bantta (direction band) — confluence skip."
+        ]
+      },
+      "raw_regime": "TRANSITIONING",
+      "primary_tf": "1h",
+      "base": {
+        "source_engine": "E-YAY × Aegis",
+        "source_version": "1.0_revised",
+        "symbol": "XAUUSD",
+        "timeframe": "1h",
+        "raw_regime": "TRANSITIONING",
+        "weight_key": "default",
+        "primary_tf": "1h",
+        "weights_used": {
+          "touche": 0.1,
+          "fundamental": 0.2,
+          "news": 0.15,
+          "sentinel": 0.3,
+          "quantum": 0.15,
+          "chart_pattern": 0.1
+        },
+        "weights_trained": false,
+        "module_scores": {
+          "touche": 67.0,
+          "fundamental": 66.6667,
+          "news": 50.0,
+          "sentinel": 60.0,
+          "quantum": 8.0,
+          "chart_pattern": 35.95
+        },
+        "consensus_score": 50.3283,
+        "direction": "neutral",
+        "status": "OK",
+        "missing_modules": [],
+        "contributions": {
+          "touche": {
+            "score": 67.0,
+            "weight": 0.1,
+            "weighted_score": 6.7,
+            "source": "provided"
+          },
+          "fundamental": {
+            "score": 66.6667,
+            "weight": 0.2,
+            "weighted_score": 13.3333,
+            "source": "provided"
+          },
+          "news": {
+            "score": 50.0,
+            "weight": 0.15,
+            "weighted_score": 7.5,
+            "source": "provided"
+          },
+          "sentinel": {
+            "score": 60.0,
+            "weight": 0.3,
+            "weighted_score": 18.0,
+            "source": "provided"
+          },
+          "quantum": {
+            "score": 8.0,
+            "weight": 0.15,
+            "weighted_score": 1.2,
+            "source": "provided"
+          },
+          "chart_pattern": {
+            "score": 35.95,
+            "weight": 0.1,
+            "weighted_score": 3.595,
+            "source": "provided"
+          }
+        },
+        "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+        "final_decision": false,
+        "warnings": []
+      },
+      "tf_signals": {
+        "1h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAUUSD",
+          "timeframe": "1h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 67.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 35.95
+          },
+          "consensus_score": 50.3283,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 67.0,
+              "weight": 0.1,
+              "weighted_score": 6.7,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 35.95,
+              "weight": 0.1,
+              "weighted_score": 3.595,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "4h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAUUSD",
+          "timeframe": "4h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 71.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 35.95
+          },
+          "consensus_score": 50.7283,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 71.0,
+              "weight": 0.1,
+              "weighted_score": 7.1,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 35.95,
+              "weight": 0.1,
+              "weighted_score": 3.595,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "1d": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAUUSD",
+          "timeframe": "1d",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 49.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 35.95
+          },
+          "consensus_score": 48.5283,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 49.0,
+              "weight": 0.1,
+              "weighted_score": 4.9,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 35.95,
+              "weight": 0.1,
+              "weighted_score": 3.595,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        }
+      },
+      "other_tf_scores": {
+        "4h": 50.7283,
+        "1d": 48.5283
+      },
+      "atr": 77.5131,
+      "agent_command": "WAIT",
+      "contradiction_score": 15,
+      "aggression_context": {
+        "aggression_level": "medium",
+        "aggression_score": 30,
+        "why_aggressive": [
+          "Makro rejim tam risk-on değil",
+          "TF sinyal verisi yetersiz"
+        ],
+        "allowed_if_aggressive": true,
+        "required_adjustments": {
+          "smaller_size": true,
+          "tighter_stop": false,
+          "shorter_timeframe": false,
+          "faster_recheck": false,
+          "partial_take_profit": true,
+          "hard_invalidation": false
+        },
+        "recommended_timeframe": "4h",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120,
+        "stop_style": "structure_based",
+        "summary": "XAUUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 30)."
+      },
+      "event_risk_context": {
+        "event_risk_high": false,
+        "event_risk_direction": "neutral_or_unknown",
+        "reason": "Fallback heuristic: event risk göstergesi yok"
+      },
+      "volatility_context": {
+        "high_volatility": false,
+        "atr_pct": 0.0,
+        "reason": "Fallback heuristic: volatilite normal aralıkta"
+      },
+      "controlled_aggressive_promotion": {
+        "promoted": false,
+        "from": "WAIT",
+        "to": "WAIT",
+        "new_size_cap": 0.0,
+        "reason": "Promotion uygulanmaz: command=WAIT"
+      }
+    },
+    "XAGUSD": {
+      "symbol": "XAGUSD",
+      "final_score": 47.0983,
+      "final_direction": "neutral",
+      "confluence": {
+        "original_score": 47.0983,
+        "adjusted_score": 47.0983,
+        "multiplier": 1.0,
+        "status": "neutral_base",
+        "vote_count": {
+          "aligned": 0,
+          "opposing": 0,
+          "neutral_ignored": 0
+        },
+        "warnings": [
+          "Base skor nötr bantta (direction band) — confluence skip."
+        ]
+      },
+      "raw_regime": "TRANSITIONING",
+      "primary_tf": "1h",
+      "base": {
+        "source_engine": "E-YAY × Aegis",
+        "source_version": "1.0_revised",
+        "symbol": "XAGUSD",
+        "timeframe": "1h",
+        "raw_regime": "TRANSITIONING",
+        "weight_key": "default",
+        "primary_tf": "1h",
+        "weights_used": {
+          "touche": 0.1,
+          "fundamental": 0.2,
+          "news": 0.15,
+          "sentinel": 0.3,
+          "quantum": 0.15,
+          "chart_pattern": 0.1
+        },
+        "weights_trained": false,
+        "module_scores": {
+          "touche": 49.0,
+          "fundamental": 66.6667,
+          "news": 50.0,
+          "sentinel": 60.0,
+          "quantum": 8.0,
+          "chart_pattern": 21.65
+        },
+        "consensus_score": 47.0983,
+        "direction": "neutral",
+        "status": "OK",
+        "missing_modules": [],
+        "contributions": {
+          "touche": {
+            "score": 49.0,
+            "weight": 0.1,
+            "weighted_score": 4.9,
+            "source": "provided"
+          },
+          "fundamental": {
+            "score": 66.6667,
+            "weight": 0.2,
+            "weighted_score": 13.3333,
+            "source": "provided"
+          },
+          "news": {
+            "score": 50.0,
+            "weight": 0.15,
+            "weighted_score": 7.5,
+            "source": "provided"
+          },
+          "sentinel": {
+            "score": 60.0,
+            "weight": 0.3,
+            "weighted_score": 18.0,
+            "source": "provided"
+          },
+          "quantum": {
+            "score": 8.0,
+            "weight": 0.15,
+            "weighted_score": 1.2,
+            "source": "provided"
+          },
+          "chart_pattern": {
+            "score": 21.65,
+            "weight": 0.1,
+            "weighted_score": 2.165,
+            "source": "provided"
+          }
+        },
+        "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+        "final_decision": false,
+        "warnings": []
+      },
+      "tf_signals": {
+        "1h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAGUSD",
+          "timeframe": "1h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 49.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 21.65
+          },
+          "consensus_score": 47.0983,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 49.0,
+              "weight": 0.1,
+              "weighted_score": 4.9,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 21.65,
+              "weight": 0.1,
+              "weighted_score": 2.165,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "4h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAGUSD",
+          "timeframe": "4h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 52.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 35.8
+          },
+          "consensus_score": 48.8133,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 52.0,
+              "weight": 0.1,
+              "weighted_score": 5.2,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 35.8,
+              "weight": 0.1,
+              "weighted_score": 3.58,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "1d": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAGUSD",
+          "timeframe": "1d",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 49.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 50.0
+          },
+          "consensus_score": 49.9333,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 49.0,
+              "weight": 0.1,
+              "weighted_score": 4.9,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 50.0,
+              "weight": 0.1,
+              "weighted_score": 5.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        }
+      },
+      "other_tf_scores": {
+        "4h": 48.8133,
+        "1d": 49.9333
+      },
+      "atr": 0.2687,
+      "agent_command": "WAIT",
+      "contradiction_score": 15,
+      "aggression_context": {
+        "aggression_level": "medium",
+        "aggression_score": 35,
+        "why_aggressive": [
+          "Makro rejim tam risk-on değil",
+          "TF sinyal verisi yetersiz",
+          "XAGUSD hızlı hareket eden asset — momentum erken setup"
+        ],
+        "allowed_if_aggressive": true,
+        "required_adjustments": {
+          "smaller_size": true,
+          "tighter_stop": false,
+          "shorter_timeframe": false,
+          "faster_recheck": false,
+          "partial_take_profit": true,
+          "hard_invalidation": false
+        },
+        "recommended_timeframe": "4h",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120,
+        "stop_style": "structure_based",
+        "summary": "XAGUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+      },
+      "event_risk_context": {
+        "event_risk_high": false,
+        "event_risk_direction": "neutral_or_unknown",
+        "reason": "Fallback heuristic: event risk göstergesi yok"
+      },
+      "volatility_context": {
+        "high_volatility": false,
+        "atr_pct": 0.0,
+        "reason": "Fallback heuristic: volatilite normal aralıkta"
+      },
+      "controlled_aggressive_promotion": {
+        "promoted": false,
+        "from": "WAIT",
+        "to": "WAIT",
+        "new_size_cap": 0.0,
+        "reason": "Promotion uygulanmaz: command=WAIT"
+      }
+    },
+    "BRENT": {
+      "symbol": "BRENT",
+      "final_score": 52.7333,
+      "final_direction": "neutral",
+      "confluence": {
+        "original_score": 52.7333,
+        "adjusted_score": 52.7333,
+        "multiplier": 1.0,
+        "status": "neutral_base",
+        "vote_count": {
+          "aligned": 0,
+          "opposing": 0,
+          "neutral_ignored": 0
+        },
+        "warnings": [
+          "Base skor nötr bantta (direction band) — confluence skip."
+        ]
+      },
+      "raw_regime": "TRANSITIONING",
+      "primary_tf": "1h",
+      "base": {
+        "source_engine": "E-YAY × Aegis",
+        "source_version": "1.0_revised",
+        "symbol": "BRENT",
+        "timeframe": "1h",
+        "raw_regime": "TRANSITIONING",
+        "weight_key": "default",
+        "primary_tf": "1h",
+        "weights_used": {
+          "touche": 0.1,
+          "fundamental": 0.2,
+          "news": 0.15,
+          "sentinel": 0.3,
+          "quantum": 0.15,
+          "chart_pattern": 0.1
+        },
+        "weights_trained": false,
+        "module_scores": {
+          "touche": 77.0,
+          "fundamental": 66.6667,
+          "news": 50.0,
+          "sentinel": 60.0,
+          "quantum": 8.0,
+          "chart_pattern": 50.0
+        },
+        "consensus_score": 52.7333,
+        "direction": "neutral",
+        "status": "OK",
+        "missing_modules": [],
+        "contributions": {
+          "touche": {
+            "score": 77.0,
+            "weight": 0.1,
+            "weighted_score": 7.7,
+            "source": "provided"
+          },
+          "fundamental": {
+            "score": 66.6667,
+            "weight": 0.2,
+            "weighted_score": 13.3333,
+            "source": "provided"
+          },
+          "news": {
+            "score": 50.0,
+            "weight": 0.15,
+            "weighted_score": 7.5,
+            "source": "provided"
+          },
+          "sentinel": {
+            "score": 60.0,
+            "weight": 0.3,
+            "weighted_score": 18.0,
+            "source": "provided"
+          },
+          "quantum": {
+            "score": 8.0,
+            "weight": 0.15,
+            "weighted_score": 1.2,
+            "source": "provided"
+          },
+          "chart_pattern": {
+            "score": 50.0,
+            "weight": 0.1,
+            "weighted_score": 5.0,
+            "source": "provided"
+          }
+        },
+        "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+        "final_decision": false,
+        "warnings": []
+      },
+      "tf_signals": {
+        "1h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BRENT",
+          "timeframe": "1h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 77.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 50.0
+          },
+          "consensus_score": 52.7333,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 77.0,
+              "weight": 0.1,
+              "weighted_score": 7.7,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 50.0,
+              "weight": 0.1,
+              "weighted_score": 5.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        },
+        "4h": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BRENT",
+          "timeframe": "4h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.0,
+            "fundamental": 0.222222,
+            "news": 0.166667,
+            "sentinel": 0.333333,
+            "quantum": 0.166667,
+            "chart_pattern": 0.111111
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 56.45
+          },
+          "consensus_score": 50.7537,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [
+            "touche"
+          ],
+          "contributions": {
+            "touche": {
+              "score": 0.0,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "missing_redistributed"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.222222,
+              "weighted_score": 14.8148,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.166667,
+              "weighted_score": 8.3334,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.333333,
+              "weighted_score": 20.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.166667,
+              "weighted_score": 1.3333,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 56.45,
+              "weight": 0.111111,
+              "weighted_score": 6.2722,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": [
+            "Eksik modül(ler) ['touche'] için ağırlık yeniden dağıtıldı (redistribute) — 50 nötr fallback YOK."
+          ]
+        },
+        "1d": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BRENT",
+          "timeframe": "1d",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.1,
+            "fundamental": 0.2,
+            "news": 0.15,
+            "sentinel": 0.3,
+            "quantum": 0.15,
+            "chart_pattern": 0.1
+          },
+          "weights_trained": false,
+          "module_scores": {
+            "touche": 77.0,
+            "fundamental": 66.6667,
+            "news": 50.0,
+            "sentinel": 60.0,
+            "quantum": 8.0,
+            "chart_pattern": 60.8
+          },
+          "consensus_score": 53.8133,
+          "direction": "neutral",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 77.0,
+              "weight": 0.1,
+              "weighted_score": 7.7,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 66.6667,
+              "weight": 0.2,
+              "weighted_score": 13.3333,
+              "source": "provided"
+            },
+            "news": {
+              "score": 50.0,
+              "weight": 0.15,
+              "weighted_score": 7.5,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.3,
+              "weighted_score": 18.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 8.0,
+              "weight": 0.15,
+              "weighted_score": 1.2,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 60.8,
+              "weight": 0.1,
+              "weighted_score": 6.08,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": []
+        }
+      },
+      "other_tf_scores": {
+        "4h": 50.7537,
+        "1d": 53.8133
+      },
+      "atr": 23.8839,
+      "agent_command": "WAIT",
+      "contradiction_score": 15,
+      "aggression_context": {
+        "aggression_level": "medium",
+        "aggression_score": 35,
+        "why_aggressive": [
+          "Makro rejim tam risk-on değil",
+          "TF sinyal verisi yetersiz",
+          "BRENT hızlı hareket eden asset — momentum erken setup"
+        ],
+        "allowed_if_aggressive": true,
+        "required_adjustments": {
+          "smaller_size": true,
+          "tighter_stop": false,
+          "shorter_timeframe": false,
+          "faster_recheck": false,
+          "partial_take_profit": true,
+          "hard_invalidation": false
+        },
+        "recommended_timeframe": "4h",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120,
+        "stop_style": "structure_based",
+        "summary": "BRENT trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+      },
+      "event_risk_context": {
+        "event_risk_high": false,
+        "event_risk_direction": "neutral_or_unknown",
+        "reason": "Fallback heuristic: event risk göstergesi yok"
+      },
+      "volatility_context": {
+        "high_volatility": false,
+        "atr_pct": 0.0,
+        "reason": "Fallback heuristic: volatilite normal aralıkta"
+      },
+      "controlled_aggressive_promotion": {
+        "promoted": false,
+        "from": "WAIT",
+        "to": "WAIT",
+        "new_size_cap": 0.0,
+        "reason": "Promotion uygulanmaz: command=WAIT"
+      }
+    }
+  }
+}
