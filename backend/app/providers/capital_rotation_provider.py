@@ -2,7 +2,7 @@
 CapitalRotationProvider — Sermaye Rotasyonu ve Çapraz Varlık Korelasyon Analizi.
 
 Para nereye gidiyor?
-  NAKİT (DXY) ⇄ TAHVİL (TLT/SHY) ⇄ ALTIN/GÜMÜŞ (GLD/XAG) ⇄ PETROL (OIL) ⇄ BTC
+  DOLAR_GÜCÜ (DXY) ⇄ TAHVİL (TLT/SHY) ⇄ ALTIN/GÜMÜŞ (GLD/XAG) ⇄ PETROL (OIL) ⇄ BTC
 
 Hesaplamalar:
   1. Bireysel 30g momentum (her varlık sınıfı için)
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class AssetClassScore:
     """Tek bir varlık sınıfının para akış skoru."""
-    name: str           # "ALTIN", "TAHVİL", "BTC", "HİSSE", "NAKİT", "PETROL", "GÜMÜŞ"
+    name: str           # "ALTIN", "TAHVİL", "BTC", "HİSSE", "DOLAR_GÜCÜ", "PETROL", "GÜMÜŞ"
     score: float        # -1.5 → +1.5 arası normalize
     momentum_30d: float # O sınıfın ana varlığının 30g % değişimi (referans)
     direction: str      # "GİRİŞ" | "ÇIKIŞ" | "NÖTR"
@@ -463,9 +463,9 @@ def _detect_rotation_pattern(class_scores: list[AssetClassScore]) -> str | None:
     primary tek başına net değilse bile, GİRİŞ + ÇIKIŞ kombinasyonundan hikaye çıkar.
 
     Dönen kalıp adları:
-      "DEFENSIVE_RISK_ON"   — Hisse+Nakit giriyor, Altın/BTC çıkıyor (dolar güçlü)
-      "PURE_RISK_ON"        — Hisse+BTC giriyor, Nakit/Tahvil çıkıyor
-      "FLIGHT_TO_SAFETY"    — Altın+Tahvil+Nakit giriyor, Hisse/BTC çıkıyor
+      "DEFENSIVE_RISK_ON"   — Hisse+Dolar gücü (DXY) giriyor, Altın/BTC çıkıyor (dolar güçlü)
+      "PURE_RISK_ON"        — Hisse+BTC giriyor, Dolar gücü (DXY)/Tahvil çıkıyor
+      "FLIGHT_TO_SAFETY"    — Altın+Tahvil+Dolar gücü (DXY) giriyor, Hisse/BTC çıkıyor
       "INFLATION_HEDGE"     — Altın+Emtia giriyor, Tahvil çıkıyor
       "CRYPTO_LEADERSHIP"   — BTC öncü, geri kalan karışık
       None                  — gerçekten karışık, hiç kalıp yok
@@ -473,16 +473,16 @@ def _detect_rotation_pattern(class_scores: list[AssetClassScore]) -> str | None:
     enters = {cs.name for cs in class_scores if cs.direction == "GİRİŞ"}
     exits  = {cs.name for cs in class_scores if cs.direction == "ÇIKIŞ"}
 
-    # Hisse + Nakit giriş, Metal/Kripto çıkış → defansif risk-on
-    if {"HİSSE", "NAKİT"} <= enters and {"ALTIN", "BTC"} <= exits:
+    # Hisse + Dolar gücü giriş, Metal/Kripto çıkış → defansif risk-on
+    if {"HİSSE", "DOLAR_GÜCÜ"} <= enters and {"ALTIN", "BTC"} <= exits:
         return "DEFENSIVE_RISK_ON"
 
-    # Hisse + BTC giriş, Nakit/Tahvil çıkış → saf risk-on
-    if {"HİSSE", "BTC"} <= enters and ({"NAKİT"} <= exits or {"TAHVİL"} <= exits):
+    # Hisse + BTC giriş, Dolar gücü/Tahvil çıkış → saf risk-on
+    if {"HİSSE", "BTC"} <= enters and ({"DOLAR_GÜCÜ"} <= exits or {"TAHVİL"} <= exits):
         return "PURE_RISK_ON"
 
-    # Altın + Tahvil + Nakit en az 2 tanesi giriş, Hisse/BTC çıkış → güvenli liman
-    safe = enters & {"ALTIN", "TAHVİL", "NAKİT"}
+    # Altın + Tahvil + Dolar gücü en az 2 tanesi giriş, Hisse/BTC çıkış → güvenli liman
+    safe = enters & {"ALTIN", "TAHVİL", "DOLAR_GÜCÜ"}
     if len(safe) >= 2 and ({"HİSSE"} <= exits or {"BTC"} <= exits):
         return "FLIGHT_TO_SAFETY"
 
@@ -571,9 +571,9 @@ def _build_synthesis(
         return (f"Tahvil ({tlt_m:+.1f}%) güvenli liman olarak öne çıkıyor; "
                 "resesyon veya risk-off endişesi sermayeyi devlet tahviline yönlendiriyor.")
 
-    if primary == "NAKİT":
+    if primary == "DOLAR_GÜCÜ":
         return (f"Dolar ({dxy_m:+.1f}%) tüm varlıkları baskılıyor; "
-                "sermaye en güvenli park yeri olarak nakite sığınıyor.")
+                "sermaye en güvenli park yeri olarak dolara (DXY) sığınıyor.")
 
     conv_str = "net" if conviction >= 50 else "zayıf"
     return (f"{primary} {conv_str} sermaye çekiyor"
