@@ -97,25 +97,29 @@ class TechnicalInsight:
 # ---------------------------------------------------------------------------
 
 #   ticker  : yfinance sembolü
-#   period  : geçmiş veri uzunluğu
+#   period  : geçmiş veri uzunluğu. yfinance "Nd" = TAKVİM günü; EMA200 için
+#             ≥200 işlem barı gerekir. 90d (~64 bar) ve 260d (~178 bar) yetersiz
+#             kaldığından 365d (~252 işlem barı) kullanılır → _ema_stack artık
+#             "unavailable" dönmez. Cache TTL (3dk) korunur; yfinance yükü biraz
+#             artar ama EMA hizalama skoru (advanced_technical_score) devreye girer.
 #   interval: çubuk aralığı
 #   mult    : fiyat çarpanı (HG=F $/lb → $/tonne için 2204.623)
 
 _OHLCV_ASSETS: dict[str, dict] = {
-    "BTCUSD": {"ticker": "BTC-USD",   "period": "90d", "interval": "1d", "mult": 1.0},
-    "XAUUSD": {"ticker": "GC=F",      "period": "90d", "interval": "1d", "mult": 1.0},
-    "XAGUSD": {"ticker": "SI=F",      "period": "90d", "interval": "1d", "mult": 1.0},
-    "XCUUSD": {"ticker": "HG=F",      "period": "90d", "interval": "1d", "mult": 2204.623},
-    "BRENT":  {"ticker": "BZ=F",      "period": "90d", "interval": "1d", "mult": 1.0},
-    "DXY":    {"ticker": "DX-Y.NYB",  "period": "90d", "interval": "1d", "mult": 1.0},
-    "VIX":    {"ticker": "^VIX",      "period": "90d", "interval": "1d", "mult": 1.0},
-    "SP500":  {"ticker": "^GSPC",     "period": "90d", "interval": "1d", "mult": 1.0},
-    "HYG":    {"ticker": "HYG",       "period": "90d", "interval": "1d", "mult": 1.0},
-    "QQQ":    {"ticker": "QQQ",       "period": "90d", "interval": "1d", "mult": 1.0},
-    "IWM":    {"ticker": "IWM",       "period": "90d", "interval": "1d", "mult": 1.0},
-    "LQD":    {"ticker": "LQD",       "period": "90d", "interval": "1d", "mult": 1.0},
-    "SMH":    {"ticker": "SMH",       "period": "90d", "interval": "1d", "mult": 1.0},
-    "XLF":    {"ticker": "XLF",       "period": "90d", "interval": "1d", "mult": 1.0},
+    "BTCUSD": {"ticker": "BTC-USD",   "period": "365d", "interval": "1d", "mult": 1.0},
+    "XAUUSD": {"ticker": "GC=F",      "period": "365d", "interval": "1d", "mult": 1.0},
+    "XAGUSD": {"ticker": "SI=F",      "period": "365d", "interval": "1d", "mult": 1.0},
+    "XCUUSD": {"ticker": "HG=F",      "period": "365d", "interval": "1d", "mult": 2204.623},
+    "BRENT":  {"ticker": "BZ=F",      "period": "365d", "interval": "1d", "mult": 1.0},
+    "DXY":    {"ticker": "DX-Y.NYB",  "period": "365d", "interval": "1d", "mult": 1.0},
+    "VIX":    {"ticker": "^VIX",      "period": "365d", "interval": "1d", "mult": 1.0},
+    "SP500":  {"ticker": "^GSPC",     "period": "365d", "interval": "1d", "mult": 1.0},
+    "HYG":    {"ticker": "HYG",       "period": "365d", "interval": "1d", "mult": 1.0},
+    "QQQ":    {"ticker": "QQQ",       "period": "365d", "interval": "1d", "mult": 1.0},
+    "IWM":    {"ticker": "IWM",       "period": "365d", "interval": "1d", "mult": 1.0},
+    "LQD":    {"ticker": "LQD",       "period": "365d", "interval": "1d", "mult": 1.0},
+    "SMH":    {"ticker": "SMH",       "period": "365d", "interval": "1d", "mult": 1.0},
+    "XLF":    {"ticker": "XLF",       "period": "365d", "interval": "1d", "mult": 1.0},
 }
 
 # ---------------------------------------------------------------------------
