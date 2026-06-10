@@ -1,6 +1,6 @@
 import { fetchAIReport, fetchRegimeReport } from "@/lib/api";
 import AIAnalystReportPanel from "@/components/AIAnalystReport";
-import DecisionBanner from "@/components/DecisionBanner";
+import ActionSignalPanelShell from "@/components/ActionSignalPanelShell";
 import ScenarioPanelShell from "@/components/ScenarioPanelShell";
 import MacroPanel from "@/components/MacroPanel";
 import CommandSignalsPanelShell from "@/components/CommandSignalsPanelShell";
@@ -91,7 +91,7 @@ export default async function HomePage() {
         {data && (
           <>
             {/* 1 ── Karar */}
-            <DecisionBanner report={data.report} />
+            <ActionSignalPanelShell report={data.report} />
 
             {/* 2 ── Operasyonel Merkez */}
             <ActionCenter
