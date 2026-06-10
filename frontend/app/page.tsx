@@ -1,4 +1,4 @@
-import { fetchAIReport, fetchRegimeReport } from "@/lib/api";
+import { fetchAIReport, fetchDashboardState, fetchRegimeReport } from "@/lib/api";
 import AIAnalystReportPanel from "@/components/AIAnalystReport";
 import ActionSignalPanelShell from "@/components/ActionSignalPanelShell";
 import ScenarioPanelShell from "@/components/ScenarioPanelShell";
@@ -16,6 +16,7 @@ import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
 import PaperTradingTicker from "@/components/PaperTradingTicker";
 import WarBreakingAlert from "@/components/WarBreakingAlert";
+import RiskGateEvidence from "@/components/RiskGateEvidence";
 import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
 // Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
@@ -30,10 +31,12 @@ export default async function HomePage() {
   let aiError: string | null = null;
   let geoNewsCount = 0;
 
-  const [regimeResult, aiResult] = await Promise.allSettled([
+  const [regimeResult, aiResult, dashResult] = await Promise.allSettled([
     fetchRegimeReport(true),
     fetchAIReport(),
+    fetchDashboardState(),
   ]);
+  const dashState = dashResult.status === "fulfilled" ? dashResult.value : null;
 
   if (regimeResult.status === "fulfilled") {
     data = regimeResult.value;
@@ -99,6 +102,17 @@ export default async function HomePage() {
           <>
             {/* 1 ── Karar */}
             <ActionSignalPanelShell report={data.report} />
+
+            {/* 1b ── Canonical RiskGate + Agent oyları (kanıt zinciri).
+                Backend /api/v1/dashboard/state'ten gelir; mevcut motoru
+                göstermez, var olan risk_action/dqs çıktısını standart
+                kontrata sarar. PAPER_SAFE. */}
+            {dashState?.state?.risk_gate && (
+              <RiskGateEvidence
+                riskGate={dashState.state.risk_gate}
+                agentVotes={dashState.state.agent_votes ?? []}
+              />
+            )}
 
             {/* 2 ── Operasyonel Merkez (Launch Control Dock) ana dashboard'dan
                 kaldırıldı; karar detayları agent komut merkezi içindeki
