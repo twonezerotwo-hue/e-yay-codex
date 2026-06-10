@@ -2324,11 +2324,20 @@ def dismiss_manual_ready(pair: str) -> bool:
     return True
 
 
-def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, Any]:
+def get_snapshot(
+    current_prices: dict[str, float] | None = None,
+    *,
+    include_opinion: bool = True,
+) -> dict[str, Any]:
     """Frontend için tek seferlik durum görüntüsü.
 
     current_prices boş veya None ise state'in last_tick_prices'ından düşülür —
     böylece GET tick yapmadan da geçerli unrealized PnL döner.
+
+    include_opinion=False: AI Trade Opinion servisi bu fonksiyonu
+    collect_opinion_context() üzerinden çağırır — sonsuz özyineleme
+    (get_snapshot → opinion → collect_opinion_context → get_snapshot)
+    önlemek için opinion view burada hesaplanmaz.
     """
     st = _load_state()
     if not current_prices:
@@ -2375,13 +2384,15 @@ def get_snapshot(current_prices: dict[str, float] | None = None) -> dict[str, An
                 opening_view = {}
 
         # FAZ 18 — agent opinion read-only view (state'e yazılmaz)
-        try:
-            from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
-                build_position_opinion_view as _pos_op,
-            )
-            opinion_view = _pos_op(p.pair, p.side)
-        except Exception:  # noqa: BLE001
-            opinion_view = {"available": False}
+        opinion_view: dict[str, Any] = {"available": False}
+        if include_opinion:
+            try:
+                from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
+                    build_position_opinion_view as _pos_op,
+                )
+                opinion_view = _pos_op(p.pair, p.side)
+            except Exception:  # noqa: BLE001
+                opinion_view = {"available": False}
 
         open_positions.append({
             **asdict(p),

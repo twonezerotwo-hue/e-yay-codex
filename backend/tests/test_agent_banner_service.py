@@ -47,7 +47,7 @@ def _mock_pts_no_positions(monkeypatch):
     import app.services.paper_trading_service as pts
     monkeypatch.setattr(
         pts, "get_snapshot",
-        lambda: {"open_positions": [], "state_anomaly": {"active": False, "reasons": []}},
+        lambda *a, **k: {"open_positions": [], "state_anomaly": {"active": False, "reasons": []}},
     )
 
 
@@ -91,7 +91,7 @@ def test_managing_position_mode_when_open_positions(monkeypatch):
     import app.services.paper_trading_service as pts
     monkeypatch.setattr(
         pts, "get_snapshot",
-        lambda: {
+        lambda *a, **k: {
             "open_positions": [
                 {"pair": "BTCUSD", "side": "LONG", "entry_price": 67000.0, "pnl_pct": 1.2},
                 {"pair": "XAUUSD", "side": "SHORT", "entry_price": 2350.0, "pnl_pct": -0.5},
@@ -149,7 +149,7 @@ def test_risk_alert_mode_when_paper_anomaly(monkeypatch):
     import app.services.paper_trading_service as pts
     monkeypatch.setattr(
         pts, "get_snapshot",
-        lambda: {
+        lambda *a, **k: {
             "open_positions": [{"pair": "BTCUSD", "side": "LONG", "entry_price": 67000.0, "pnl_pct": 5.0}],
             "state_anomaly": {
                 "active": True,
@@ -221,7 +221,7 @@ def test_risk_alert_produces_mode_specific_content(monkeypatch):
     import app.services.paper_trading_service as pts
     monkeypatch.setattr(
         pts, "get_snapshot",
-        lambda: {
+        lambda *a, **k: {
             "open_positions": [],
             "state_anomaly": {"active": True, "reasons": ["daily_pnl_spike"]},
         },

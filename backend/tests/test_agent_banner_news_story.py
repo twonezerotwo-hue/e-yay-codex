@@ -172,6 +172,13 @@ def test_managing_position_headline_contains_news(monkeypatch):
         news_classification=cls,
     )
     monkeypatch.setattr(abs_, "_collect_context", lambda: ctx)
+    # FAZ 18 AI Trade Opinion market_opinion'ı (her zaman dolu) managing_position
+    # modunda headline'ı ezer; bu test FAZ 14 news-aware headline'ı doğruluyor,
+    # bu yüzden opinion katmanını nötrledik.
+    monkeypatch.setattr(
+        "app.services.ai_trade_opinion_service.build_ai_trade_opinion",
+        lambda: {"owner_brief": "", "market_opinion": ""},
+    )
     banner   = abs_.build_agent_banner()
     headline = banner["headline"]
 

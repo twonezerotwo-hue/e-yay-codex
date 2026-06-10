@@ -144,7 +144,7 @@ def _ctx_with_decision(verdict: str, best_bias="long"):
             "appetite_layer": {"status": "NEUTRAL"},
             "asset_signals":  asset_signals,
             "news_headlines": [], "upcoming_catalysts": [],
-            "decision": {"verdict": verdict},
+            "decision": verdict,
         }, "mtf": mtf},
         "prev_snapshot": None, "thesis": None, "thesis_sanity": None,
         "paper_state": {"open_positions": []},

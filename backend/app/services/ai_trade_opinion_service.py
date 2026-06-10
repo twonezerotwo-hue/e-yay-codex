@@ -78,7 +78,9 @@ def collect_opinion_context() -> dict[str, Any]:
 
     try:
         from app.services import paper_trading_service as pts  # noqa: PLC0415
-        ctx["paper_state"] = pts.get_snapshot()
+        # include_opinion=False — aksi halde get_snapshot → opinion →
+        # collect_opinion_context → get_snapshot sonsuz döngüye girer.
+        ctx["paper_state"] = pts.get_snapshot(include_opinion=False)
     except Exception:  # noqa: BLE001
         pass
 
@@ -481,7 +483,8 @@ def build_ai_trade_opinion(ctx: dict[str, Any] | None = None) -> dict[str, Any]:
     )
 
     # ── Ana karar motoru ile uyum (soft modifier için paper trading kullanır)
-    decision = str((_report(ctx).get("decision") or {}).get("verdict") or "").upper()
+    # report["decision"] hourly snapshot'ta düz string'dir (örn. "KÜÇÜLT").
+    decision = str(_report(ctx).get("decision") or "").upper()
     # System "AL/ARTTIR" → long_bias ile uyumlu; "KAPAT/KÜÇÜLT" → uyumsuz
     long_biased = best.get("bias") == "long"
     short_biased = best.get("bias") == "short"

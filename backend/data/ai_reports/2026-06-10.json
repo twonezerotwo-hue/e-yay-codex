@@ -1,15 +1,16 @@
 {
   "date": "2026-06-10",
-  "generated_at": "2026-06-10T07:29:14.509197+00:00",
-  "decision": "BEKLE",
-  "regime": "TRANSITIONING",
-  "verdict": "BEKLE kararı doğru çünkü makro yön netleşene kadar piyasalarda belirsizlik devam ediyor",
+  "generated_at": "2026-06-10T19:50:36.103178+00:00",
+  "decision": "KÜÇÜLT",
+  "regime": "DEFENSIVE",
+  "verdict": "KÜÇÜLT kararı, makro baskı veya risk iştahı zayıflığı nedeniyle doğru görünüyor",
   "key_signals": [
-    "ABD ve İran arasındaki gerginlik artıyor",
+    "Jeopolitik gerilimler artıyor",
     "Para güvenli liman olarak görülen varlıklara akıyor",
-    "DXY 99.86 seviyesinde ve belirgin bir baskı yok"
+    "Enerji fiyatlarındaki dalgalanmalar devam ediyor",
+    "Küresel ekonomideki belirsizlikler nedeniyle risk iştahı zayıflığı devam ediyor"
   ],
   "snapshot": {
-    "HYG": 79.62
+    "HYG": 79.49
   }
 }
