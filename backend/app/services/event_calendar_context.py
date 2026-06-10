@@ -171,16 +171,41 @@ def _price_story(
     """
     parts: list[str] = []
 
-    # BTC
+    # BTC + ETH (birlikte düşüyorlarsa tek cümle)
     btc_val    = _asset_value(signals, "BTCUSD")
     btc_action = _asset_action(signals, "BTCUSD")
-    if btc_val is not None:
-        if btc_action in ("LONG_AWAIT", "LONG"):
+    eth_action = _asset_action(signals, "ETHUSD")
+    _bear = ("SHORT", "AVOID", "SHORT_AWAIT")
+    _bull = ("LONG", "LONG_AWAIT")
+    btc_bear = btc_action in _bear
+    eth_bear = eth_action in _bear
+
+    if btc_bear and eth_bear:
+        val_str = f" ${btc_val:,.0f}" if btc_val is not None else ""
+        parts.append(f"BTC/ETH zayıf{val_str}; risk iştahı kripto tarafında bozulmuş.")
+    elif btc_val is not None:
+        if btc_action in _bull:
             parts.append(f"BTC ${btc_val:,.0f} destek bölgesinde; kırılım değil kapanış teyidi beklenmeli.")
-        elif btc_action in ("SHORT", "AVOID"):
+        elif btc_bear:
             parts.append(f"BTC ${btc_val:,.0f} — baskı altında, yön belirsiz.")
         else:
             parts.append(f"BTC ${btc_val:,.0f} nötr bölgede.")
+
+    # Gold + Silver (birlikte düşüyorlarsa tek cümle)
+    gold_action   = _asset_action(signals, "XAUUSD")
+    silver_action = _asset_action(signals, "XAGUSD")
+    gold_bear     = gold_action in _bear
+    silver_bear   = silver_action in _bear
+
+    if gold_bear and silver_bear:
+        parts.append("Gold/Silver birlikte zayıf; hedge talebi çözülüyor veya dolar baskısı artıyor.")
+    else:
+        gold_val = _asset_value(signals, "XAUUSD")
+        if gold_val is not None:
+            if gold_action in _bull:
+                parts.append(f"Gold ${gold_val:,.0f} — güvenli liman talebi var.")
+            elif gold_bear:
+                parts.append(f"Gold ${gold_val:,.0f} — baskı altında.")
 
     # Brent
     brent_val    = _asset_value(signals, "BRENT")

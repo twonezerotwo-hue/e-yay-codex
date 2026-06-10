@@ -91,6 +91,10 @@ interface AgentBanner {
   event_calendar_note?: string;
   market_pricing_note?: string;
   next_trigger?:        string;
+  // FAZ 14 — haber farkındalığı
+  news_story?:          string;
+  source_news_titles?:  string[];
+  generated_at?:        string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -568,17 +572,25 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
           {/* ════════════════════════════════════════════════════════════
               FAZ 13 — PIYASA BAĞLAMI: fiyat / takvim / tetikleyici
              ════════════════════════════════════════════════════════════ */}
-          {banner && (banner.price_story || banner.event_calendar_note || banner.market_pricing_note || banner.next_trigger) && (
+          {banner && (banner.news_story || banner.price_story || banner.event_calendar_note || banner.market_pricing_note || banner.next_trigger) && (
             <section className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-5">
               <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-3">
                 Piyasa bağlamı
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                {/* Fiyat hikayesi */}
+                {/* Haber hikayesi */}
+                {banner.news_story && (
+                  <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-3 space-y-1">
+                    <p className="text-[9px] font-mono text-orange-300 uppercase tracking-widest">📰 Haber hikayesi</p>
+                    <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.news_story}</p>
+                  </div>
+                )}
+
+                {/* Fiyat tepkisi */}
                 {banner.price_story && (
                   <div className="rounded-xl border border-eyay-border/60 bg-eyay-raised/40 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-eyay-blue uppercase tracking-widest">📈 Fiyat hikayesi</p>
+                    <p className="text-[9px] font-mono text-eyay-blue uppercase tracking-widest">📈 Fiyat tepkisi</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.price_story}</p>
                   </div>
                 )}
