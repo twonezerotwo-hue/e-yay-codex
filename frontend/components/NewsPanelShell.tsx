@@ -38,11 +38,6 @@ export default function NewsPanelShell({ headlines }: Props) {
 
   return (
     <div id="news" data-section="news" data-testid="news-panel-shell" className="scroll-mt-20">
-      {/* DEBUG — kaldırılacak */}
-      <p className="text-[8px] font-mono text-cyan-400/60 px-1 pb-0.5">
-        NewsPanel Radar Shell ACTIVE · mode={mode} · headlines={headlines.length}
-      </p>
-
       {/* ── Toggle bar ── */}
       <div className="flex items-center justify-between px-3 py-2 mb-1.5 bg-eyay-raised/60 border border-eyay-border/60 rounded-xl">
         <div className="flex items-center gap-2">
@@ -103,7 +98,7 @@ export default function NewsPanelShell({ headlines }: Props) {
             onError={(err) => fallbackToList(err?.message || "render_error")}
           >
             <Suspense fallback={legacyView}>
-              <NewsMapRadarLayer onDegraded={fallbackToList} />
+              <NewsMapRadarLayer headlines={headlines} onDegraded={fallbackToList} />
             </Suspense>
           </BreakingNewsErrorBoundary>
         </div>

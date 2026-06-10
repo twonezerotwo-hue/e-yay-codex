@@ -81,8 +81,6 @@ export default function BreakingNewsPanelShell({ headlines }: Props) {
 
   return (
     <section className="rounded-2xl border border-red-800/60 bg-red-950/20 p-5 min-h-[80px]" data-testid="breaking-news-shell">
-      {/* DEBUG — kaldırılacak */}
-      <p className="text-[8px] font-mono text-cyan-400/60 mb-1">BreakingNewsPanelShell ACTIVE · mode={mode} · headlines={headlines.length}</p>
       {/* Başlık + toggle */}
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
