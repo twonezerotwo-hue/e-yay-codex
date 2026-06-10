@@ -174,6 +174,35 @@ def _run_step_agent_thesis() -> dict[str, Any]:
         return _step(name, "fail", {"error": str(exc)[:200]})
 
 
+def _run_step_ai_trade_opinion() -> dict[str, Any]:
+    """
+    Adım: AI Trade Opinion üret ve logla.
+
+    Deterministik fikir katmanı — stored data READ-ONLY okunur,
+    sadece ai_trade_opinions.jsonl'e yazılır. Emir/pozisyon yok.
+    """
+    name = "ai_trade_opinion"
+    try:
+        from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
+            build_ai_trade_opinion,
+        )
+        from app.storage.ai_trade_opinion_store import (  # noqa: PLC0415
+            save_ai_trade_opinion,
+        )
+
+        opinion = build_ai_trade_opinion()
+        opinion_id = save_ai_trade_opinion(opinion)
+        return _step(name, "success", {
+            "opinion_id":   opinion_id,
+            "overall_view": opinion.get("overall_view"),
+            "best_asset":   (opinion.get("best_candidate") or {}).get("asset"),
+        })
+
+    except Exception as exc:
+        _log.warning("scheduler step %s failed: %s", name, exc)
+        return _step(name, "fail", {"error": str(exc)[:200]})
+
+
 def _run_step_position_recheck() -> dict[str, Any]:
     """Adım 3: Açık pozisyonlar için audit recheck."""
     name = "position_recheck"
@@ -452,6 +481,7 @@ def run_once() -> dict[str, Any]:
     steps = [
         _run_step_snapshot_capture(),
         _run_step_agent_thesis(),
+        _run_step_ai_trade_opinion(),
         _run_step_position_recheck(),
         _run_step_learning_candidate(),
         _run_step_mistake_memory(),

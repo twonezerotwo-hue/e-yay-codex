@@ -344,12 +344,9 @@ export default function NewsMapRadarLayer({ onDegraded }: Props) {
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((j: RadarPayload) => {
         if (!alive) return;
-        if (j.status === "degraded") {
-          const reason = j.fallback_reason || "degraded";
-          setError(reason);
-          onDegraded?.(reason);
-          return;
-        }
+        // "degraded" (örn. no_news_data) bir hata değil, sadece veri yok demek —
+        // radar'da kal, boş durum göster. Liste fallback'i sadece gerçek
+        // fetch/render hatalarında (catch bloğu) tetiklenir.
         setData(j);
       })
       .catch(e => {

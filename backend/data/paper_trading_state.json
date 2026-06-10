@@ -1,15 +1,15 @@
 {
   "starting_balance": 100000.0,
-  "realized_pnl_usd": -78.34654306113912,
+  "realized_pnl_usd": -39.52797821620314,
   "positions": {
     "BRENT": {
       "pair": "BRENT",
       "side": "LONG",
       "entry_price": 92.22,
       "entry_at": "2026-06-10T01:09:49.627370+00:00",
-      "size_usd": 7381.13,
-      "last_signal": "bullish@55.2",
-      "stop_loss": 89.8795,
+      "size_usd": 3690.57,
+      "last_signal": "bullish@68.8",
+      "stop_loss": 92.22,
       "take_profit": 95.4967,
       "open_signal": {
         "symbol": "BRENT",
@@ -480,6 +480,13 @@
           "min_rr": 1.2,
           "reason": "Taktik trade — orta hedef, partial TP opsiyonel.",
           "stop_type": "atr"
+        },
+        "partial_tp_execution": {
+          "source": "atr_fallback",
+          "partial_tp_price": 93.1562,
+          "executed_at": "2026-06-10T11:48:25.475214+00:00",
+          "executed_price": 93.19,
+          "reason": "Legacy entry±ATR partial TP target reached (no take_profit_plan)."
         }
       },
       "fingerprint": "BRENT|TRANSITIONING|bullish|weak_bull|skipped|fundamental",
@@ -499,16 +506,16 @@
         "asset_profile": "BRENT",
         "explanation": "SL ve TP, günlük (1D) mumlar üzerinde Wilder ATR(14) ile hesaplandı. SL=2.5×ATR, TP=3.5×ATR (RR 1.4). Beklenen tutuş: ~48-144 saat. (Profil: BRENT)"
       },
-      "trailing_stop_active": false,
-      "peak_favorable_price": 92.73,
-      "partial_tp_taken": false,
-      "original_size_usd": 0.0,
+      "trailing_stop_active": true,
+      "peak_favorable_price": 93.19,
+      "partial_tp_taken": true,
+      "original_size_usd": 7381.13,
       "opened_by": "PAPER",
       "recheck_plan": {
         "recheck_interval_minutes": 120,
-        "next_recheck_at": "2026-06-10T11:10:39.722299+00:00",
-        "last_recheck_at": "2026-06-10T09:10:39.722299+00:00",
-        "recheck_count": 4,
+        "next_recheck_at": "2026-06-10T13:10:41.852930+00:00",
+        "last_recheck_at": "2026-06-10T11:10:41.852930+00:00",
+        "recheck_count": 5,
         "max_rechecks": 12,
         "last_recheck_result": "ok",
         "last_recheck_reason": "Tüm gateler temiz"
@@ -562,7 +569,7 @@
       "entry_price": 61511.4219,
       "entry_at": "2026-06-10T07:11:22.819616+00:00",
       "size_usd": 12995.0,
-      "last_signal": "bullish@55.7",
+      "last_signal": "bullish@68.3",
       "stop_loss": 60883.5021,
       "take_profit": 62557.9549,
       "open_signal": {
@@ -964,9 +971,9 @@
       "opened_by": "MANUAL",
       "recheck_plan": {
         "recheck_interval_minutes": 120,
-        "next_recheck_at": "2026-06-10T11:11:53.197477+00:00",
-        "last_recheck_at": "2026-06-10T09:11:53.197477+00:00",
-        "recheck_count": 1,
+        "next_recheck_at": "2026-06-10T13:12:15.171186+00:00",
+        "last_recheck_at": "2026-06-10T11:12:15.171186+00:00",
+        "recheck_count": 2,
         "max_rechecks": 12,
         "last_recheck_result": "ok",
         "last_recheck_reason": "Tüm gateler temiz"
@@ -1020,7 +1027,7 @@
       "entry_price": 65.07,
       "entry_at": "2026-06-10T07:11:24.800149+00:00",
       "size_usd": 8445.0,
-      "last_signal": "neutral@52.7",
+      "last_signal": "bullish@70.1",
       "stop_loss": 63.4954,
       "take_profit": 67.8255,
       "open_signal": {
@@ -1422,9 +1429,9 @@
       "opened_by": "MANUAL",
       "recheck_plan": {
         "recheck_interval_minutes": 120,
-        "next_recheck_at": "2026-06-10T11:11:53.197477+00:00",
-        "last_recheck_at": "2026-06-10T09:11:53.197477+00:00",
-        "recheck_count": 1,
+        "next_recheck_at": "2026-06-10T13:12:15.171186+00:00",
+        "last_recheck_at": "2026-06-10T11:12:15.171186+00:00",
+        "recheck_count": 2,
         "max_rechecks": 12,
         "last_recheck_result": "ok",
         "last_recheck_reason": "Tüm gateler temiz"
@@ -1475,7 +1482,429 @@
   },
   "pending_orders": {},
   "rejected_signals": {},
-  "manual_ready_trades": {},
+  "manual_ready_trades": {
+    "XAUUSD": {
+      "pair": "XAUUSD",
+      "side": "LONG",
+      "requested_at": "2026-06-10T10:23:51.361212+00:00",
+      "rejected_at": "2026-06-10T10:23:51.361212+00:00",
+      "last_signal": "bullish@70.1",
+      "size_usd": 6041.59,
+      "requested_price": 4176.5,
+      "open_signal": {
+        "symbol": "XAUUSD",
+        "final_score": 70.0667,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 58.3889,
+          "adjusted_score": 70.0667,
+          "multiplier": 1.2,
+          "status": "aligned",
+          "vote_count": {
+            "aligned": 2,
+            "opposing": 0,
+            "neutral_ignored": 0
+          },
+          "tf_directions": {
+            "1h": "bullish",
+            "4h": "bullish"
+          },
+          "base_direction": "bullish",
+          "warnings": []
+        },
+        "raw_regime": "DEFENSIVE",
+        "primary_tf": "1d",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "XAUUSD",
+          "timeframe": "1d",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
+          "weights_used": {
+            "touche": 0.055556,
+            "fundamental": 0.222222,
+            "news": 0.333333,
+            "sentinel": 0.333333,
+            "quantum": 0.055556,
+            "chart_pattern": 0.0
+          },
+          "weights_trained": true,
+          "module_scores": {
+            "touche": 47.0,
+            "fundamental": 100.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 13.05
+          },
+          "consensus_score": 58.3889,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 47.0,
+              "weight": 0.055556,
+              "weighted_score": 2.6111,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 100.0,
+              "weight": 0.222222,
+              "weighted_score": 22.2222,
+              "source": "provided"
+            },
+            "news": {
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 55.0,
+              "weight": 0.333333,
+              "weighted_score": 18.3333,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 13.05,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": [
+            "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+          ]
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "1h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.055556,
+              "fundamental": 0.222222,
+              "news": 0.333333,
+              "sentinel": 0.333333,
+              "quantum": 0.055556,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 37.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 4.0,
+              "chart_pattern": 35.3
+            },
+            "consensus_score": 57.8333,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 37.0,
+                "weight": 0.055556,
+                "weighted_score": 2.0556,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.333333,
+                "weighted_score": 15.0,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.333333,
+                "weighted_score": 18.3333,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 4.0,
+                "weight": 0.055556,
+                "weighted_score": 0.2222,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 35.3,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "4h",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.055556,
+              "fundamental": 0.222222,
+              "news": 0.333333,
+              "sentinel": 0.333333,
+              "quantum": 0.055556,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 37.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 4.0,
+              "chart_pattern": 13.4
+            },
+            "consensus_score": 57.8333,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 37.0,
+                "weight": 0.055556,
+                "weighted_score": 2.0556,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.333333,
+                "weighted_score": 15.0,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.333333,
+                "weighted_score": 18.3333,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 4.0,
+                "weight": 0.055556,
+                "weighted_score": 0.2222,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 13.4,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "XAUUSD",
+            "timeframe": "1d",
+            "raw_regime": "DEFENSIVE",
+            "weight_key": "bear_2022",
+            "primary_tf": "1d",
+            "weights_used": {
+              "touche": 0.055556,
+              "fundamental": 0.222222,
+              "news": 0.333333,
+              "sentinel": 0.333333,
+              "quantum": 0.055556,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 47.0,
+              "fundamental": 100.0,
+              "news": 45.0,
+              "sentinel": 55.0,
+              "quantum": 4.0,
+              "chart_pattern": 13.05
+            },
+            "consensus_score": 58.3889,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 47.0,
+                "weight": 0.055556,
+                "weighted_score": 2.6111,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 45.0,
+                "weight": 0.333333,
+                "weighted_score": 15.0,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 55.0,
+                "weight": 0.333333,
+                "weighted_score": 18.3333,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 4.0,
+                "weight": 0.055556,
+                "weighted_score": 0.2222,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 13.05,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          }
+        },
+        "other_tf_scores": {
+          "1h": 57.8333,
+          "4h": 57.8333
+        },
+        "atr": 83.8276,
+        "agent_command": "LONG_SETUP",
+        "contradiction_score": 32,
+        "aggression_context": {
+          "aggression_level": "medium",
+          "aggression_score": 40,
+          "why_aggressive": [
+            "Makro rejim defansif zeminde",
+            "TF uyumu orta seviyede"
+          ],
+          "allowed_if_aggressive": true,
+          "required_adjustments": {
+            "smaller_size": true,
+            "tighter_stop": false,
+            "shorter_timeframe": false,
+            "faster_recheck": false,
+            "partial_take_profit": true,
+            "hard_invalidation": false
+          },
+          "recommended_timeframe": "4h",
+          "max_holding_time": "24h",
+          "recheck_interval_minutes": 120,
+          "stop_style": "structure_based",
+          "summary": "XAUUSD LONG: taktik setup — seçici sizing, yakın stop, kısa holding (score 40)."
+        },
+        "timeframe_decision": {
+          "selected_timeframe": "4h",
+          "reason": "Aggression medium (score 40) → 4h. Primary TF: 1d.",
+          "max_holding_time": "24h",
+          "recheck_interval_minutes": 120
+        },
+        "stop_decision": {
+          "stop_distance_pct": 1.0,
+          "atr_multiplier": 1.8,
+          "stop_type": "atr",
+          "why_this_stop": "Aggression medium → ATR×1.8 (1.00% mesafe, tip=atr)",
+          "hard_invalidation": [
+            "ATR-bazlı normal SL — trailing stop devreye girer."
+          ]
+        },
+        "sizing_decision": {
+          "base_size_multiplier": 1.5,
+          "aggression_multiplier": 0.7,
+          "regime_multiplier": 0.55,
+          "contradiction_multiplier": 0.9,
+          "event_risk_multiplier": 0.65,
+          "volatility_multiplier": 1.0,
+          "final_size_multiplier": 0.3378,
+          "reason": "base=1.50 × regime(DEFENSIVE)=0.55 × agg(medium)=0.70 × cont(32)=0.90 × event=0.65 × vol=1.00 = 0.3378"
+        },
+        "take_profit_plan": {
+          "rr_target": 2.2,
+          "partial_tp_enabled": false,
+          "partial_tp_at_r": null,
+          "final_tp_at_r": 2.2,
+          "partial_tp_price": null,
+          "final_tp_price": null,
+          "stop_distance": 0.0,
+          "rr_below_min": false,
+          "min_rr": 1.2,
+          "reason": "Taktik trade — orta hedef, partial TP opsiyonel.",
+          "stop_type": "atr"
+        },
+        "event_risk_context": {
+          "event_risk_high": true,
+          "event_risk_direction": "supports_trade",
+          "reason": "XAUUSD event-sensitive ve rejim DEFENSIVE"
+        },
+        "volatility_context": {
+          "high_volatility": false,
+          "atr_pct": 0.0,
+          "reason": "Fallback heuristic: volatilite normal aralıkta"
+        },
+        "controlled_aggressive_promotion": {
+          "promoted": false,
+          "from": "LONG_SETUP",
+          "to": "LONG_SETUP",
+          "new_size_cap": 0.0,
+          "reason": "Promotion uygulanmaz: command=LONG_SETUP"
+        },
+        "auto_tune_context": {
+          "available": false,
+          "applied": false,
+          "reason": "no_overrides"
+        }
+      },
+      "fingerprint": "XAUUSD|DEFENSIVE|bullish|weak_bull|skipped|fundamental",
+      "atr_value": 83.8276,
+      "primary_tf": "1d",
+      "original_requested_price": 4179.3999,
+      "last_refreshed_at": "2026-06-10T12:00:13.197392+00:00"
+    }
+  },
   "trades": [
     {
       "id": 1,
@@ -2897,6 +3326,521 @@
         }
       },
       "data_quality_flag": ""
+    },
+    {
+      "id": 4,
+      "pair": "BRENT",
+      "side": "LONG",
+      "entry_price": 92.22,
+      "exit_price": 93.19,
+      "entry_at": "2026-06-10T01:09:49.627370+00:00",
+      "exit_at": "2026-06-10T11:48:25.475214+00:00",
+      "size_usd": 3690.57,
+      "pnl_usd": 38.82,
+      "pnl_pct": 1.05,
+      "duration_min": 638,
+      "reason": "PARTIAL_TP1",
+      "open_signal": {
+        "symbol": "BRENT",
+        "final_score": 55.6111,
+        "final_direction": "bullish",
+        "confluence": {
+          "original_score": 55.6111,
+          "adjusted_score": 55.6111,
+          "multiplier": 1.0,
+          "status": "skipped",
+          "vote_count": {
+            "aligned": 0,
+            "opposing": 0,
+            "neutral_ignored": 2
+          },
+          "tf_directions": {
+            "4h": "neutral",
+            "1d": "neutral"
+          },
+          "base_direction": "bullish",
+          "warnings": [
+            "Tüm higher TF'ler nötr bantta — confluence skip."
+          ]
+        },
+        "raw_regime": "TRANSITIONING",
+        "primary_tf": "1h",
+        "base": {
+          "source_engine": "E-YAY × Aegis",
+          "source_version": "1.0_revised",
+          "symbol": "BRENT",
+          "timeframe": "1h",
+          "raw_regime": "TRANSITIONING",
+          "weight_key": "default",
+          "primary_tf": "1h",
+          "weights_used": {
+            "touche": 0.111111,
+            "fundamental": 0.222222,
+            "news": 0.166667,
+            "sentinel": 0.333333,
+            "quantum": 0.166667,
+            "chart_pattern": 0.0
+          },
+          "weights_trained": true,
+          "module_scores": {
+            "touche": 42.0,
+            "fundamental": 100.0,
+            "news": 38.3333,
+            "sentinel": 60.0,
+            "quantum": 14.0,
+            "chart_pattern": 36.5
+          },
+          "consensus_score": 55.6111,
+          "direction": "bullish",
+          "status": "OK",
+          "missing_modules": [],
+          "contributions": {
+            "touche": {
+              "score": 42.0,
+              "weight": 0.111111,
+              "weighted_score": 4.6667,
+              "source": "provided"
+            },
+            "fundamental": {
+              "score": 100.0,
+              "weight": 0.222222,
+              "weighted_score": 22.2222,
+              "source": "provided"
+            },
+            "news": {
+              "score": 38.3333,
+              "weight": 0.166667,
+              "weighted_score": 6.3889,
+              "source": "provided"
+            },
+            "sentinel": {
+              "score": 60.0,
+              "weight": 0.333333,
+              "weighted_score": 20.0,
+              "source": "provided"
+            },
+            "quantum": {
+              "score": 14.0,
+              "weight": 0.166667,
+              "weighted_score": 2.3333,
+              "source": "provided"
+            },
+            "chart_pattern": {
+              "score": 36.5,
+              "weight": 0.0,
+              "weighted_score": 0.0,
+              "source": "provided"
+            }
+          },
+          "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+          "final_decision": false,
+          "warnings": [
+            "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+          ]
+        },
+        "tf_signals": {
+          "1h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "1h",
+            "raw_regime": "TRANSITIONING",
+            "weight_key": "default",
+            "primary_tf": "1h",
+            "weights_used": {
+              "touche": 0.111111,
+              "fundamental": 0.222222,
+              "news": 0.166667,
+              "sentinel": 0.333333,
+              "quantum": 0.166667,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 42.0,
+              "fundamental": 100.0,
+              "news": 38.3333,
+              "sentinel": 60.0,
+              "quantum": 14.0,
+              "chart_pattern": 36.5
+            },
+            "consensus_score": 55.6111,
+            "direction": "bullish",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 42.0,
+                "weight": 0.111111,
+                "weighted_score": 4.6667,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 38.3333,
+                "weight": 0.166667,
+                "weighted_score": 6.3889,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 60.0,
+                "weight": 0.333333,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 14.0,
+                "weight": 0.166667,
+                "weighted_score": 2.3333,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 36.5,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          },
+          "4h": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "4h",
+            "raw_regime": "TRANSITIONING",
+            "weight_key": "default",
+            "primary_tf": "1h",
+            "weights_used": {
+              "touche": 0.111111,
+              "fundamental": 0.222222,
+              "news": 0.166667,
+              "sentinel": 0.333333,
+              "quantum": 0.166667,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 28.0,
+              "fundamental": 100.0,
+              "news": 38.3333,
+              "sentinel": 60.0,
+              "quantum": 14.0,
+              "chart_pattern": 50.0
+            },
+            "consensus_score": 54.0555,
+            "direction": "neutral",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 28.0,
+                "weight": 0.111111,
+                "weighted_score": 3.1111,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 38.3333,
+                "weight": 0.166667,
+                "weighted_score": 6.3889,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 60.0,
+                "weight": 0.333333,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 14.0,
+                "weight": 0.166667,
+                "weighted_score": 2.3333,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 50.0,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          },
+          "1d": {
+            "source_engine": "E-YAY × Aegis",
+            "source_version": "1.0_revised",
+            "symbol": "BRENT",
+            "timeframe": "1d",
+            "raw_regime": "TRANSITIONING",
+            "weight_key": "default",
+            "primary_tf": "1h",
+            "weights_used": {
+              "touche": 0.111111,
+              "fundamental": 0.222222,
+              "news": 0.166667,
+              "sentinel": 0.333333,
+              "quantum": 0.166667,
+              "chart_pattern": 0.0
+            },
+            "weights_trained": true,
+            "module_scores": {
+              "touche": 28.0,
+              "fundamental": 100.0,
+              "news": 38.3333,
+              "sentinel": 60.0,
+              "quantum": 14.0,
+              "chart_pattern": 32.5
+            },
+            "consensus_score": 54.0555,
+            "direction": "neutral",
+            "status": "OK",
+            "missing_modules": [],
+            "contributions": {
+              "touche": {
+                "score": 28.0,
+                "weight": 0.111111,
+                "weighted_score": 3.1111,
+                "source": "provided"
+              },
+              "fundamental": {
+                "score": 100.0,
+                "weight": 0.222222,
+                "weighted_score": 22.2222,
+                "source": "provided"
+              },
+              "news": {
+                "score": 38.3333,
+                "weight": 0.166667,
+                "weighted_score": 6.3889,
+                "source": "provided"
+              },
+              "sentinel": {
+                "score": 60.0,
+                "weight": 0.333333,
+                "weighted_score": 20.0,
+                "source": "provided"
+              },
+              "quantum": {
+                "score": 14.0,
+                "weight": 0.166667,
+                "weighted_score": 2.3333,
+                "source": "provided"
+              },
+              "chart_pattern": {
+                "score": 32.5,
+                "weight": 0.0,
+                "weighted_score": 0.0,
+                "source": "provided"
+              }
+            },
+            "decision_permission": "SIGNAL_ONLY_NOT_FINAL",
+            "final_decision": false,
+            "warnings": [
+              "Eğitilmiş ağırlıklar uygulandı (baseline + agent learning)."
+            ]
+          }
+        },
+        "other_tf_scores": {
+          "4h": 54.0555,
+          "1d": 54.0555
+        },
+        "atr": 0.9362,
+        "agent_command": "WAIT",
+        "contradiction_score": 33,
+        "aggression_context": {
+          "aggression_level": "medium",
+          "aggression_score": 35,
+          "why_aggressive": [
+            "Makro rejim tam risk-on değil",
+            "TF sinyal verisi yetersiz",
+            "BRENT hızlı hareket eden asset — momentum erken setup"
+          ],
+          "allowed_if_aggressive": true,
+          "required_adjustments": {
+            "smaller_size": true,
+            "tighter_stop": false,
+            "shorter_timeframe": false,
+            "faster_recheck": false,
+            "partial_take_profit": true,
+            "hard_invalidation": false
+          },
+          "recommended_timeframe": "4h",
+          "max_holding_time": "24h",
+          "recheck_interval_minutes": 120,
+          "stop_style": "structure_based",
+          "summary": "BRENT trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+        },
+        "event_risk_context": {
+          "event_risk_high": false,
+          "event_risk_direction": "neutral_or_unknown",
+          "reason": "Fallback heuristic: event risk göstergesi yok"
+        },
+        "volatility_context": {
+          "high_volatility": false,
+          "atr_pct": 0.0,
+          "reason": "Fallback heuristic: volatilite normal aralıkta"
+        },
+        "controlled_aggressive_promotion": {
+          "promoted": false,
+          "from": "WAIT",
+          "to": "WAIT",
+          "new_size_cap": 0.0,
+          "reason": "Promotion uygulanmaz: command=WAIT"
+        },
+        "auto_tune_context": {
+          "available": false,
+          "applied": false,
+          "reason": "no_overrides"
+        },
+        "agent_thesis_context": {
+          "available": true,
+          "thesis_id": "0360cacb-c1f0-43a1-b559-24b4b6db4d0d",
+          "created_at": "2026-06-09T17:07:55.597031+00:00",
+          "context_only": true,
+          "can_open_trade": false,
+          "sanity_score": 100,
+          "sanity_status": "pass",
+          "source": "pair_specific",
+          "pair": "BRENT",
+          "bias": "watch",
+          "reason": "İzleme bölgesi ($91.32) — destek-direnç arası, kalıcı yön bekle [S:86.08 · R:126.10 · ATR:5.34 (5.8%) · BEARISH · RSI:39]",
+          "contradictions": []
+        },
+        "advanced_technical": {
+          "available": true,
+          "primary_tf": "1h",
+          "volume_confirmation": "weak",
+          "ema_stack": "bearish",
+          "market_structure": "LH_LL",
+          "vwap_position": "above",
+          "vwap_value": 91.6722,
+          "candle_close_confirmation": "no_breakout",
+          "advanced_score": 18,
+          "tf_view": {
+            "1h": {
+              "volume_confirmation": "weak",
+              "volume_conf_score": 1,
+              "ema_stack": "bearish",
+              "ema_alignment_score": 5,
+              "market_structure": "LH_LL",
+              "market_structure_score": 5,
+              "vwap_position": "above",
+              "vwap_value": 91.6722,
+              "vwap_score": 5,
+              "candle_close_confirmation": "no_breakout",
+              "candle_close_score": 2,
+              "advanced_technical_score": 18
+            },
+            "4h": {
+              "volume_confirmation": "weak",
+              "volume_conf_score": 1,
+              "ema_stack": "bearish",
+              "ema_alignment_score": 5,
+              "market_structure": "LH_LL",
+              "market_structure_score": 5,
+              "vwap_position": "below",
+              "vwap_value": 93.7957,
+              "vwap_score": 5,
+              "candle_close_confirmation": "no_breakout",
+              "candle_close_score": 2,
+              "advanced_technical_score": 18
+            },
+            "1d": {
+              "volume_confirmation": "warning",
+              "volume_conf_score": 0,
+              "ema_stack": "unavailable",
+              "ema_alignment_score": 0,
+              "market_structure": "LH_LL",
+              "market_structure_score": 5,
+              "vwap_position": "below",
+              "vwap_value": 100.9719,
+              "vwap_score": 5,
+              "candle_close_confirmation": "no_breakout",
+              "candle_close_score": 2,
+              "advanced_technical_score": 12
+            }
+          },
+          "contradictions": []
+        },
+        "paper_risk_sizing_context": {
+          "base_multiplier_before": 0.3375,
+          "base_multiplier_after": 0.2952,
+          "conviction_tier": "medium",
+          "soft_modifiers": [
+            "conviction=medium",
+            "score=55.6",
+            "confluence=skipped",
+            "adv_tech:volume=weak",
+            "adv_tech:ema_stack=bearish(against_long)",
+            "adv_tech:candle_close=no_breakout",
+            "adv_combined=0.729"
+          ],
+          "final_size_usd": 7381.13,
+          "reason": "paper risk increased for learning, hard gates preserved"
+        },
+        "take_profit_plan": {
+          "rr_target": 2.2,
+          "partial_tp_enabled": false,
+          "partial_tp_at_r": null,
+          "final_tp_at_r": 2.2,
+          "partial_tp_price": null,
+          "final_tp_price": 97.3691,
+          "stop_distance": 2.3405,
+          "rr_below_min": false,
+          "min_rr": 1.2,
+          "reason": "Taktik trade — orta hedef, partial TP opsiyonel.",
+          "stop_type": "atr"
+        },
+        "partial_tp_execution": {
+          "source": "atr_fallback",
+          "partial_tp_price": 93.1562,
+          "executed_at": "2026-06-10T11:48:25.475214+00:00",
+          "executed_price": 93.19,
+          "reason": "Legacy entry±ATR partial TP target reached (no take_profit_plan)."
+        }
+      },
+      "exit_signal": {
+        "price": 93.19,
+        "reason": "PARTIAL_TP1"
+      },
+      "verdict": "WIN",
+      "fingerprint": "BRENT|TRANSITIONING|bullish|weak_bull|skipped|fundamental",
+      "risk_plan": {
+        "timeframe": "1D",
+        "atr_period_bars": 14,
+        "atr_value": 0.9362,
+        "sl_basis": "2.5×ATR(14) · 1D",
+        "tp_basis": "3.5×ATR(14) · 1D",
+        "risk_reward": 1.4,
+        "stop_loss_pct": 2.54,
+        "take_profit_pct": 3.55,
+        "expected_horizon_hours": {
+          "low": 48,
+          "high": 144
+        },
+        "asset_profile": "BRENT",
+        "explanation": "SL ve TP, günlük (1D) mumlar üzerinde Wilder ATR(14) ile hesaplandı. SL=2.5×ATR, TP=3.5×ATR (RR 1.4). Beklenen tutuş: ~48-144 saat. (Profil: BRENT)"
+      },
+      "data_quality_flag": ""
     }
   ],
   "last_event": {
@@ -2920,67 +3864,70 @@
     }
   ],
   "last_tick_prices": {
-    "BTCUSD": 61301.5898,
-    "XAUUSD": 4189.6001,
-    "XAGUSD": 63.965,
-    "BRENT": 91.41
+    "BTCUSD": 60985.0117,
+    "XAUUSD": 4176.5,
+    "XAGUSD": 64.095,
+    "BRENT": 92.97
   },
-  "last_tick_at": "2026-06-10T10:00:36.942070+00:00",
+  "last_tick_at": "2026-06-10T12:00:13.196962+00:00",
   "last_tick_signals": {
     "BTCUSD": {
       "symbol": "BTCUSD",
-      "final_score": 54.1666,
-      "final_direction": "neutral",
+      "final_score": 68.3333,
+      "final_direction": "bullish",
       "confluence": {
-        "original_score": 54.1666,
-        "adjusted_score": 54.1666,
-        "multiplier": 1.0,
-        "status": "neutral_base",
+        "original_score": 56.9444,
+        "adjusted_score": 68.3333,
+        "multiplier": 1.2,
+        "status": "aligned",
         "vote_count": {
-          "aligned": 0,
+          "aligned": 2,
           "opposing": 0,
           "neutral_ignored": 0
         },
-        "warnings": [
-          "Base skor nötr bantta (direction band) — confluence skip."
-        ]
+        "tf_directions": {
+          "1h": "bullish",
+          "4h": "bullish"
+        },
+        "base_direction": "bullish",
+        "warnings": []
       },
-      "raw_regime": "TRANSITIONING",
-      "primary_tf": "1h",
+      "raw_regime": "DEFENSIVE",
+      "primary_tf": "1d",
       "base": {
         "source_engine": "E-YAY × Aegis",
         "source_version": "1.0_revised",
         "symbol": "BTCUSD",
-        "timeframe": "1h",
-        "raw_regime": "TRANSITIONING",
-        "weight_key": "default",
-        "primary_tf": "1h",
+        "timeframe": "1d",
+        "raw_regime": "DEFENSIVE",
+        "weight_key": "bear_2022",
+        "primary_tf": "1d",
         "weights_used": {
-          "touche": 0.111111,
+          "touche": 0.055556,
           "fundamental": 0.222222,
-          "news": 0.166667,
+          "news": 0.333333,
           "sentinel": 0.333333,
-          "quantum": 0.166667,
+          "quantum": 0.055556,
           "chart_pattern": 0.0
         },
         "weights_trained": true,
         "module_scores": {
-          "touche": 53.0,
+          "touche": 21.0,
           "fundamental": 100.0,
-          "news": 33.3333,
-          "sentinel": 60.0,
-          "quantum": 3.0,
-          "chart_pattern": 50.0
+          "news": 45.0,
+          "sentinel": 55.0,
+          "quantum": 4.0,
+          "chart_pattern": 35.0
         },
-        "consensus_score": 54.1666,
-        "direction": "neutral",
+        "consensus_score": 56.9444,
+        "direction": "bullish",
         "status": "OK",
         "missing_modules": [],
         "contributions": {
           "touche": {
-            "score": 53.0,
-            "weight": 0.111111,
-            "weighted_score": 5.8889,
+            "score": 21.0,
+            "weight": 0.055556,
+            "weighted_score": 1.1667,
             "source": "provided"
           },
           "fundamental": {
@@ -2990,25 +3937,25 @@
             "source": "provided"
           },
           "news": {
-            "score": 33.3333,
-            "weight": 0.166667,
-            "weighted_score": 5.5556,
+            "score": 45.0,
+            "weight": 0.333333,
+            "weighted_score": 15.0,
             "source": "provided"
           },
           "sentinel": {
-            "score": 60.0,
+            "score": 55.0,
             "weight": 0.333333,
-            "weighted_score": 20.0,
+            "weighted_score": 18.3333,
             "source": "provided"
           },
           "quantum": {
-            "score": 3.0,
-            "weight": 0.166667,
-            "weighted_score": 0.5,
+            "score": 4.0,
+            "weight": 0.055556,
+            "weighted_score": 0.2222,
             "source": "provided"
           },
           "chart_pattern": {
-            "score": 50.0,
+            "score": 35.0,
             "weight": 0.0,
             "weighted_score": 0.0,
             "source": "provided"
@@ -3026,35 +3973,35 @@
           "source_version": "1.0_revised",
           "symbol": "BTCUSD",
           "timeframe": "1h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 53.0,
+            "touche": 42.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 50.0
           },
-          "consensus_score": 54.1666,
-          "direction": "neutral",
+          "consensus_score": 58.1111,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 53.0,
-              "weight": 0.111111,
-              "weighted_score": 5.8889,
+              "score": 42.0,
+              "weight": 0.055556,
+              "weighted_score": 2.3334,
               "source": "provided"
             },
             "fundamental": {
@@ -3064,21 +4011,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3099,35 +4046,35 @@
           "source_version": "1.0_revised",
           "symbol": "BTCUSD",
           "timeframe": "4h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 37.0,
+            "touche": 54.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 50.0
           },
-          "consensus_score": 52.3888,
-          "direction": "neutral",
+          "consensus_score": 58.7777,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 37.0,
-              "weight": 0.111111,
-              "weighted_score": 4.1111,
+              "score": 54.0,
+              "weight": 0.055556,
+              "weighted_score": 3.0,
               "source": "provided"
             },
             "fundamental": {
@@ -3137,21 +4084,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3172,35 +4119,35 @@
           "source_version": "1.0_revised",
           "symbol": "BTCUSD",
           "timeframe": "1d",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 14.0,
+            "touche": 21.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 35.0
           },
-          "consensus_score": 49.8333,
-          "direction": "neutral",
+          "consensus_score": 56.9444,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 14.0,
-              "weight": 0.111111,
-              "weighted_score": 1.5556,
+              "score": 21.0,
+              "weight": 0.055556,
+              "weighted_score": 1.1667,
               "source": "provided"
             },
             "fundamental": {
@@ -3210,21 +4157,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3242,34 +4189,74 @@
         }
       },
       "other_tf_scores": {
-        "4h": 52.3888,
-        "1d": 49.8333
+        "1h": 58.1111,
+        "4h": 58.7777
       },
-      "atr": 454.7948,
-      "agent_command": "WAIT",
-      "contradiction_score": 15,
+      "atr": 2379.4078,
+      "agent_command": "TACTICAL_LONG_SETUP",
+      "contradiction_score": 42,
       "aggression_context": {
-        "aggression_level": "medium",
-        "aggression_score": 35,
+        "aggression_level": "high",
+        "aggression_score": 57,
         "why_aggressive": [
-          "Makro rejim tam risk-on değil",
-          "TF sinyal verisi yetersiz",
+          "Makro rejim defansif zeminde",
+          "TF uyumu orta seviyede",
+          "Orta contradiction (42)",
           "BTCUSD hızlı hareket eden asset — momentum erken setup"
         ],
         "allowed_if_aggressive": true,
         "required_adjustments": {
           "smaller_size": true,
-          "tighter_stop": false,
-          "shorter_timeframe": false,
-          "faster_recheck": false,
+          "tighter_stop": true,
+          "shorter_timeframe": true,
+          "faster_recheck": true,
           "partial_take_profit": true,
-          "hard_invalidation": false
+          "hard_invalidation": true
         },
-        "recommended_timeframe": "4h",
-        "max_holding_time": "24h",
-        "recheck_interval_minutes": 120,
-        "stop_style": "structure_based",
-        "summary": "BTCUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+        "recommended_timeframe": "1h",
+        "max_holding_time": "6h",
+        "recheck_interval_minutes": 30,
+        "stop_style": "hybrid_tight",
+        "summary": "BTCUSD LONG: agresif setup — küçük boyut, yakın stop, kısa timeframe, sık recheck (score 57)."
+      },
+      "timeframe_decision": {
+        "selected_timeframe": "1h",
+        "reason": "Aggression high (score 57) → 1h. Primary TF: 1d.",
+        "max_holding_time": "6h",
+        "recheck_interval_minutes": 30
+      },
+      "stop_decision": {
+        "stop_distance_pct": 0.65,
+        "atr_multiplier": 1.2,
+        "stop_type": "atr",
+        "why_this_stop": "Aggression high → ATR×1.2 (0.65% mesafe, tip=atr)",
+        "hard_invalidation": [
+          "Fiyat stop seviyesinin altına/üstüne kapanırsa pozisyon kapatılır.",
+          "Primary TF trendi tersine dönerse hard invalidation."
+        ]
+      },
+      "sizing_decision": {
+        "base_size_multiplier": 1.0,
+        "aggression_multiplier": 0.4,
+        "regime_multiplier": 0.55,
+        "contradiction_multiplier": 0.9,
+        "event_risk_multiplier": 1.0,
+        "volatility_multiplier": 1.0,
+        "final_size_multiplier": 0.198,
+        "reason": "base=1.00 × regime(DEFENSIVE)=0.55 × agg(high)=0.40 × cont(42)=0.90 × event=1.00 × vol=1.00 = 0.1980"
+      },
+      "take_profit_plan": {
+        "rr_target": 1.8,
+        "partial_tp_enabled": true,
+        "partial_tp_at_r": 1.0,
+        "final_tp_at_r": 1.8,
+        "partial_tp_price": null,
+        "final_tp_price": null,
+        "stop_distance": 0.0,
+        "rr_below_min": false,
+        "min_rr": 1.2,
+        "reason": "Agresif trade — kısa hedef + partial TP zorunlu.",
+        "stop_type": "atr"
       },
       "event_risk_context": {
         "event_risk_high": false,
@@ -3283,66 +4270,74 @@
       },
       "controlled_aggressive_promotion": {
         "promoted": false,
-        "from": "WAIT",
-        "to": "WAIT",
+        "from": "TACTICAL_LONG_SETUP",
+        "to": "TACTICAL_LONG_SETUP",
         "new_size_cap": 0.0,
-        "reason": "Promotion uygulanmaz: command=WAIT"
+        "reason": "Promotion uygulanmaz: command=TACTICAL_LONG_SETUP"
+      },
+      "auto_tune_context": {
+        "available": false,
+        "applied": false,
+        "reason": "no_overrides"
       }
     },
     "XAUUSD": {
       "symbol": "XAUUSD",
-      "final_score": 52.9444,
-      "final_direction": "neutral",
+      "final_score": 70.0667,
+      "final_direction": "bullish",
       "confluence": {
-        "original_score": 52.9444,
-        "adjusted_score": 52.9444,
-        "multiplier": 1.0,
-        "status": "neutral_base",
+        "original_score": 58.3889,
+        "adjusted_score": 70.0667,
+        "multiplier": 1.2,
+        "status": "aligned",
         "vote_count": {
-          "aligned": 0,
+          "aligned": 2,
           "opposing": 0,
           "neutral_ignored": 0
         },
-        "warnings": [
-          "Base skor nötr bantta (direction band) — confluence skip."
-        ]
+        "tf_directions": {
+          "1h": "bullish",
+          "4h": "bullish"
+        },
+        "base_direction": "bullish",
+        "warnings": []
       },
-      "raw_regime": "TRANSITIONING",
-      "primary_tf": "1h",
+      "raw_regime": "DEFENSIVE",
+      "primary_tf": "1d",
       "base": {
         "source_engine": "E-YAY × Aegis",
         "source_version": "1.0_revised",
         "symbol": "XAUUSD",
-        "timeframe": "1h",
-        "raw_regime": "TRANSITIONING",
-        "weight_key": "default",
-        "primary_tf": "1h",
+        "timeframe": "1d",
+        "raw_regime": "DEFENSIVE",
+        "weight_key": "bear_2022",
+        "primary_tf": "1d",
         "weights_used": {
-          "touche": 0.111111,
+          "touche": 0.055556,
           "fundamental": 0.222222,
-          "news": 0.166667,
+          "news": 0.333333,
           "sentinel": 0.333333,
-          "quantum": 0.166667,
+          "quantum": 0.055556,
           "chart_pattern": 0.0
         },
         "weights_trained": true,
         "module_scores": {
-          "touche": 42.0,
+          "touche": 47.0,
           "fundamental": 100.0,
-          "news": 33.3333,
-          "sentinel": 60.0,
-          "quantum": 3.0,
-          "chart_pattern": 35.3
+          "news": 45.0,
+          "sentinel": 55.0,
+          "quantum": 4.0,
+          "chart_pattern": 13.05
         },
-        "consensus_score": 52.9444,
-        "direction": "neutral",
+        "consensus_score": 58.3889,
+        "direction": "bullish",
         "status": "OK",
         "missing_modules": [],
         "contributions": {
           "touche": {
-            "score": 42.0,
-            "weight": 0.111111,
-            "weighted_score": 4.6667,
+            "score": 47.0,
+            "weight": 0.055556,
+            "weighted_score": 2.6111,
             "source": "provided"
           },
           "fundamental": {
@@ -3352,25 +4347,25 @@
             "source": "provided"
           },
           "news": {
-            "score": 33.3333,
-            "weight": 0.166667,
-            "weighted_score": 5.5556,
+            "score": 45.0,
+            "weight": 0.333333,
+            "weighted_score": 15.0,
             "source": "provided"
           },
           "sentinel": {
-            "score": 60.0,
+            "score": 55.0,
             "weight": 0.333333,
-            "weighted_score": 20.0,
+            "weighted_score": 18.3333,
             "source": "provided"
           },
           "quantum": {
-            "score": 3.0,
-            "weight": 0.166667,
-            "weighted_score": 0.5,
+            "score": 4.0,
+            "weight": 0.055556,
+            "weighted_score": 0.2222,
             "source": "provided"
           },
           "chart_pattern": {
-            "score": 35.3,
+            "score": 13.05,
             "weight": 0.0,
             "weighted_score": 0.0,
             "source": "provided"
@@ -3388,35 +4383,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAUUSD",
           "timeframe": "1h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 42.0,
+            "touche": 37.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 35.3
           },
-          "consensus_score": 52.9444,
-          "direction": "neutral",
+          "consensus_score": 57.8333,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 42.0,
-              "weight": 0.111111,
-              "weighted_score": 4.6667,
+              "score": 37.0,
+              "weight": 0.055556,
+              "weighted_score": 2.0556,
               "source": "provided"
             },
             "fundamental": {
@@ -3426,21 +4421,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3461,35 +4456,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAUUSD",
           "timeframe": "4h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
             "touche": 37.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
-            "chart_pattern": 35.0
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 13.4
           },
-          "consensus_score": 52.3888,
-          "direction": "neutral",
+          "consensus_score": 57.8333,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
               "score": 37.0,
-              "weight": 0.111111,
-              "weighted_score": 4.1111,
+              "weight": 0.055556,
+              "weighted_score": 2.0556,
               "source": "provided"
             },
             "fundamental": {
@@ -3499,25 +4494,25 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
-              "score": 35.0,
+              "score": 13.4,
               "weight": 0.0,
               "weighted_score": 0.0,
               "source": "provided"
@@ -3534,35 +4529,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAUUSD",
           "timeframe": "1d",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
             "touche": 47.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
-            "chart_pattern": 13.4
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 13.05
           },
-          "consensus_score": 53.5,
-          "direction": "neutral",
+          "consensus_score": 58.3889,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
               "score": 47.0,
-              "weight": 0.111111,
-              "weighted_score": 5.2222,
+              "weight": 0.055556,
+              "weighted_score": 2.6111,
               "source": "provided"
             },
             "fundamental": {
@@ -3572,25 +4567,25 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
-              "score": 13.4,
+              "score": 13.05,
               "weight": 0.0,
               "weighted_score": 0.0,
               "source": "provided"
@@ -3604,18 +4599,18 @@
         }
       },
       "other_tf_scores": {
-        "4h": 52.3888,
-        "1d": 53.5
+        "1h": 57.8333,
+        "4h": 57.8333
       },
-      "atr": 23.3816,
-      "agent_command": "WAIT",
-      "contradiction_score": 15,
+      "atr": 83.8276,
+      "agent_command": "LONG_SETUP",
+      "contradiction_score": 32,
       "aggression_context": {
         "aggression_level": "medium",
-        "aggression_score": 30,
+        "aggression_score": 40,
         "why_aggressive": [
-          "Makro rejim tam risk-on değil",
-          "TF sinyal verisi yetersiz"
+          "Makro rejim defansif zeminde",
+          "TF uyumu orta seviyede"
         ],
         "allowed_if_aggressive": true,
         "required_adjustments": {
@@ -3630,12 +4625,50 @@
         "max_holding_time": "24h",
         "recheck_interval_minutes": 120,
         "stop_style": "structure_based",
-        "summary": "XAUUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 30)."
+        "summary": "XAUUSD LONG: taktik setup — seçici sizing, yakın stop, kısa holding (score 40)."
+      },
+      "timeframe_decision": {
+        "selected_timeframe": "4h",
+        "reason": "Aggression medium (score 40) → 4h. Primary TF: 1d.",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120
+      },
+      "stop_decision": {
+        "stop_distance_pct": 1.0,
+        "atr_multiplier": 1.8,
+        "stop_type": "atr",
+        "why_this_stop": "Aggression medium → ATR×1.8 (1.00% mesafe, tip=atr)",
+        "hard_invalidation": [
+          "ATR-bazlı normal SL — trailing stop devreye girer."
+        ]
+      },
+      "sizing_decision": {
+        "base_size_multiplier": 1.5,
+        "aggression_multiplier": 0.7,
+        "regime_multiplier": 0.55,
+        "contradiction_multiplier": 0.9,
+        "event_risk_multiplier": 0.65,
+        "volatility_multiplier": 1.0,
+        "final_size_multiplier": 0.3378,
+        "reason": "base=1.50 × regime(DEFENSIVE)=0.55 × agg(medium)=0.70 × cont(32)=0.90 × event=0.65 × vol=1.00 = 0.3378"
+      },
+      "take_profit_plan": {
+        "rr_target": 2.2,
+        "partial_tp_enabled": false,
+        "partial_tp_at_r": null,
+        "final_tp_at_r": 2.2,
+        "partial_tp_price": null,
+        "final_tp_price": null,
+        "stop_distance": 0.0,
+        "rr_below_min": false,
+        "min_rr": 1.2,
+        "reason": "Taktik trade — orta hedef, partial TP opsiyonel.",
+        "stop_type": "atr"
       },
       "event_risk_context": {
-        "event_risk_high": false,
-        "event_risk_direction": "neutral_or_unknown",
-        "reason": "Fallback heuristic: event risk göstergesi yok"
+        "event_risk_high": true,
+        "event_risk_direction": "supports_trade",
+        "reason": "XAUUSD event-sensitive ve rejim DEFENSIVE"
       },
       "volatility_context": {
         "high_volatility": false,
@@ -3644,66 +4677,74 @@
       },
       "controlled_aggressive_promotion": {
         "promoted": false,
-        "from": "WAIT",
-        "to": "WAIT",
+        "from": "LONG_SETUP",
+        "to": "LONG_SETUP",
         "new_size_cap": 0.0,
-        "reason": "Promotion uygulanmaz: command=WAIT"
+        "reason": "Promotion uygulanmaz: command=LONG_SETUP"
+      },
+      "auto_tune_context": {
+        "available": false,
+        "applied": false,
+        "reason": "no_overrides"
       }
     },
     "XAGUSD": {
       "symbol": "XAGUSD",
-      "final_score": 51.3889,
-      "final_direction": "neutral",
+      "final_score": 70.0667,
+      "final_direction": "bullish",
       "confluence": {
-        "original_score": 51.3889,
-        "adjusted_score": 51.3889,
-        "multiplier": 1.0,
-        "status": "neutral_base",
+        "original_score": 58.3889,
+        "adjusted_score": 70.0667,
+        "multiplier": 1.2,
+        "status": "aligned",
         "vote_count": {
-          "aligned": 0,
+          "aligned": 2,
           "opposing": 0,
           "neutral_ignored": 0
         },
-        "warnings": [
-          "Base skor nötr bantta (direction band) — confluence skip."
-        ]
+        "tf_directions": {
+          "1h": "bullish",
+          "4h": "bullish"
+        },
+        "base_direction": "bullish",
+        "warnings": []
       },
-      "raw_regime": "TRANSITIONING",
-      "primary_tf": "1h",
+      "raw_regime": "DEFENSIVE",
+      "primary_tf": "1d",
       "base": {
         "source_engine": "E-YAY × Aegis",
         "source_version": "1.0_revised",
         "symbol": "XAGUSD",
-        "timeframe": "1h",
-        "raw_regime": "TRANSITIONING",
-        "weight_key": "default",
-        "primary_tf": "1h",
+        "timeframe": "1d",
+        "raw_regime": "DEFENSIVE",
+        "weight_key": "bear_2022",
+        "primary_tf": "1d",
         "weights_used": {
-          "touche": 0.111111,
+          "touche": 0.055556,
           "fundamental": 0.222222,
-          "news": 0.166667,
+          "news": 0.333333,
           "sentinel": 0.333333,
-          "quantum": 0.166667,
+          "quantum": 0.055556,
           "chart_pattern": 0.0
         },
         "weights_trained": true,
         "module_scores": {
-          "touche": 28.0,
+          "touche": 47.0,
           "fundamental": 100.0,
-          "news": 33.3333,
-          "sentinel": 60.0,
-          "quantum": 3.0,
-          "chart_pattern": 39.15
+          "news": 45.0,
+          "sentinel": 55.0,
+          "quantum": 4.0,
+          "chart_pattern": 35.95
         },
-        "consensus_score": 51.3889,
-        "direction": "neutral",
+        "consensus_score": 58.3889,
+        "direction": "bullish",
         "status": "OK",
         "missing_modules": [],
         "contributions": {
           "touche": {
-            "score": 28.0,
-            "weight": 0.111111,
-            "weighted_score": 3.1111,
+            "score": 47.0,
+            "weight": 0.055556,
+            "weighted_score": 2.6111,
             "source": "provided"
           },
           "fundamental": {
@@ -3713,25 +4754,25 @@
             "source": "provided"
           },
           "news": {
-            "score": 33.3333,
-            "weight": 0.166667,
-            "weighted_score": 5.5556,
+            "score": 45.0,
+            "weight": 0.333333,
+            "weighted_score": 15.0,
             "source": "provided"
           },
           "sentinel": {
-            "score": 60.0,
+            "score": 55.0,
             "weight": 0.333333,
-            "weighted_score": 20.0,
+            "weighted_score": 18.3333,
             "source": "provided"
           },
           "quantum": {
-            "score": 3.0,
-            "weight": 0.166667,
-            "weighted_score": 0.5,
+            "score": 4.0,
+            "weight": 0.055556,
+            "weighted_score": 0.2222,
             "source": "provided"
           },
           "chart_pattern": {
-            "score": 39.15,
+            "score": 35.95,
             "weight": 0.0,
             "weighted_score": 0.0,
             "source": "provided"
@@ -3749,35 +4790,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAGUSD",
           "timeframe": "1h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 28.0,
+            "touche": 25.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 39.15
           },
-          "consensus_score": 51.3889,
-          "direction": "neutral",
+          "consensus_score": 57.1666,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 28.0,
-              "weight": 0.111111,
-              "weighted_score": 3.1111,
+              "score": 25.0,
+              "weight": 0.055556,
+              "weighted_score": 1.3889,
               "source": "provided"
             },
             "fundamental": {
@@ -3787,21 +4828,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3822,35 +4863,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAGUSD",
           "timeframe": "4h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
             "touche": 22.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
-            "chart_pattern": 50.0
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 30.15
           },
-          "consensus_score": 50.7222,
-          "direction": "neutral",
+          "consensus_score": 57.0,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
               "score": 22.0,
-              "weight": 0.111111,
-              "weighted_score": 2.4444,
+              "weight": 0.055556,
+              "weighted_score": 1.2222,
               "source": "provided"
             },
             "fundamental": {
@@ -3860,25 +4901,25 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
-              "score": 50.0,
+              "score": 30.15,
               "weight": 0.0,
               "weighted_score": 0.0,
               "source": "provided"
@@ -3895,35 +4936,35 @@
           "source_version": "1.0_revised",
           "symbol": "XAGUSD",
           "timeframe": "1d",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
             "touche": 47.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 35.95
           },
-          "consensus_score": 53.5,
-          "direction": "neutral",
+          "consensus_score": 58.3889,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
               "score": 47.0,
-              "weight": 0.111111,
-              "weighted_score": 5.2222,
+              "weight": 0.055556,
+              "weighted_score": 2.6111,
               "source": "provided"
             },
             "fundamental": {
@@ -3933,21 +4974,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -3965,18 +5006,18 @@
         }
       },
       "other_tf_scores": {
-        "4h": 50.7222,
-        "1d": 53.5
+        "1h": 57.1666,
+        "4h": 57.0
       },
-      "atr": 0.7718,
-      "agent_command": "WAIT",
-      "contradiction_score": 15,
+      "atr": 2.7199,
+      "agent_command": "LONG_SETUP",
+      "contradiction_score": 32,
       "aggression_context": {
         "aggression_level": "medium",
-        "aggression_score": 35,
+        "aggression_score": 45,
         "why_aggressive": [
-          "Makro rejim tam risk-on değil",
-          "TF sinyal verisi yetersiz",
+          "Makro rejim defansif zeminde",
+          "TF uyumu orta seviyede",
           "XAGUSD hızlı hareket eden asset — momentum erken setup"
         ],
         "allowed_if_aggressive": true,
@@ -3992,12 +5033,50 @@
         "max_holding_time": "24h",
         "recheck_interval_minutes": 120,
         "stop_style": "structure_based",
-        "summary": "XAGUSD trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+        "summary": "XAGUSD LONG: taktik setup — seçici sizing, yakın stop, kısa holding (score 45)."
+      },
+      "timeframe_decision": {
+        "selected_timeframe": "4h",
+        "reason": "Aggression medium (score 45) → 4h. Primary TF: 1d.",
+        "max_holding_time": "24h",
+        "recheck_interval_minutes": 120
+      },
+      "stop_decision": {
+        "stop_distance_pct": 1.0,
+        "atr_multiplier": 1.8,
+        "stop_type": "atr",
+        "why_this_stop": "Aggression medium → ATR×1.8 (1.00% mesafe, tip=atr)",
+        "hard_invalidation": [
+          "ATR-bazlı normal SL — trailing stop devreye girer."
+        ]
+      },
+      "sizing_decision": {
+        "base_size_multiplier": 1.5,
+        "aggression_multiplier": 0.7,
+        "regime_multiplier": 0.55,
+        "contradiction_multiplier": 0.9,
+        "event_risk_multiplier": 0.65,
+        "volatility_multiplier": 1.0,
+        "final_size_multiplier": 0.3378,
+        "reason": "base=1.50 × regime(DEFENSIVE)=0.55 × agg(medium)=0.70 × cont(32)=0.90 × event=0.65 × vol=1.00 = 0.3378"
+      },
+      "take_profit_plan": {
+        "rr_target": 2.2,
+        "partial_tp_enabled": false,
+        "partial_tp_at_r": null,
+        "final_tp_at_r": 2.2,
+        "partial_tp_price": null,
+        "final_tp_price": null,
+        "stop_distance": 0.0,
+        "rr_below_min": false,
+        "min_rr": 1.2,
+        "reason": "Taktik trade — orta hedef, partial TP opsiyonel.",
+        "stop_type": "atr"
       },
       "event_risk_context": {
-        "event_risk_high": false,
-        "event_risk_direction": "neutral_or_unknown",
-        "reason": "Fallback heuristic: event risk göstergesi yok"
+        "event_risk_high": true,
+        "event_risk_direction": "supports_trade",
+        "reason": "XAGUSD event-sensitive ve rejim DEFENSIVE"
       },
       "volatility_context": {
         "high_volatility": false,
@@ -4006,66 +5085,74 @@
       },
       "controlled_aggressive_promotion": {
         "promoted": false,
-        "from": "WAIT",
-        "to": "WAIT",
+        "from": "LONG_SETUP",
+        "to": "LONG_SETUP",
         "new_size_cap": 0.0,
-        "reason": "Promotion uygulanmaz: command=WAIT"
+        "reason": "Promotion uygulanmaz: command=LONG_SETUP"
+      },
+      "auto_tune_context": {
+        "available": false,
+        "applied": false,
+        "reason": "no_overrides"
       }
     },
     "BRENT": {
       "symbol": "BRENT",
-      "final_score": 52.8333,
-      "final_direction": "neutral",
+      "final_score": 68.8,
+      "final_direction": "bullish",
       "confluence": {
-        "original_score": 52.8333,
-        "adjusted_score": 52.8333,
-        "multiplier": 1.0,
-        "status": "neutral_base",
+        "original_score": 57.3333,
+        "adjusted_score": 68.8,
+        "multiplier": 1.2,
+        "status": "aligned",
         "vote_count": {
-          "aligned": 0,
+          "aligned": 2,
           "opposing": 0,
           "neutral_ignored": 0
         },
-        "warnings": [
-          "Base skor nötr bantta (direction band) — confluence skip."
-        ]
+        "tf_directions": {
+          "1h": "bullish",
+          "4h": "bullish"
+        },
+        "base_direction": "bullish",
+        "warnings": []
       },
-      "raw_regime": "TRANSITIONING",
-      "primary_tf": "1h",
+      "raw_regime": "DEFENSIVE",
+      "primary_tf": "1d",
       "base": {
         "source_engine": "E-YAY × Aegis",
         "source_version": "1.0_revised",
         "symbol": "BRENT",
-        "timeframe": "1h",
-        "raw_regime": "TRANSITIONING",
-        "weight_key": "default",
-        "primary_tf": "1h",
+        "timeframe": "1d",
+        "raw_regime": "DEFENSIVE",
+        "weight_key": "bear_2022",
+        "primary_tf": "1d",
         "weights_used": {
-          "touche": 0.111111,
+          "touche": 0.055556,
           "fundamental": 0.222222,
-          "news": 0.166667,
+          "news": 0.333333,
           "sentinel": 0.333333,
-          "quantum": 0.166667,
+          "quantum": 0.055556,
           "chart_pattern": 0.0
         },
         "weights_trained": true,
         "module_scores": {
-          "touche": 41.0,
+          "touche": 28.0,
           "fundamental": 100.0,
-          "news": 33.3333,
-          "sentinel": 60.0,
-          "quantum": 3.0,
-          "chart_pattern": 61.5
+          "news": 45.0,
+          "sentinel": 55.0,
+          "quantum": 4.0,
+          "chart_pattern": 35.0
         },
-        "consensus_score": 52.8333,
-        "direction": "neutral",
+        "consensus_score": 57.3333,
+        "direction": "bullish",
         "status": "OK",
         "missing_modules": [],
         "contributions": {
           "touche": {
-            "score": 41.0,
-            "weight": 0.111111,
-            "weighted_score": 4.5556,
+            "score": 28.0,
+            "weight": 0.055556,
+            "weighted_score": 1.5556,
             "source": "provided"
           },
           "fundamental": {
@@ -4075,25 +5162,25 @@
             "source": "provided"
           },
           "news": {
-            "score": 33.3333,
-            "weight": 0.166667,
-            "weighted_score": 5.5556,
+            "score": 45.0,
+            "weight": 0.333333,
+            "weighted_score": 15.0,
             "source": "provided"
           },
           "sentinel": {
-            "score": 60.0,
+            "score": 55.0,
             "weight": 0.333333,
-            "weighted_score": 20.0,
+            "weighted_score": 18.3333,
             "source": "provided"
           },
           "quantum": {
-            "score": 3.0,
-            "weight": 0.166667,
-            "weighted_score": 0.5,
+            "score": 4.0,
+            "weight": 0.055556,
+            "weighted_score": 0.2222,
             "source": "provided"
           },
           "chart_pattern": {
-            "score": 61.5,
+            "score": 35.0,
             "weight": 0.0,
             "weighted_score": 0.0,
             "source": "provided"
@@ -4111,35 +5198,35 @@
           "source_version": "1.0_revised",
           "symbol": "BRENT",
           "timeframe": "1h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 41.0,
+            "touche": 62.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
-            "chart_pattern": 61.5
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 62.5
           },
-          "consensus_score": 52.8333,
-          "direction": "neutral",
+          "consensus_score": 59.2222,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 41.0,
-              "weight": 0.111111,
-              "weighted_score": 4.5556,
+              "score": 62.0,
+              "weight": 0.055556,
+              "weighted_score": 3.4445,
               "source": "provided"
             },
             "fundamental": {
@@ -4149,25 +5236,25 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
-              "score": 61.5,
+              "score": 62.5,
               "weight": 0.0,
               "weighted_score": 0.0,
               "source": "provided"
@@ -4184,35 +5271,35 @@
           "source_version": "1.0_revised",
           "symbol": "BRENT",
           "timeframe": "4h",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
-            "touche": 33.0,
+            "touche": 51.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
-            "chart_pattern": 36.05
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
+            "chart_pattern": 82.05
           },
-          "consensus_score": 51.9444,
-          "direction": "neutral",
+          "consensus_score": 58.6111,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
-              "score": 33.0,
-              "weight": 0.111111,
-              "weighted_score": 3.6667,
+              "score": 51.0,
+              "weight": 0.055556,
+              "weighted_score": 2.8334,
               "source": "provided"
             },
             "fundamental": {
@@ -4222,25 +5309,25 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
-              "score": 36.05,
+              "score": 82.05,
               "weight": 0.0,
               "weighted_score": 0.0,
               "source": "provided"
@@ -4257,35 +5344,35 @@
           "source_version": "1.0_revised",
           "symbol": "BRENT",
           "timeframe": "1d",
-          "raw_regime": "TRANSITIONING",
-          "weight_key": "default",
-          "primary_tf": "1h",
+          "raw_regime": "DEFENSIVE",
+          "weight_key": "bear_2022",
+          "primary_tf": "1d",
           "weights_used": {
-            "touche": 0.111111,
+            "touche": 0.055556,
             "fundamental": 0.222222,
-            "news": 0.166667,
+            "news": 0.333333,
             "sentinel": 0.333333,
-            "quantum": 0.166667,
+            "quantum": 0.055556,
             "chart_pattern": 0.0
           },
           "weights_trained": true,
           "module_scores": {
             "touche": 28.0,
             "fundamental": 100.0,
-            "news": 33.3333,
-            "sentinel": 60.0,
-            "quantum": 3.0,
+            "news": 45.0,
+            "sentinel": 55.0,
+            "quantum": 4.0,
             "chart_pattern": 35.0
           },
-          "consensus_score": 51.3889,
-          "direction": "neutral",
+          "consensus_score": 57.3333,
+          "direction": "bullish",
           "status": "OK",
           "missing_modules": [],
           "contributions": {
             "touche": {
               "score": 28.0,
-              "weight": 0.111111,
-              "weighted_score": 3.1111,
+              "weight": 0.055556,
+              "weighted_score": 1.5556,
               "source": "provided"
             },
             "fundamental": {
@@ -4295,21 +5382,21 @@
               "source": "provided"
             },
             "news": {
-              "score": 33.3333,
-              "weight": 0.166667,
-              "weighted_score": 5.5556,
+              "score": 45.0,
+              "weight": 0.333333,
+              "weighted_score": 15.0,
               "source": "provided"
             },
             "sentinel": {
-              "score": 60.0,
+              "score": 55.0,
               "weight": 0.333333,
-              "weighted_score": 20.0,
+              "weighted_score": 18.3333,
               "source": "provided"
             },
             "quantum": {
-              "score": 3.0,
-              "weight": 0.166667,
-              "weighted_score": 0.5,
+              "score": 4.0,
+              "weight": 0.055556,
+              "weighted_score": 0.2222,
               "source": "provided"
             },
             "chart_pattern": {
@@ -4327,39 +5414,79 @@
         }
       },
       "other_tf_scores": {
-        "4h": 51.9444,
-        "1d": 51.3889
+        "1h": 59.2222,
+        "4h": 58.6111
       },
-      "atr": 0.9005,
-      "agent_command": "WAIT",
-      "contradiction_score": 15,
+      "atr": 5.1599,
+      "agent_command": "TACTICAL_LONG_SETUP",
+      "contradiction_score": 42,
       "aggression_context": {
-        "aggression_level": "medium",
-        "aggression_score": 35,
+        "aggression_level": "high",
+        "aggression_score": 57,
         "why_aggressive": [
-          "Makro rejim tam risk-on değil",
-          "TF sinyal verisi yetersiz",
+          "Makro rejim defansif zeminde",
+          "TF uyumu orta seviyede",
+          "Orta contradiction (42)",
           "BRENT hızlı hareket eden asset — momentum erken setup"
         ],
         "allowed_if_aggressive": true,
         "required_adjustments": {
           "smaller_size": true,
-          "tighter_stop": false,
-          "shorter_timeframe": false,
-          "faster_recheck": false,
+          "tighter_stop": true,
+          "shorter_timeframe": true,
+          "faster_recheck": true,
           "partial_take_profit": true,
-          "hard_invalidation": false
+          "hard_invalidation": true
         },
-        "recommended_timeframe": "4h",
-        "max_holding_time": "24h",
-        "recheck_interval_minutes": 120,
-        "stop_style": "structure_based",
-        "summary": "BRENT trade: taktik setup — seçici sizing, yakın stop, kısa holding (score 35)."
+        "recommended_timeframe": "1h",
+        "max_holding_time": "6h",
+        "recheck_interval_minutes": 30,
+        "stop_style": "hybrid_tight",
+        "summary": "BRENT LONG: agresif setup — küçük boyut, yakın stop, kısa timeframe, sık recheck (score 57)."
+      },
+      "timeframe_decision": {
+        "selected_timeframe": "1h",
+        "reason": "Aggression high (score 57) → 1h. Primary TF: 1d.",
+        "max_holding_time": "6h",
+        "recheck_interval_minutes": 30
+      },
+      "stop_decision": {
+        "stop_distance_pct": 0.65,
+        "atr_multiplier": 1.2,
+        "stop_type": "atr",
+        "why_this_stop": "Aggression high → ATR×1.2 (0.65% mesafe, tip=atr)",
+        "hard_invalidation": [
+          "Fiyat stop seviyesinin altına/üstüne kapanırsa pozisyon kapatılır.",
+          "Primary TF trendi tersine dönerse hard invalidation."
+        ]
+      },
+      "sizing_decision": {
+        "base_size_multiplier": 1.0,
+        "aggression_multiplier": 0.4,
+        "regime_multiplier": 0.55,
+        "contradiction_multiplier": 0.9,
+        "event_risk_multiplier": 0.65,
+        "volatility_multiplier": 1.0,
+        "final_size_multiplier": 0.1287,
+        "reason": "base=1.00 × regime(DEFENSIVE)=0.55 × agg(high)=0.40 × cont(42)=0.90 × event=0.65 × vol=1.00 = 0.1287"
+      },
+      "take_profit_plan": {
+        "rr_target": 1.8,
+        "partial_tp_enabled": true,
+        "partial_tp_at_r": 1.0,
+        "final_tp_at_r": 1.8,
+        "partial_tp_price": null,
+        "final_tp_price": null,
+        "stop_distance": 0.0,
+        "rr_below_min": false,
+        "min_rr": 1.2,
+        "reason": "Agresif trade — kısa hedef + partial TP zorunlu.",
+        "stop_type": "atr"
       },
       "event_risk_context": {
-        "event_risk_high": false,
-        "event_risk_direction": "neutral_or_unknown",
-        "reason": "Fallback heuristic: event risk göstergesi yok"
+        "event_risk_high": true,
+        "event_risk_direction": "supports_trade",
+        "reason": "BRENT event-sensitive ve rejim DEFENSIVE"
       },
       "volatility_context": {
         "high_volatility": false,
@@ -4368,10 +5495,15 @@
       },
       "controlled_aggressive_promotion": {
         "promoted": false,
-        "from": "WAIT",
-        "to": "WAIT",
+        "from": "TACTICAL_LONG_SETUP",
+        "to": "TACTICAL_LONG_SETUP",
         "new_size_cap": 0.0,
-        "reason": "Promotion uygulanmaz: command=WAIT"
+        "reason": "Promotion uygulanmaz: command=TACTICAL_LONG_SETUP"
+      },
+      "auto_tune_context": {
+        "available": false,
+        "applied": false,
+        "reason": "no_overrides"
       }
     }
   }

@@ -75,6 +75,56 @@ interface TradingState {
 
 type BannerMode = "waiting" | "managing_position" | "contradiction" | "risk_alert" | "learning";
 
+// AI Trade Opinion (ai_trade_opinion_v1) — net fikir katmanı
+interface AssetOpinion {
+  asset: string;
+  opinion: string;
+  conviction: string;
+  score: number;
+  why: string[];
+  against: string[];
+  trigger_needed: string;
+  invalidation: string;
+  suggested_action: string;
+}
+
+interface PositionOpinion {
+  pair: string;
+  side: string;
+  opinion: string;
+  conviction: string;
+  reason: string;
+  what_to_watch: string[];
+  invalidation: string;
+}
+
+interface TradeOpinion {
+  schema_version: string;
+  generated_at: string;
+  overall_view: string;
+  market_opinion: string;
+  asset_opinions: AssetOpinion[];
+  open_position_opinions: PositionOpinion[];
+  best_candidate: { asset: string; bias: string; reason: string; trigger: string; risk: string };
+  no_trade_reason: string;
+  next_3_triggers: string[];
+  what_would_change_my_mind: string[];
+  owner_brief: string;
+}
+
+const OPINION_STYLE: Record<string, string> = {
+  LONG_BIAS:   "text-emerald-300 border-emerald-700/50 bg-emerald-950/30",
+  HOLD:        "text-emerald-300 border-emerald-700/50 bg-emerald-950/30",
+  SHORT_BIAS:  "text-red-300 border-red-700/50 bg-red-950/30",
+  AVOID:       "text-red-300 border-red-700/50 bg-red-950/30",
+  CLOSE_WATCH: "text-red-300 border-red-700/50 bg-red-950/30",
+  REDUCE:      "text-amber-300 border-amber-700/50 bg-amber-950/30",
+  WAIT:        "text-eyay-dim border-eyay-border bg-eyay-raised/40",
+  WAIT_EVENT_CONFIRMATION: "text-amber-300 border-amber-700/50 bg-amber-950/20",
+  MANUAL_REVIEW: "text-eyay-blue border-blue-800/50 bg-blue-950/20",
+  ADD_ONLY_IF: "text-eyay-blue border-blue-800/50 bg-blue-950/20",
+};
+
 interface AgentBanner {
   mode:                BannerMode;
   headline:            string;
@@ -259,6 +309,7 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
 }) {
   // ── State ──────────────────────────────────────────────────────────────────
   const [banner,    setBanner]    = useState<AgentBanner | null>(null);
+  const [opinion,   setOpinion]   = useState<TradeOpinion | null>(null);
   const [insights,  setInsights]  = useState<AgentInsight[]>([]);
   const [decision,  setDecision]  = useState("");
   const [insightAt, setInsightAt] = useState<string>("");
@@ -278,6 +329,22 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
     }
     load();
     const id = setInterval(load, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  // ── AI Trade Opinion polling (60sn — backend cache ile uyumlu)
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/backend/agent/trade-opinion", { cache: "no-store" });
+        if (!res.ok) return;
+        const data: TradeOpinion = await res.json();
+        if (!cancelled) setOpinion(data);
+      } catch { /* silent */ }
+    }
+    load();
+    const id = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
@@ -569,6 +636,112 @@ export default function AgentCommandCenter({ onClose, headlines = [] }: {
               </span>
             </div>
           </section>
+
+          {/* ════════════════════════════════════════════════════════════
+              AI TRADE OPINION — net fikir katmanı (PAPER_SAFE, emir yok)
+             ════════════════════════════════════════════════════════════ */}
+          {opinion && (
+            <section className="rounded-2xl border border-cyan-900/40 bg-cyan-950/10 p-5" data-testid="ai-trade-opinion">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[9px] font-mono text-cyan-300/80 uppercase tracking-widest">
+                  🎯 AI Trade Fikrim
+                </p>
+                <span className="text-[8px] font-mono text-eyay-faint border border-eyay-border/60 rounded px-1.5 py-0.5">
+                  {opinion.overall_view} · PAPER_SAFE · emir yok
+                </span>
+              </div>
+              <p className="text-xs text-eyay-text leading-relaxed mb-4">{opinion.market_opinion}</p>
+
+              {/* Açık Pozisyon Görüşüm */}
+              {opinion.open_position_opinions.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
+                    Açık Pozisyon Görüşüm
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {opinion.open_position_opinions.map(po => (
+                      <div key={po.pair} className="rounded-xl border border-eyay-border/60 bg-eyay-raised/30 px-3 py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[11px] font-mono font-bold text-eyay-text">{po.pair} {po.side}</span>
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${OPINION_STYLE[po.opinion] ?? OPINION_STYLE.WAIT}`}>
+                            {po.opinion}
+                          </span>
+                          <span className="text-[8px] font-mono text-eyay-faint">conviction: {po.conviction}</span>
+                        </div>
+                        <p className="text-[10px] text-eyay-dim mt-1 leading-snug">{po.reason}</p>
+                        <p className="text-[9px] font-mono text-amber-400/70 mt-1">⚠ {po.invalidation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Asset fikirleri — kompakt çip satırı */}
+              <div className="mb-4">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
+                  Varlık Görüşleri
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {opinion.asset_opinions.map(ao => (
+                    <span
+                      key={ao.asset}
+                      title={`${ao.suggested_action} · skor ${ao.score} · ${ao.trigger_needed}`}
+                      className={`text-[9px] font-mono font-semibold px-2 py-1 rounded-lg border ${OPINION_STYLE[ao.opinion] ?? OPINION_STYLE.WAIT}`}
+                    >
+                      {ao.asset} · {ao.opinion} ({ao.conviction})
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* En İyi Yeni Aday */}
+              <div className="mb-4">
+                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                  En İyi Yeni Aday
+                </p>
+                {opinion.best_candidate.asset !== "NONE" ? (
+                  <p className="text-[11px] text-eyay-text leading-snug">
+                    <span className="font-mono font-bold text-cyan-300">{opinion.best_candidate.asset}</span>
+                    <span className="text-eyay-dim"> ({opinion.best_candidate.bias})</span>
+                    {" — "}{opinion.best_candidate.reason}
+                    <span className="text-eyay-faint"> · Tetik: {opinion.best_candidate.trigger}</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-eyay-dim leading-snug">
+                    Aday yok — {opinion.no_trade_reason}
+                  </p>
+                )}
+              </div>
+
+              {/* Neyi Bekliyorum / Fikrimi Ne Bozar */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {opinion.next_3_triggers.length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                      Neyi Bekliyorum?
+                    </p>
+                    <ul className="flex flex-col gap-1">
+                      {opinion.next_3_triggers.map((t, i) => (
+                        <li key={i} className="text-[10px] text-eyay-dim leading-snug">→ {t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {opinion.what_would_change_my_mind.length > 0 && (
+                  <div>
+                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                      Fikrimi Ne Bozar?
+                    </p>
+                    <ul className="flex flex-col gap-1">
+                      {opinion.what_would_change_my_mind.map((t, i) => (
+                        <li key={i} className="text-[10px] text-eyay-dim leading-snug">✕ {t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* ════════════════════════════════════════════════════════════
               FAZ 13 — PIYASA BAĞLAMI: fiyat / takvim / tetikleyici

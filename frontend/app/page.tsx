@@ -1,7 +1,7 @@
 import { fetchAIReport, fetchRegimeReport } from "@/lib/api";
 import AIAnalystReportPanel from "@/components/AIAnalystReport";
 import DecisionBanner from "@/components/DecisionBanner";
-import ScenarioPanel from "@/components/ScenarioPanel";
+import ScenarioPanelShell from "@/components/ScenarioPanelShell";
 import MacroPanel from "@/components/MacroPanel";
 import AssetGrid from "@/components/AssetGrid";
 import AsymmetryCard from "@/components/AsymmetryCard";
@@ -138,7 +138,7 @@ export default async function HomePage() {
 
             {/* 5 ── Senaryo  |  Teyit  |  Asimetri */}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_200px] gap-2 items-start">
-              <ScenarioPanel
+              <ScenarioPanelShell
                 scenarios={data.report.scenarios ?? []}
                 decision={data.report.decision}
               />

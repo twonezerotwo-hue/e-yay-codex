@@ -33,7 +33,7 @@ def _step(name: str, status: str = "success", result: dict | None = None) -> dic
 
 def _all_success_steps() -> list[dict]:
     names = [
-        "snapshot_capture", "agent_thesis", "position_recheck",
+        "snapshot_capture", "agent_thesis", "ai_trade_opinion", "position_recheck",
         "learning_candidate", "mistake_memory_finalize",
         "weekly_calibration", "auto_tune",
     ]
@@ -42,12 +42,13 @@ def _all_success_steps() -> list[dict]:
 
 def _mock_all_steps(monkeypatch, statuses: list[str] | None = None) -> None:
     """
-    Tüm 7 adım fonksiyonunu monkeypatch ile değiştirir.
+    Tüm 8 adım fonksiyonunu monkeypatch ile değiştirir.
     statuses: her adım için durum listesi (varsayılan: hepsi "success").
     """
     names = [
         "_run_step_snapshot_capture",
         "_run_step_agent_thesis",
+        "_run_step_ai_trade_opinion",
         "_run_step_position_recheck",
         "_run_step_learning_candidate",
         "_run_step_mistake_memory",
@@ -55,12 +56,12 @@ def _mock_all_steps(monkeypatch, statuses: list[str] | None = None) -> None:
         "_run_step_auto_tune",
     ]
     step_names = [
-        "snapshot_capture", "agent_thesis", "position_recheck",
+        "snapshot_capture", "agent_thesis", "ai_trade_opinion", "position_recheck",
         "learning_candidate", "mistake_memory_finalize",
         "weekly_calibration", "auto_tune",
     ]
     if statuses is None:
-        statuses = ["success"] * 7
+        statuses = ["success"] * 8
 
     for fn_name, step_name, status in zip(names, step_names, statuses):
         captured_name = step_name
@@ -96,7 +97,7 @@ def test_run_once_records_all_steps(monkeypatch):
     result = svc.run_once()
 
     assert "run_id" in result
-    assert len(result["steps"]) == 7
+    assert len(result["steps"]) == 8
     step_names = [s["name"] for s in result["steps"]]
     assert "snapshot_capture" in step_names
     assert "auto_tune" in step_names
@@ -110,7 +111,8 @@ def test_run_once_records_all_steps(monkeypatch):
 
 def test_run_once_continues_after_step_fail(monkeypatch):
     # Adım 2 (agent_thesis) fail, diğerleri success
-    statuses = ["success", "fail", "success", "success", "success", "success", "success"]
+    statuses = ["success", "fail", "success", "success",
+                "success", "success", "success", "success"]
     _mock_all_steps(monkeypatch, statuses)
 
     result = svc.run_once()
@@ -120,7 +122,7 @@ def test_run_once_continues_after_step_fail(monkeypatch):
     success = [s for s in steps if s["status"] == "success"]
     assert len(failed) == 1
     assert failed[0]["name"] == "agent_thesis"
-    assert len(success) == 6   # diğer 6 başarılı
+    assert len(success) == 7   # diğer 7 başarılı
 
     # Summary "partial" olmalı
     assert result["summary"]["status"] == "partial"
@@ -225,7 +227,7 @@ def test_steps_skip_gracefully_without_data(monkeypatch):
         result = svc.run_once()
 
     assert "run_id" in result
-    assert len(result["steps"]) == 7
+    assert len(result["steps"]) == 8
 
     # Crash yok — tüm adımlar tamamlandı
     for step in result["steps"]:

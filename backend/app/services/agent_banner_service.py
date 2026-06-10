@@ -743,9 +743,25 @@ def build_agent_banner() -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         pass
 
+    # AI Trade Opinion — headline net fikir olsun; "N pozisyon var" yetmez.
+    # risk_alert / contradiction güvenlik mesajlarını ezmez.
+    trade_opinion_brief = ""
+    try:
+        from app.services.ai_trade_opinion_service import (  # noqa: PLC0415
+            build_ai_trade_opinion,
+        )
+        opinion = build_ai_trade_opinion()
+        trade_opinion_brief = str(opinion.get("owner_brief") or "")
+        op_headline = str(opinion.get("market_opinion") or "")
+        if op_headline and mode in ("managing_position", "learning", "waiting"):
+            headline = f"🎯 {op_headline}"
+    except Exception:  # noqa: BLE001
+        _log.debug("agent_banner: trade opinion unavailable")
+
     return {
         "mode":                mode,
         "headline":            headline,
+        "trade_opinion_brief": trade_opinion_brief,
         "main_view":           main_view,
         "top_signals":         _extract_top_signals(ctx, mode),
         "contradictions":      _extract_contradictions(ctx),

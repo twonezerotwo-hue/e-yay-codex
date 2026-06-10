@@ -37,8 +37,7 @@ class AIAnalystReport:
 # Önbellek (15 dk)
 # ---------------------------------------------------------------------------
 
-_CACHE_TTL = 3000  # 50 dk — Groq 70b TPD 100k limitine göre %85 kullanım
-                   # (28 çağrı/gün × ~3k token = ~84k token, limit altında)
+_CACHE_TTL = 7200  # 2 saat — bkz. _GROQ_DAILY_CALL_BUDGET açıklaması
 _STALE_TTL = 14400  # 4 saatlik stale-while-error: rate-limit varsa eski raporu göster
 _cached_report: AIAnalystReport | None = None
 _cached_at: float = 0.0
@@ -67,14 +66,27 @@ def _set_cache(report: AIAnalystReport) -> None:
 
 # ---------------------------------------------------------------------------
 # Günlük Groq çağrı bütçesi — otomatik sayfa yenilemesi (30s/60s) Groq'u
-# günde onlarca kez tetiklemesin. TPD kotası AI raporu + stratejist + ajan
-# arasında PAYLAŞILIR; bu sayaç sadece AI raporunun payına sabit bir günlük
-# tavan koyar (varsayılan 24/gün — diske kalıcı, restart'ta sıfırlanmaz).
-# Tavan dolunca Groq hiç denenmez — zaten 429 dönecek isteği boşa harcamadan
-# doğrudan Claude'a / stale önbelleğe düşülür.
+# günde onlarca kez tetiklemesin.
+#
+# Ölçülen prompt boyutu (gerçek pipeline verisiyle): ~1700 token (girdi).
+# max_tokens=2500 (çıktı tavanı) → en kötü durumda ~4200 token/çağrı,
+# tipik kullanımda (gözlenen rapor uzunluklarına göre) ~2200-2700 token/çağrı.
+#
+# llama-3.3-70b-versatile ücretsiz katman: TPD = 100.000 token/gün. Bu kota
+# AI raporu + market stratejisti + agent arasında PAYLAŞILIR; AI raporuna
+# yaklaşık %40'lık bir pay (~40k token/gün) ayırıyoruz, gerisi diğer
+# servisler için kalsın:
+#   12 çağrı/gün × ~3450 token (ortalama) ≈ 41k token  → %41 — güvenli marj
+#   12 çağrı/gün × ~4200 token (en kötü)  ≈ 50k token  → %50 — yine limit altı
+#
+# _CACHE_TTL = 2 saat → sürekli trafikte doğal üst sınır = 24 çağrı/gün;
+# bu sayaç (varsayılan 12/gün) Groq'u günde en fazla ~2 saatte bir, gerçekte
+# ortalama ~her 2 saatte bir dener. Tavan dolunca Groq hiç denenmez — zaten
+# 429 dönecek isteği boşa harcamadan doğrudan Claude'a / stale önbelleğe
+# düşülür. Diske kalıcı, restart'ta sıfırlanmaz.
 # ---------------------------------------------------------------------------
 
-_GROQ_DAILY_CALL_BUDGET = int(os.environ.get("AI_REPORT_GROQ_DAILY_BUDGET", "24"))
+_GROQ_DAILY_CALL_BUDGET = int(os.environ.get("AI_REPORT_GROQ_DAILY_BUDGET", "12"))
 _BUDGET_FILE = Path(__file__).resolve().parents[2] / "data" / "groq_daily_budget.json"
 _budget_date = ""
 _budget_used = 0
@@ -269,7 +281,7 @@ def _call_groq_model(
         system_prompt, temp = _build_system_prompt(persona_key, regime)
         resp = client.chat.completions.create(
             model=model,
-            max_tokens=2500,
+            max_tokens=1800,
             temperature=temp,
             response_format={"type": "json_object"},
             messages=[

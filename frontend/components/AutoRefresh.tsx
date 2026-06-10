@@ -5,7 +5,8 @@
  *
  * Önemli: sayfa yenileme Groq'a istek YAPMAZ — backend cache hit olur.
  * Groq tüketimi cache TTL'ine bağlı:
- *   • AI Yorumu : 60 dk cache → 24 çağrı/gün → ~72k token (70b limit 100k)
+ *   • AI Yorumu : 2 saat cache → 12 çağrı/gün → ~41k token (70b limit 100k,
+ *                 stratejist + agent ile paylaşılan kotanın ~%40'ı)
  *   • Haber çev.: 6 saat cache → 4 çağrı/gün  → ~18k token (8b limit 500k)
  * Yani 30s'lik yenileme bile Groq'a yük getirmez, sadece RSC re-render.
  */
