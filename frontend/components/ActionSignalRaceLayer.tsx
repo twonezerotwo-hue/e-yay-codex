@@ -180,10 +180,24 @@ export default function ActionSignalRaceLayer({ report }: Props) {
   const total      = confirmed + pending + blocking;
 
   // Atlet x pozisyonu (track yüzdesi). Dominant kararın tabanı + sayaç oranı.
+  // Pist semantiği: sağ uçta BARİYER (risk). Risk-off kararlarda (KAPAT/KÜÇÜLT)
+  // blocking ARTTIKÇA atlet bariyere YAKLAŞMALI; eski tek formül (confirmed↑ →
+  // sağ, blocking↑ → sol) bu kararlar için yönü tersine çeviriyordu. Karara özel
+  // boost ile görsel yön düzeltildi.
   const baseByDecision: Record<Decision, number> = {
     AÇIL: 70, BEKLE: 18, KÜÇÜLT: 50, KAPAT: 85,
   };
-  const ratioBoost = total > 0 ? (confirmed / total) * 20 - (blocking / total) * 14 : 0;
+  let ratioBoost = 0;
+  if (decision === "KAPAT") {
+    // Risk kararı: blocking arttıkça bariyere yaklaş
+    ratioBoost = total > 0 ? (blocking / total) * 9 : 0;
+  } else if (decision === "KÜÇÜLT") {
+    // Defansif: blocking ileri iter, confirmed geri çeker
+    ratioBoost = total > 0 ? (blocking / total) * 4 - (confirmed / total) * 4 : 0;
+  } else {
+    // AÇIL / BEKLE: confirmed ilerletir, blocking geri çeker
+    ratioBoost = total > 0 ? (confirmed / total) * 20 - (blocking / total) * 14 : 0;
+  }
   const xPct = clampPct((baseByDecision[decision] ?? 30) + ratioBoost);
 
   const time = report.generated_at
