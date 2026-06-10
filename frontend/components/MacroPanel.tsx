@@ -38,9 +38,11 @@ function signalColor(value: string, label: string): string {
 
 // ── Ana bileşen ──────────────────────────────────────────────────────────────
 
-export default function MacroPanel({ macro, appetite }: {
+export default function MacroPanel({ macro, appetite, showUnified = true }: {
   macro: MacroLayer;
   appetite: RiskAppetiteLayer;
+  /** Birleşik Okuma alt bloğunu render et — ana dashboardda false geçilir. */
+  showUnified?: boolean;
 }) {
   const { t } = useLanguage();
   const rb = REGIME_BADGE[macro.regime];
@@ -131,7 +133,9 @@ export default function MacroPanel({ macro, appetite }: {
     {/* ── Birleşik Okuma — Makro Zemin (Katman 2) + Risk İştahı (Katman 3) sentezi ──
          Tamamen mevcut internal enum'lardan (regime + appetite) türetilir;
          Agent → Paper Trading bağlantısı burada GÖSTERİLMEZ — sadece kullanıcıya
-         okunabilir bir sentez sunulur. */}
+         okunabilir bir sentez sunulur. Ana dashboardda gizli; Agent paneli altındaki
+         Sistem Kontrolleri accordion'unda aktif edilir. */}
+    {showUnified && (
     <div className="bg-eyay-surface rounded-2xl border border-eyay-border shadow-card overflow-hidden">
       <div className="px-5 py-4 border-b border-eyay-border">
         <p className="text-2xs text-eyay-blue uppercase tracking-widest font-semibold">{t.unifiedReading.title}</p>
@@ -143,6 +147,7 @@ export default function MacroPanel({ macro, appetite }: {
         <UnifiedRow label={t.unifiedReading.impact}  value={unified.impact} />
       </div>
     </div>
+    )}
 
     </div>
   );

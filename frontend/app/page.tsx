@@ -17,8 +17,6 @@ import AgentInsightBar from "@/components/AgentInsightBar";
 import AutoRefresh from "@/components/AutoRefresh";
 import PaperTradingTicker from "@/components/PaperTradingTicker";
 import WarBreakingAlert from "@/components/WarBreakingAlert";
-import LearningPanel from "@/components/LearningPanel";
-import SystemHealthPanel from "@/components/SystemHealthPanel";
 import { MonitoringBanner, SystemHealthBar } from "@/components/SystemHealthBar";
 
 // Cache'i kapat — backend kendi 5dk/15dk cache'lerini yönetiyor.
@@ -59,7 +57,11 @@ export default async function HomePage() {
     <div className="min-h-screen bg-eyay-bg">
 
       {/* 🤖 AGENT — proaktif gözlem bandı (en üstte sticky) */}
-      <AgentInsightBar headlines={data?.report?.news_headlines ?? []} />
+      <AgentInsightBar
+        headlines={data?.report?.news_headlines ?? []}
+        macro={data?.report?.macro_layer}
+        appetite={data?.report?.appetite_layer}
+      />
 
       <Header
         totalSnapshots={data?.meta.total_snapshots}
@@ -122,11 +124,11 @@ export default async function HomePage() {
                 <MacroPanel
                   macro={data.report.macro_layer}
                   appetite={data.report.appetite_layer}
+                  showUnified={false}
                 />
-                {/* FAZ 8 — Öğrenme & Auto-Tune özeti */}
-                <LearningPanel />
-                {/* FAZ 10 — Sistem sağlık özeti */}
-                <SystemHealthPanel />
+                {/* FAZ 21 — LearningPanel, SystemHealthPanel ve "Birleşik Okuma"
+                    Agent paneli altındaki "Sistem Kontrolleri" accordion'una
+                    taşındı. Backend/veri üretimi değişmedi. */}
               </div>
               <div className="sticky top-16 self-start">
                 <EventCalendarPanelShell catalysts={data.report.upcoming_catalysts ?? []} />
