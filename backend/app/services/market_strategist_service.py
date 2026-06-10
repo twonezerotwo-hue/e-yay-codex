@@ -67,6 +67,11 @@ class StrategistContext:
     generated_at:       str
     regime:             str | None
     decision:           str | None
+    # Bağlamın kaynağı: "current" (canlı pipeline) | "replay" (geçmiş snapshot).
+    # Şu an replay bağlı DEĞİL; snapshot_id verilse bile veri güncel pipeline'dan
+    # gelir. Kontratı dürüst tutmak için aşağıdaki iki alan açıkça raporlanır.
+    context_source:     str                      = "current"
+    snapshot_id_status: str | None               = None  # "reserved_not_active" | None
     consensus_summary:  list[dict[str, Any]]     = field(default_factory=list)
     chart_patterns:     dict[str, dict]          = field(default_factory=dict)
     chart_readings:     dict[str, dict]          = field(default_factory=dict)
@@ -236,11 +241,21 @@ def build_context(
     except Exception:
         missing.append("audit")
 
+    # snapshot_id replay henüz bağlı değil — kullanıcı bir ID gönderse bile veri
+    # güncel pipeline'dan gelir. Sessizce "replay yapılıyormuş" izlenimi vermemek
+    # için durumu açıkça işaretle ve missing_data'ya not düş (LLM de görsün).
+    snapshot_id_status: str | None = None
+    if snapshot_id:
+        snapshot_id_status = "reserved_not_active"
+        missing.append("snapshot_replay:reserved_not_active")
+
     return StrategistContext(
         snapshot_id        = snapshot_id,
         generated_at       = datetime.now(UTC).isoformat(),
         regime             = regime,
         decision           = decision,
+        context_source     = "current",
+        snapshot_id_status = snapshot_id_status,
         consensus_summary  = consensus_summary,
         chart_patterns     = chart_patterns,
         chart_readings     = chart_readings,
@@ -330,6 +345,8 @@ If the provided context is too thin to support a scenario, return:
 def _build_user_prompt(question: str, ctx: StrategistContext) -> str:
     blob = {
         "snapshot_id":        ctx.snapshot_id,
+        "context_source":     ctx.context_source,
+        "snapshot_id_status": ctx.snapshot_id_status,
         "generated_at":       ctx.generated_at,
         "regime":             ctx.regime,
         "decision":           ctx.decision,

@@ -72,12 +72,15 @@ def market_strategist_chat(body: ChatRequest) -> dict:
         "safety_notice":        _PAPER_SAFE_NOTICE,
         # context meta (no raw internal data)
         "context_meta": {
-            "snapshot_id":   ctx.snapshot_id,
-            "generated_at":  ctx.generated_at,
-            "regime":        ctx.regime,
-            "decision":      ctx.decision,
-            "missing_data":  ctx.missing_data,
-            "symbols":       body.symbols or list(mss._DEFAULT_SYMBOLS),
+            "snapshot_id":        ctx.snapshot_id,
+            # Bağlam kaynağı + snapshot durumu — replay henüz bağlı değil.
+            "context_source":     ctx.context_source,       # "current"
+            "snapshot_id_status": ctx.snapshot_id_status,   # "reserved_not_active" | None
+            "generated_at":       ctx.generated_at,
+            "regime":             ctx.regime,
+            "decision":           ctx.decision,
+            "missing_data":       ctx.missing_data,
+            "symbols":            body.symbols or list(mss._DEFAULT_SYMBOLS),
         },
         # strategist output
         "answer":                 resp_dict["answer"],
