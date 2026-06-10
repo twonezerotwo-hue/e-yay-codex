@@ -125,11 +125,15 @@ export default function CapitalFlowAnimatedLayer({ onDegraded }: Props) {
       data-reduced-motion={reduced ? "true" : "false"}
       data-mobile={isMobile ? "true" : "false"}
     >
-      {/* DEBUG header — kullanıcı doğru component'ı gördüğünü teyit etsin */}
-      <div className="flex items-center justify-between border-b border-emerald-700/30 pb-2 mb-1">
-        <span className="text-[10px] font-mono text-emerald-300 uppercase tracking-widest">
-          🌐 Animated Layer ACTIVE · nodes: {data.nodes.length} · flows: {data.flows.length}
-        </span>
+      <div className="flex items-center justify-between border-b border-eyay-border/40 pb-2 mb-1">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-mono text-eyay-dim uppercase tracking-widest">
+            Animasyonlu Sermaye Akışı
+          </span>
+          <span className="text-[9px] font-mono text-eyay-faint">
+            {data.nodes.length} varlık · {data.flows.length} akış · {data.execution_mode}
+          </span>
+        </div>
         <span className="text-[9px] font-mono text-eyay-faint">
           conviction {data.conviction}/5 · {data.primary_flow}
         </span>

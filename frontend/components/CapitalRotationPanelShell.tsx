@@ -44,10 +44,9 @@ export default function CapitalRotationPanelShell({ rotation }: Props) {
 
   return (
     <div className="space-y-2" data-testid="cap-rotation-shell">
-      {/* DEBUG marker — Shell render edildiğini görsel teyit */}
-      <div className="flex items-center justify-between rounded-lg border border-emerald-700/30 bg-emerald-950/10 px-3 py-1.5">
-        <span className="text-[10px] font-mono text-emerald-300 uppercase tracking-widest">
-          🛰 Sermaye Rotasyonu · CapitalRotationPanelShell ACTIVE
+      <div className="flex items-center justify-between rounded-lg border border-eyay-border/40 bg-eyay-raised/20 px-3 py-1.5">
+        <span className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
+          Sermaye Rotasyonu
         </span>
         <div className="flex items-center gap-1.5">
           <button
