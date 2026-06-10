@@ -48,6 +48,7 @@ from app.api.paper_trading import router as paper_trading_router
 from app.api.market_strategist import router as market_strategist_router
 from app.api.paper_decision import router as paper_decision_router
 from app.api.signal_attribution import router as signal_attribution_router
+from app.api.dashboard_state import router as dashboard_state_router
 from app.api.regime_report import router as regime_report_router
 from app.api.snapshot_replay import router as snapshot_replay_router
 from app.core.config import get_settings
@@ -119,6 +120,7 @@ app.include_router(health_router)
 app.include_router(alerts_router, prefix=settings.api_prefix)
 app.include_router(ceo_report_router, prefix=settings.api_prefix)
 app.include_router(regime_report_router, prefix=settings.api_prefix)
+app.include_router(dashboard_state_router, prefix=settings.api_prefix)
 app.include_router(ai_report_router, prefix=settings.api_prefix)
 app.include_router(chat_router, prefix=settings.api_prefix)
 app.include_router(agent_insight_router, prefix=settings.api_prefix)
