@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { AsymmetrySignal } from "@/lib/types";
 import { useLanguage } from "@/contexts/LanguageContext";
+import {
+  loadPrevDisplayedRatio,
+  savePrevDisplayedRatio,
+  smoothRatio,
+  type SmoothResult,
+} from "@/lib/normalizeAsymmetry";
 
 const STYLES = {
   green:  { ring: "border-emerald-700", label: "text-emerald-400", bar: "bg-emerald-500", glow: "shadow-emerald-900/40" },
@@ -27,6 +33,8 @@ export default function AsymmetryCard({ asymmetry }: { asymmetry: AsymmetrySigna
   const { t } = useLanguage();
   const [showFormula, setShowFormula] = useState(false);
   const prevRatioRef = useRef<number | null>(null);
+  // FAZ 23 — Display smoothing: gerçek raw ratio'yu sakla, UI'da yumuşatılmış değeri göster.
+  const [smooth, setSmooth] = useState<SmoothResult | null>(null);
 
   const suspect   = !asymmetry || isSuspect(asymmetry);
   const prevRatio = prevRatioRef.current;
@@ -36,13 +44,20 @@ export default function AsymmetryCard({ asymmetry }: { asymmetry: AsymmetrySigna
     prevRatio !== null &&
     (asymmetry.ratio / prevRatio > 2.5 || prevRatio / asymmetry.ratio > 2.5);
 
-  // Effect runs after every render to track the last valid ratio.
-  // No deps array is intentional — we always want the latest confirmed value.
   useEffect(() => {
-    if (asymmetry && !isSuspect(asymmetry)) {
-      prevRatioRef.current = asymmetry.ratio;
+    if (!asymmetry || isSuspect(asymmetry)) return;
+    const prev = loadPrevDisplayedRatio();
+    const next = smoothRatio(asymmetry.ratio, prev);
+    setSmooth(next);
+    savePrevDisplayedRatio(next.displayed);
+    prevRatioRef.current = asymmetry.ratio;
+    if (next.rawJump && typeof console !== "undefined") {
+      console.warn(
+        `[asymmetry] raw jump: prev=${prev} → raw=${asymmetry.ratio} ` +
+        `(displayed clamp=${next.displayed}, smoothed=${next.smoothed})`,
+      );
     }
-  });
+  }, [asymmetry?.ratio]);
 
   if (!asymmetry) return null;
 
@@ -101,20 +116,29 @@ export default function AsymmetryCard({ asymmetry }: { asymmetry: AsymmetrySigna
         ) : (
           /* ── Normal görünüm ── */
           <div className="space-y-3">
-            {bigJump && prevRatio !== null && (
-              <div className="text-[9px] font-mono text-amber-400/80 border border-amber-900/40 bg-amber-950/20 rounded px-2 py-1 leading-snug">
-                ⚠ Asimetri değişimi yüksek: {prevRatio.toFixed(1)}× → {asymmetry.ratio.toFixed(1)}×
+            {(bigJump || smooth?.rawJump) && prevRatio !== null && (
+              <div className="text-[9px] font-mono text-amber-400/80 border border-amber-900/40 bg-amber-950/20 rounded px-2 py-1 leading-snug"
+                   title={`Ham oran: ${asymmetry.ratio.toFixed(2)}× · Önceki: ${prevRatio.toFixed(2)}×`}>
+                ⚠ Ham asimetri değişimi yüksek (yumuşatıldı): {prevRatio.toFixed(1)}× → {asymmetry.ratio.toFixed(1)}×
               </div>
             )}
 
-            {/* Büyük oran */}
+            {/* Büyük oran — display smoothed; raw tooltip'te */}
             <div className="flex items-end justify-between gap-3">
               <div>
-                <span className={`font-mono font-black text-3xl leading-none ${s.label}`}>
-                  {asymmetry.ratio.toFixed(1)}
+                <span
+                  className={`font-mono font-black text-3xl leading-none ${s.label}`}
+                  title={`Ham oran: ${asymmetry.ratio.toFixed(2)}×${smooth?.smoothed ? " (gösterim yumuşatıldı)" : ""}`}
+                >
+                  {(smooth?.displayed ?? asymmetry.ratio).toFixed(1)}
                   <span className="text-base font-bold">×</span>
                 </span>
                 <p className={`text-[10px] font-semibold mt-1 ${s.label}`}>{asymmetry.label}</p>
+                {smooth?.smoothed && (
+                  <p className="text-[8px] font-mono text-amber-400/70 mt-0.5">
+                    ham: {asymmetry.ratio.toFixed(2)}×
+                  </p>
+                )}
               </div>
               <div className="text-right space-y-0.5">
                 <div className="text-[10px] font-mono">
