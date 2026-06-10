@@ -10,7 +10,8 @@
  */
 import { useEffect, useState } from "react";
 
-import type { AssetSignal, TechnicalInsight } from "@/lib/types";
+import MacroRiskPulse from "@/components/MacroRiskPulse";
+import type { AssetSignal, MacroLayer, RiskAppetiteLayer, TechnicalInsight } from "@/lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -257,9 +258,12 @@ function SupportBar({ s }: { s: AssetSignal }) {
 interface Props {
   signals:      AssetSignal[];
   techInsights?: TechnicalInsight[];
+  /** FAZ 22 — Macro/Risk Pulse banner için opsiyonel. */
+  macro?:       MacroLayer;
+  appetite?:    RiskAppetiteLayer;
 }
 
-export default function CommandSignalCardsLayer({ signals, techInsights = [] }: Props) {
+export default function CommandSignalCardsLayer({ signals, techInsights = [], macro, appetite }: Props) {
   const [selected, setSelected] = useState(0);
   const [animate,  setAnimate]  = useState(false);
   const [isMobile, setMobile]   = useState(false);
@@ -380,8 +384,8 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
           {/* Kartlar — Desktop: 3D carousel; Mobile: prev/next + scroll */}
           {!isMobile ? (
             <div
-              className="relative z-10 h-[200px] overflow-hidden"
-              style={{ perspective: "1400px", perspectiveOrigin: "50% 38%" }}
+              className="relative z-10 h-[240px] overflow-hidden"
+              style={{ perspective: "1500px", perspectiveOrigin: "50% 38%" }}
               onMouseEnter={() => setPaused(true)}
               onMouseLeave={() => setPaused(false)}
               onFocusCapture={() => setPaused(true)}
@@ -393,18 +397,18 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
                 if (offset > n / 2) offset -= n;
                 if (offset < -n / 2) offset += n;
                 const abs = Math.abs(offset);
-                const tx  = offset * 22;       // % yatay (kompakt)
-                const tz  = -abs * 80;         // derinlik px
-                const ry  = offset * -10;      // hafif yaw
-                const sc  = abs === 0 ? 1 : abs === 1 ? 0.74 : 0.54;
-                const op  = abs === 0 ? 1 : abs === 1 ? 0.7  : 0.30;
+                const tx  = offset * 32;       // % yatay — fan-out genişledi
+                const tz  = -abs * 100;        // derinlik
+                const ry  = offset * -12;      // yaw
+                const sc  = abs === 0 ? 1.05 : abs === 1 ? 0.88 : 0.74;
+                const op  = abs === 0 ? 1 : abs === 1 ? 0.85 : 0.52;
                 return (
                   <div
                     key={p.code}
                     className="absolute top-2 left-1/2 transition-all duration-700 ease-out"
                     style={{
-                      width: "180px",
-                      marginLeft: "-90px",
+                      width: "190px",
+                      marginLeft: "-95px",
                       transform: `translateX(${tx}%) translateZ(${tz}px) rotateY(${ry}deg) scale(${sc})`,
                       opacity: op,
                       zIndex: 100 - abs,
@@ -462,29 +466,68 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
             </div>
           )}
 
-          {/* Holografik komut masası — kompakt zemin */}
+          {/* Holografik AI Trading Operations platformu — premium katmanlı */}
           {!isMobile && (
-            <div aria-hidden="true" className="relative h-[36px] mt-1 overflow-hidden">
+            <div aria-hidden="true" className="relative h-[58px] mt-1 overflow-hidden">
+              {/* Dış halka — soft bloom */}
               <div
                 className="absolute left-1/2 top-0 -translate-x-1/2 rounded-[50%]"
                 style={{
-                  width: "70%", height: "60px",
-                  background: "radial-gradient(ellipse at center, rgba(34,211,238,0.22), rgba(34,211,238,0.06) 55%, transparent 78%)",
-                  border: "1px solid rgba(34,211,238,0.30)",
-                  boxShadow: "0 0 28px rgba(34,211,238,0.18), inset 0 0 36px rgba(34,211,238,0.08)",
-                  animation: animate ? "cs-breathe 4s ease-in-out infinite" : undefined,
+                  width: "88%", height: "92px",
+                  background: "radial-gradient(ellipse at center, rgba(34,211,238,0.18), rgba(34,211,238,0.05) 55%, transparent 78%)",
+                  filter: "blur(0.4px)",
+                  animation: animate ? "cs-breathe 4.5s ease-in-out infinite" : undefined,
                 }}
               />
+              {/* Orta ana platform halkası */}
               <div
-                className="absolute left-1/2 top-1.5 -translate-x-1/2 rounded-[50%] border border-cyan-400/25"
+                className="absolute left-1/2 top-2 -translate-x-1/2 rounded-[50%]"
                 style={{
-                  width: "50%", height: "40px",
-                  animation: animate ? "cs-spin 28s linear infinite" : undefined,
+                  width: "70%", height: "76px",
+                  background: "radial-gradient(ellipse at center, rgba(34,211,238,0.28), rgba(34,211,238,0.08) 55%, transparent 80%)",
+                  border: "1px solid rgba(34,211,238,0.45)",
+                  boxShadow: "0 0 32px rgba(34,211,238,0.22), inset 0 0 44px rgba(34,211,238,0.12)",
+                }}
+              />
+              {/* Dönen dashed ring */}
+              <div
+                className="absolute left-1/2 top-3.5 -translate-x-1/2 rounded-[50%] border border-cyan-400/30"
+                style={{
+                  width: "54%", height: "60px",
+                  animation: animate ? "cs-spin 32s linear infinite" : undefined,
                   borderStyle: "dashed",
                 }}
               />
-              <p className="absolute left-1/2 top-[14px] -translate-x-1/2 text-[7px] font-mono text-cyan-300/55 uppercase tracking-[0.35em] whitespace-nowrap">
-                ◇ AI Trading Operations ◇
+              {/* İç dönen ters yön */}
+              <div
+                className="absolute left-1/2 top-5 -translate-x-1/2 rounded-[50%] border border-cyan-300/20"
+                style={{
+                  width: "40%", height: "42px",
+                  animation: animate ? "cs-spin 22s linear infinite reverse" : undefined,
+                }}
+              />
+              {/* Enerji çekirdeği */}
+              <div
+                className="absolute left-1/2 top-[26px] -translate-x-1/2 rounded-full"
+                style={{
+                  width: "10px", height: "10px",
+                  background: "radial-gradient(circle, #67e8f9, rgba(34,211,238,0.4) 60%, transparent)",
+                  boxShadow: "0 0 10px rgba(34,211,238,0.8), 0 0 18px rgba(34,211,238,0.4)",
+                  animation: animate ? "cs-breathe 2s ease-in-out infinite" : undefined,
+                }}
+              />
+              {/* Scanline */}
+              {animate && (
+                <div
+                  className="absolute left-0 top-2 h-[76px] w-[60px] pointer-events-none"
+                  style={{
+                    background: "linear-gradient(90deg, transparent, rgba(34,211,238,0.10), transparent)",
+                    animation: "cs-scan 7s linear infinite",
+                  }}
+                />
+              )}
+              <p className="absolute left-1/2 bottom-1.5 -translate-x-1/2 text-[7px] font-mono text-cyan-300/65 uppercase tracking-[0.35em] whitespace-nowrap">
+                ◇ AI TRADING OPERATIONS ◇
               </p>
             </div>
           )}
@@ -542,6 +585,11 @@ export default function CommandSignalCardsLayer({ signals, techInsights = [] }: 
           )}
         </div>
       )}
+
+      {/* FAZ 22 — Macro / Risk Pulse rotating banner */}
+      <div className="px-3 pt-2 pb-2 border-t border-eyay-border/30 bg-black/20">
+        <MacroRiskPulse macro={macro} appetite={appetite} />
+      </div>
 
       {/* Footer */}
       <div className="px-4 py-2 border-t border-eyay-border/30 bg-black/30">

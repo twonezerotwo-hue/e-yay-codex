@@ -12,7 +12,7 @@ import { lazy, Suspense, useState } from "react";
 
 import AssetGrid from "@/components/AssetGrid";
 import CommandSignalsErrorBoundary from "@/components/CommandSignalsErrorBoundary";
-import type { AssetSignal, TechnicalInsight } from "@/lib/types";
+import type { AssetSignal, MacroLayer, RiskAppetiteLayer, TechnicalInsight } from "@/lib/types";
 
 const CommandSignalCardsLayer = lazy(
   () => import("@/components/CommandSignalCardsLayer"),
@@ -23,9 +23,12 @@ type ViewMode = "cards" | "list";
 interface Props {
   signals:       AssetSignal[];
   techInsights?: TechnicalInsight[];
+  /** FAZ 22 — Macro / Risk Pulse rotating banner için opsiyonel. */
+  macro?:        MacroLayer;
+  appetite?:     RiskAppetiteLayer;
 }
 
-export default function CommandSignalsPanelShell({ signals, techInsights = [] }: Props) {
+export default function CommandSignalsPanelShell({ signals, techInsights = [], macro, appetite }: Props) {
   const [mode, setMode]               = useState<ViewMode>("cards");
   const [degradedMsg, setDegradedMsg] = useState<string | null>(null);
 
@@ -91,7 +94,7 @@ export default function CommandSignalsPanelShell({ signals, techInsights = [] }:
           onError={(err) => fallbackToList(err?.message || "render_error")}
         >
           <Suspense fallback={legacyView}>
-            <CommandSignalCardsLayer signals={signals} techInsights={techInsights} />
+            <CommandSignalCardsLayer signals={signals} techInsights={techInsights} macro={macro} appetite={appetite} />
           </Suspense>
         </CommandSignalsErrorBoundary>
       )}
