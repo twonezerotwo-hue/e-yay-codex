@@ -2,8 +2,9 @@
 AI Analyst Report API
 GET /api/v1/ai-report/current
 
-Claude claude-opus-4-7 ile Katman 1+2+3 + jeopolitik haber analizi.
-Önbellek: 15 dakika (pahalı istek — sık yenileme yok).
+Groq llama-3.3-70b (primary) → Claude haiku (fallback) ile Katman 1+2+3 +
+jeopolitik haber analizi.
+Önbellek: 2 saat, stale fallback: 4 saat (pahalı istek + günlük token bütçesi).
 Execution: OFF / NO_EXECUTION
 """
 from __future__ import annotations
@@ -67,6 +68,53 @@ def _to_dict(obj: object) -> object:
 
 
 # ---------------------------------------------------------------------------
+# Consensus skoru — asset status dağılımından türetilir
+# ---------------------------------------------------------------------------
+
+def _derive_consensus_score_from_assets(assets: list[dict]) -> float | None:
+    """Asset signal status'larından 0-100 / 50-merkezli consensus skoru üretir.
+
+    `agent_confidence._consensus_strength()` skoru "50'den uzaklık = güç" olarak
+    okur (50→0 güç, 0/100→100 güç). Bu yüzden skoru DİREKT yön (CONFIRMED=1.0,
+    BLOCKING=0.0) olarak vermek YANLIŞ olur: tek taraflı BLOCKING 0'a gider →
+    50'den uzak → confidence YAPAY yükselir. Oysa blocking güçlü ama NEGATİF
+    sinyaldir; confidence'ı şişirmemeli.
+
+    Tasarım: yalnızca DESTEKLEYİCİ (confirmable) consensus 50'nin üstüne taşır.
+      • CONFIRMED → tam pozitif kanıt
+      • PENDING   → zayıf pozitif kanıt
+      • NEUTRAL   → nötr (50 civarı)
+      • BLOCKING  → karşıt kanıt, skoru 50'ye geri çeker (yukarı taşımaz)
+      • VERİ_YOK  → consensus'a dahil edilmez ama veri kapsamını (coverage)
+                    düşürür → düşük kapsam = düşük güven.
+
+    Dönüş: 0-100 skor; hiç değerlendirilebilir status yoksa None.
+    """
+    statuses = [a.get("status") for a in assets if isinstance(a, dict)]
+    statuses = [s for s in statuses if s]
+    if not statuses:
+        return None
+
+    total = len(statuses)
+    known = [s for s in statuses if s != "VERİ_YOK"]
+    if not known:
+        return None  # tamamen veri yok → consensus hesaplanamaz
+
+    n_confirmed = known.count("CONFIRMED")
+    n_pending   = known.count("PENDING")
+    n_blocking  = known.count("BLOCKING")
+    denom = len(known)  # CONFIRMED + PENDING + BLOCKING + NEUTRAL
+
+    pos = n_confirmed * 1.0 + n_pending * 0.4   # destekleyici kanıt
+    neg = n_blocking * 1.0                       # karşıt kanıt
+    agreement = (pos - neg) / denom              # [-1, +1]
+    directional = max(0.0, agreement)            # BLOCKING confidence'ı şişirmesin
+
+    coverage = len(known) / total                # VERİ_YOK oranı arttıkça düşer
+    return round(50.0 + 50.0 * directional * coverage, 1)
+
+
+# ---------------------------------------------------------------------------
 # Endpoint
 # ---------------------------------------------------------------------------
 
@@ -77,8 +125,8 @@ def get_ai_report(
     provider: str | None = Query(default=None, description="Manuel sağlayıcı seçimi: auto (varsayılan, Groq→Claude) | groq | claude"),
 ) -> JSONResponse:
     """
-    Piyasa katmanları + jeopolitik haberleri okuyup Claude ile Türkçe analiz üretir.
-    Sonuç 15 dakika önbellekte tutulur.
+    Piyasa katmanları + jeopolitik haberleri okuyup LLM ile Türkçe analiz üretir.
+    Sonuç 2 saat önbellekte tutulur (stale fallback 4 saat).
     """
     _ensure_repo_root_on_path()
 
@@ -103,12 +151,16 @@ def get_ai_report(
         def commit(self): pass
         def rollback(self): pass
 
-    provider = SourceRegistryBoundProviderAdapter(
+    # NOT: `provider` query param'ı LLM sağlayıcı seçimidir (auto|groq|claude).
+    # Market adapter'ı AYRI bir isimle (`market_provider`) tutulur; aksi halde
+    # `provider` shadow'lanır ve generate_ai_report'a string yerine adapter objesi
+    # gider → manuel sağlayıcı seçimi sessizce "auto"ya düşerdi.
+    market_provider = SourceRegistryBoundProviderAdapter(
         base_provider,
         build_provider_source_bindings(source_registry_entries),
     )
     ingestion_result = ProviderIngestionService(
-        MarketSnapshotService(_FakeSession()), provider
+        MarketSnapshotService(_FakeSession()), market_provider
     ).run()
 
     snapshots = tuple(p.snapshot for p in ingestion_result.persisted_snapshots)
@@ -170,15 +222,12 @@ def get_ai_report(
         max_snapshot_age_s=1200,
     )
 
-    # Asset signal'lardan ortalama skor → consensus_score temsilcisi
-    consensus_score_avg: float | None = None
-    try:
-        vals = [a.get("score") for a in assets_list if isinstance(a, dict)]
-        vals = [float(v) for v in vals if v is not None]
-        if vals:
-            consensus_score_avg = sum(vals) / len(vals)
-    except Exception:
-        consensus_score_avg = None
+    # Asset signal status'larından consensus skoru türet.
+    # NOT: AssetSignal'da `score` alanı yok; eski `a.get("score")` hep None
+    # döndürdüğü için consensus boyutu ölüydü. _derive_consensus_score_from_assets
+    # status dağılımından 0-100 / 50-merkezli (agent_confidence._consensus_strength
+    # sözleşmesi) bir skor üretir. BLOCKING confidence'ı şişirmez (aşağı çeker).
+    consensus_score_avg = _derive_consensus_score_from_assets(assets_list)
 
     confidence = agent_confidence.compute(
         data_quality_score=dq_pct,
@@ -232,7 +281,9 @@ def get_ai_report(
             },
             snapshot_id=f"ai_report::{generated_at}",
             contract_version=agent_self_validator.DEFAULT_CONTRACT_VERSION,
-            model="claude-opus-4-7",
+            # Gerçek kullanılan modeli kaydet (Groq llama / claude-haiku / stale)
+            # — sabit "claude-opus-4-7" yanıltıcıydı.
+            model=getattr(ai_report, "model", None) or "(unknown)",
             validation=validation.to_dict(),
             confidence=confidence.to_dict(),
             duration_ms=(_time.monotonic() - start_t) * 1000.0,

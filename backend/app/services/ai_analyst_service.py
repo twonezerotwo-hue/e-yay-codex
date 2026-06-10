@@ -1,7 +1,7 @@
 """
 AI Analist Servisi — E-YAY BrainChain.
 Token-minimal: sıkıştırılmış prompt, max_tokens=2500, günlük öğrenme döngüsü.
-Önbellek: 15 dakika. Execution: OFF / NO_EXECUTION.
+Önbellek: 2 saat, stale fallback: 4 saat. Execution: OFF / NO_EXECUTION.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class AIAnalystReport:
 
 
 # ---------------------------------------------------------------------------
-# Önbellek (15 dk)
+# Önbellek (2 saat / stale 4 saat)
 # ---------------------------------------------------------------------------
 
 _CACHE_TTL = 7200  # 2 saat — bkz. _GROQ_DAILY_CALL_BUDGET açıklaması
@@ -189,7 +189,7 @@ def _build_prompt(
         rot_block = (
             f"\nSERMAYE: akış={rotation.primary_flow}"
             f"{' → ' + rotation.secondary_flow if rotation.secondary_flow else ''}"
-            f" · konv={rotation.conviction}/10"
+            f" · konv={rotation.conviction}/100"
             f"\n  Sınıf: {top_scores}"
             f"\n  Öngörü: {top_insights}"
         )
