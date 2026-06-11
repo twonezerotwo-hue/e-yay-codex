@@ -88,122 +88,224 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
   const m = MODE_META[mode];
   const isLaunching = mode === "ONAY";
   const isLocked    = mode === "KAPAT";
+  const showSmoke   = mode === "BEKLE" || isLaunching;
 
   return (
     <svg viewBox="0 0 320 320" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="lp-body" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="#0e2a4e" />
-          <stop offset="45%"  stopColor="#cfd8e8" />
-          <stop offset="55%"  stopColor="#e2e8f0" />
-          <stop offset="100%" stopColor="#0e2a4e" />
+        {/* Brushed-metal body — multi-stop highlight */}
+        <linearGradient id="rk-body" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor="#0a1626" />
+          <stop offset="20%"  stopColor="#475569" />
+          <stop offset="42%"  stopColor="#cbd5e1" />
+          <stop offset="50%"  stopColor="#e2e8f0" />
+          <stop offset="58%"  stopColor="#cbd5e1" />
+          <stop offset="80%"  stopColor="#475569" />
+          <stop offset="100%" stopColor="#0a1626" />
         </linearGradient>
-        <linearGradient id="lp-nose" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%"  stopColor={m.bodyTint} />
-          <stop offset="100%" stopColor="#0e2a4e" />
+        <linearGradient id="rk-nose" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stopColor={m.bodyTint} stopOpacity="1" />
+          <stop offset="55%" stopColor={m.bodyTint} stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#0a1626" />
         </linearGradient>
-        <radialGradient id="lp-flame" cx="50%" cy="0%" r="70%">
-          <stop offset="0%"  stopColor="#ffffff" />
-          <stop offset="35%" stopColor={m.thrust} />
+        <linearGradient id="rk-fin" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor="#1e293b" />
+          <stop offset="100%" stopColor={m.bodyTint} stopOpacity="0.85" />
+        </linearGradient>
+        <linearGradient id="rk-booster" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"   stopColor="#0e1726" />
+          <stop offset="50%"  stopColor="#94a3b8" />
+          <stop offset="100%" stopColor="#0e1726" />
+        </linearGradient>
+        <radialGradient id="rk-flame" cx="50%" cy="0%" r="80%">
+          <stop offset="0%"   stopColor="#ffffff" />
+          <stop offset="25%"  stopColor={m.thrust} stopOpacity="0.95" />
+          <stop offset="70%"  stopColor={m.thrust} stopOpacity="0.35" />
           <stop offset="100%" stopColor="transparent" />
         </radialGradient>
-        <radialGradient id="lp-pad-glow" cx="50%" cy="100%" r="65%">
+        <radialGradient id="rk-pad-glow" cx="50%" cy="100%" r="80%">
           <stop offset="0%"   stopColor={m.toneSoft} />
+          <stop offset="55%"  stopColor={m.toneSoft} stopOpacity="0.35" />
           <stop offset="100%" stopColor="transparent" />
         </radialGradient>
-        <filter id="lp-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3.5" />
+        <radialGradient id="rk-smoke" cx="50%" cy="50%" r="60%">
+          <stop offset="0%"  stopColor="#94a3b8" stopOpacity="0.55" />
+          <stop offset="100%" stopColor="#475569" stopOpacity="0" />
+        </radialGradient>
+        <filter id="rk-blur" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.6" />
+        </filter>
+        <filter id="rk-soft" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="5" />
         </filter>
       </defs>
 
-      {/* Pad glow */}
-      <ellipse cx="160" cy="276" rx="120" ry="22" fill="url(#lp-pad-glow)" />
+      {/* Pad radial glow */}
+      <ellipse cx="160" cy="294" rx="140" ry="28" fill="url(#rk-pad-glow)" />
 
-      {/* Launch ring */}
-      <ellipse cx="160" cy="240" rx="84" ry="12" fill="none" stroke={m.toneRing}
-               strokeWidth="1" opacity={isLaunching ? 0.7 : 0.35}
-               style={animate ? { animation: "lp-breathe 3.5s ease-in-out infinite" } : undefined} />
-      <ellipse cx="160" cy="240" rx="62" ry="8" fill="none" stroke={m.toneRing}
-               strokeWidth="0.8" opacity="0.45" strokeDasharray="4 4" />
+      {/* Multi-layer launch platform rings */}
+      <g style={animate ? { animation: "lp-breathe 3.5s ease-in-out infinite" } : undefined}>
+        <ellipse cx="160" cy="262" rx="98" ry="13" fill="none" stroke={m.toneRing}
+                 strokeWidth="1" opacity={isLaunching ? 0.85 : 0.45} />
+        <ellipse cx="160" cy="262" rx="76" ry="10" fill="none" stroke={m.toneRing}
+                 strokeWidth="0.7" strokeDasharray="5 3" opacity="0.55" />
+        <ellipse cx="160" cy="262" rx="54" ry="7.5" fill="none" stroke={m.toneRing}
+                 strokeWidth="0.6" opacity="0.42" />
+      </g>
 
-      {/* Roket — lift sırasında yukarı */}
+      {/* Projection beams from pad up — yalnız aktif modlarda */}
+      {(isLaunching || mode === "BEKLE") && (
+        <g opacity={isLaunching ? 0.55 : 0.28}>
+          <line x1="100" y1="262" x2="124" y2="218" stroke={m.toneRing} strokeWidth="0.7" />
+          <line x1="220" y1="262" x2="196" y2="218" stroke={m.toneRing} strokeWidth="0.7" />
+        </g>
+      )}
+
+      {/* Roket — lift animation */}
       <g
-        style={animate && isLaunching ? { animation: "lp-lift 2s ease-in-out infinite" } : undefined}
-        transform={isLaunching ? "translate(0,-6)" : "translate(0,0)"}
+        style={animate && isLaunching ? { animation: "lp-lift 2.4s ease-in-out infinite" } : undefined}
+        transform={isLaunching ? "translate(0,-8)" : "translate(0,0)"}
       >
-        {/* Thrust alevi */}
+        {/* Thrust — multi-layer flame */}
         {!m.thrustOff && (
-          <>
-            <path
-              d="M 148 226 Q 160 280 172 226 Z"
-              fill="url(#lp-flame)"
-              opacity={isLaunching ? 1 : 0.85}
-              style={animate ? { animation: `lp-flame ${isLaunching ? "0.18s" : "0.45s"} ease-in-out infinite alternate` } : undefined}
-            />
-            <path
-              d="M 152 226 Q 160 260 168 226 Z"
-              fill="#fff"
-              opacity={isLaunching ? 0.9 : 0.55}
-            />
-          </>
+          <g>
+            <path d="M 140 234 Q 160 304 180 234 Z" fill="url(#rk-flame)"
+                  opacity={isLaunching ? 0.95 : 0.65} filter="url(#rk-blur)"
+                  style={animate ? { animation: `lp-flame ${isLaunching ? "0.16s" : "0.42s"} ease-in-out infinite alternate` } : undefined} />
+            <path d="M 148 234 Q 160 282 172 234 Z" fill={m.thrust}
+                  opacity={isLaunching ? 0.9 : 0.6} />
+            <path d="M 154 234 Q 160 262 166 234 Z" fill="#fff"
+                  opacity={isLaunching ? 0.95 : 0.55} />
+          </g>
         )}
 
-        {/* Burun */}
-        <path d="M 160 66 L 178 106 L 142 106 Z" fill="url(#lp-nose)" stroke={m.toneRing} strokeWidth="1" />
+        {/* Yan booster (sol) */}
+        <g>
+          <rect x="116" y="150" width="13" height="82" rx="2.5" fill="url(#rk-booster)"
+                stroke={m.toneRing} strokeWidth="0.6" opacity="0.95" />
+          <rect x="118" y="160" width="9" height="1.8" fill={m.toneRing} opacity="0.35" />
+          <rect x="118" y="180" width="9" height="1.8" fill={m.toneRing} opacity="0.35" />
+          <path d="M 116 232 L 129 232 L 127 240 L 118 240 Z" fill="#020812" stroke={m.toneRing} strokeWidth="0.6" />
+          {!m.thrustOff && (
+            <path d="M 117 240 Q 122.5 268 128 240 Z" fill={m.thrust}
+                  opacity={isLaunching ? 0.78 : 0.45} filter="url(#rk-blur)" />
+          )}
+        </g>
 
-        {/* Gövde */}
-        <rect x="142" y="106" width="36" height="100" rx="3" fill="url(#lp-body)" stroke={m.toneRing} strokeWidth="0.8" />
+        {/* Yan booster (sağ) */}
+        <g>
+          <rect x="191" y="150" width="13" height="82" rx="2.5" fill="url(#rk-booster)"
+                stroke={m.toneRing} strokeWidth="0.6" opacity="0.95" />
+          <rect x="193" y="160" width="9" height="1.8" fill={m.toneRing} opacity="0.35" />
+          <rect x="193" y="180" width="9" height="1.8" fill={m.toneRing} opacity="0.35" />
+          <path d="M 191 232 L 204 232 L 202 240 L 193 240 Z" fill="#020812" stroke={m.toneRing} strokeWidth="0.6" />
+          {!m.thrustOff && (
+            <path d="M 192 240 Q 197.5 268 203 240 Z" fill={m.thrust}
+                  opacity={isLaunching ? 0.78 : 0.45} filter="url(#rk-blur)" />
+          )}
+        </g>
 
-        {/* Pencere */}
-        <circle cx="160" cy="130" r="6.5" fill="#0a1c34" stroke={m.toneRing} strokeWidth="1.5" />
-        <circle cx="160" cy="130" r="3" fill={m.bodyTint} opacity="0.6" />
-        <circle cx="161" cy="128" r="1.5" fill="#fff" opacity="0.85" />
+        {/* Burun — sharp tip + highlight */}
+        <path d="M 160 38 L 178 78 L 142 78 Z" fill="url(#rk-nose)" stroke={m.toneRing} strokeWidth="0.8" />
+        <line x1="160" y1="40" x2="160" y2="76" stroke="#fff" strokeWidth="0.5" opacity="0.32" />
 
-        {/* Şerit detay */}
-        <rect x="142" y="156" width="36" height="3" fill={m.toneRing} opacity="0.35" />
-        <rect x="142" y="188" width="36" height="3" fill={m.toneRing} opacity="0.35" />
+        {/* Ana gövde */}
+        <rect x="142" y="78" width="36" height="128" rx="3" fill="url(#rk-body)"
+              stroke={m.toneRing} strokeWidth="0.7" />
+        {/* Body inner highlight stripe */}
+        <line x1="160" y1="80" x2="160" y2="204" stroke="#fff" strokeWidth="0.35" opacity="0.18" />
 
-        {/* Kanatlar */}
-        <path d="M 142 186 L 122 226 L 142 216 Z" fill={m.bodyTint} stroke={m.toneRing} strokeWidth="1" opacity="0.92" />
-        <path d="M 178 186 L 198 226 L 178 216 Z" fill={m.bodyTint} stroke={m.toneRing} strokeWidth="1" opacity="0.92" />
+        {/* Pencere — detaylı bolts */}
+        <circle cx="160" cy="104" r="7.5" fill="#020812" stroke={m.toneRing} strokeWidth="1.4" />
+        <circle cx="160" cy="104" r="5.2" fill={m.bodyTint} opacity="0.42" />
+        <circle cx="161" cy="102" r="2" fill="#fff" opacity="0.85" />
+        {[0, 60, 120, 180, 240, 300].map(a => {
+          const rad = (a * Math.PI) / 180;
+          const cx = 160 + Math.cos(rad) * 7.5;
+          const cy = 104 + Math.sin(rad) * 7.5;
+          return <circle key={a} cx={cx} cy={cy} r="0.55" fill={m.toneRing} opacity="0.7" />;
+        })}
 
-        {/* Motor */}
-        <rect x="148" y="206" width="24" height="20" rx="2" fill="#1a2233" stroke={m.toneRing} strokeWidth="1" />
-        <rect x="152" y="210" width="16" height="14" rx="1" fill="#000" />
+        {/* Şerit detaylar + logo bandı */}
+        <rect x="142" y="130" width="36" height="3" fill={m.toneRing} opacity="0.5" />
+        <rect x="142" y="160" width="36" height="1.6" fill="#94a3b8" opacity="0.4" />
+        <rect x="142" y="188" width="36" height="3" fill={m.toneRing} opacity="0.5" />
+        <ellipse cx="160" cy="146" rx="9" ry="3" fill="none" stroke={m.toneRing} strokeWidth="0.6" opacity="0.55" />
+        <text x="160" y="148" textAnchor="middle" fontSize="3.8" fill={m.toneRing}
+              fontFamily="monospace" fontWeight="bold" opacity="0.78">E·YAY</text>
+
+        {/* Kanatlar — fin + trailing edge highlight */}
+        <path d="M 142 186 L 116 232 L 142 218 Z" fill="url(#rk-fin)" stroke={m.toneRing} strokeWidth="0.8" />
+        <path d="M 178 186 L 204 232 L 178 218 Z" fill="url(#rk-fin)" stroke={m.toneRing} strokeWidth="0.8" />
+        <line x1="142" y1="186" x2="116" y2="232" stroke={m.toneRing} strokeWidth="0.5" opacity="0.65" />
+        <line x1="178" y1="186" x2="204" y2="232" stroke={m.toneRing} strokeWidth="0.5" opacity="0.65" />
+
+        {/* Motor + nozzle */}
+        <path d="M 144 206 L 176 206 L 172 236 L 148 236 Z" fill="#0a0f1a"
+              stroke={m.toneRing} strokeWidth="0.9" />
+        <path d="M 150 210 L 170 210 L 167 232 L 153 232 Z" fill="#000" />
+        {!m.thrustOff && (
+          <ellipse cx="160" cy="232" rx="9" ry="2.4" fill={m.thrust}
+                   opacity={isLaunching ? 0.9 : 0.55} filter="url(#rk-blur)" />
+        )}
 
         {/* Lock overlay (KAPAT) */}
         {isLocked && (
           <g style={animate ? { animation: "lp-blink 1.2s ease-in-out infinite" } : undefined}>
-            <rect x="138" y="146" width="44" height="40" rx="3" fill="rgba(248,113,113,0.18)" stroke={m.toneRing} strokeWidth="1.5" />
-            <text x="160" y="171" textAnchor="middle" fontSize="11" fill={m.toneRing} fontFamily="monospace" fontWeight="bold">LOCK</text>
+            <rect x="132" y="118" width="56" height="48" rx="3"
+                  fill="rgba(248,113,113,0.20)" stroke={m.toneRing} strokeWidth="1.6" />
+            <text x="160" y="148" textAnchor="middle" fontSize="14"
+                  fill={m.toneRing} fontFamily="monospace" fontWeight="bold">LOCK</text>
+            {/* Hazard stripes */}
+            <line x1="132" y1="170" x2="188" y2="170" stroke={m.toneRing}
+                  strokeWidth="2" strokeDasharray="6 4" opacity="0.65" />
           </g>
         )}
       </g>
 
-      {/* BEKLE — duman bulutu */}
-      {mode === "BEKLE" && (
-        <g opacity="0.5" filter="url(#lp-glow)" style={animate ? { animation: "lp-smoke 4s ease-in-out infinite" } : undefined}>
-          <ellipse cx="130" cy="270" rx="22" ry="8" fill="#475569" />
-          <ellipse cx="190" cy="272" rx="26" ry="9" fill="#475569" />
-          <ellipse cx="160" cy="262" rx="32" ry="10" fill="#64748b" />
+      {/* Duman — multi-layer blurred */}
+      {showSmoke && (
+        <g filter="url(#rk-soft)"
+           style={animate ? { animation: "lp-smoke 4.5s ease-in-out infinite" } : undefined}>
+          <ellipse cx="160" cy="278" rx="48" ry="14" fill="url(#rk-smoke)" opacity="0.85" />
+          <ellipse cx="118" cy="284" rx="32" ry="11" fill="url(#rk-smoke)" />
+          <ellipse cx="202" cy="286" rx="34" ry="12" fill="url(#rk-smoke)" />
+          <ellipse cx="92"  cy="292" rx="22" ry="8"  fill="url(#rk-smoke)" opacity="0.55" />
+          <ellipse cx="228" cy="294" rx="24" ry="9"  fill="url(#rk-smoke)" opacity="0.55" />
         </g>
       )}
 
-      {/* Launch pad zemini */}
-      <rect x="60" y="276" width="200" height="6" rx="2" fill="#1a2233" stroke={m.toneRing} strokeWidth="0.5" />
-      <rect x="60" y="282" width="200" height="6" rx="1" fill="#0a1220" />
+      {/* Pad — çok katmanlı zemin */}
+      <rect x="50" y="266" width="220" height="6"  rx="2" fill="#1e293b" stroke={m.toneRing} strokeWidth="0.5" />
+      <rect x="50" y="272" width="220" height="8"  rx="1" fill="#0a1220" />
+      <rect x="50" y="280" width="220" height="3"  rx="1" fill="#020812" />
 
-      {/* Tutucu kollar */}
-      <line x1="118" y1="276" x2="118" y2="225" stroke={m.toneRing} strokeWidth="2" opacity="0.5" />
-      <line x1="202" y1="276" x2="202" y2="225" stroke={m.toneRing} strokeWidth="2" opacity="0.5" />
-      <line x1="118" y1="225" x2="130" y2="225" stroke={m.toneRing} strokeWidth="2" opacity="0.5" />
-      <line x1="190" y1="225" x2="202" y2="225" stroke={m.toneRing} strokeWidth="2" opacity="0.5" />
+      {/* Pad surface grid */}
+      {[80, 110, 160, 210, 240].map((x) => (
+        <line key={x} x1={x} y1="266" x2={x} y2="272" stroke={m.toneRing} strokeWidth="0.4" opacity="0.5" />
+      ))}
 
-      {/* Pad ışıkları */}
-      {[78, 110, 210, 242].map((x, i) => (
-        <circle key={i} cx={x} cy="276" r="2.4" fill={m.toneRing}
-                opacity={animate ? 0.85 : 0.5}
-                style={animate ? { animation: `lp-blink ${1.5 + i * 0.2}s ease-in-out infinite` } : undefined} />
+      {/* Launch clamp arms — detaylı */}
+      <g opacity="0.72">
+        <line x1="106" y1="266" x2="106" y2="206" stroke={m.toneRing} strokeWidth="2.1" />
+        <line x1="106" y1="206" x2="124" y2="206" stroke={m.toneRing} strokeWidth="2.1" />
+        <rect x="98"  y="262" width="16" height="6" rx="1" fill="#1e293b" stroke={m.toneRing} strokeWidth="0.6" />
+        <line x1="214" y1="266" x2="214" y2="206" stroke={m.toneRing} strokeWidth="2.1" />
+        <line x1="214" y1="206" x2="196" y2="206" stroke={m.toneRing} strokeWidth="2.1" />
+        <rect x="206" y="262" width="16" height="6" rx="1" fill="#1e293b" stroke={m.toneRing} strokeWidth="0.6" />
+        {/* Cable joints */}
+        <line x1="106" y1="228" x2="116" y2="228" stroke={m.toneRing} strokeWidth="1" opacity="0.5" />
+        <line x1="214" y1="228" x2="204" y2="228" stroke={m.toneRing} strokeWidth="1" opacity="0.5" />
+      </g>
+
+      {/* Pad ışıkları — küçük blinking ledler + halo */}
+      {[64, 92, 228, 256].map((x, i) => (
+        <g key={i}>
+          <circle cx={x} cy="266" r="4.4" fill="none" stroke={m.toneRing} strokeWidth="0.45" opacity="0.32" />
+          <circle cx={x} cy="266" r="2.6" fill={m.toneRing}
+                  opacity={animate ? 0.9 : 0.5}
+                  style={animate ? { animation: `lp-blink ${1.4 + i * 0.25}s ease-in-out infinite` } : undefined} />
+        </g>
       ))}
     </svg>
   );
@@ -243,6 +345,7 @@ export default function ActionSignalLaunchLayer({ report }: Props) {
         @keyframes lp-smoke   { 0%,100%{opacity:0.35;transform:translateY(0)} 50%{opacity:0.6;transform:translateY(-3px)} }
         @keyframes lp-fade    { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
         @keyframes lp-breathe { 0%,100%{opacity:0.55;transform:scaleX(1)} 50%{opacity:0.9;transform:scaleX(1.04)} }
+        @keyframes lp-scan    { 0%{transform:translateY(-100%)} 100%{transform:translateY(100%)} }
       `}</style>
 
       {/* Header */}
@@ -294,6 +397,21 @@ export default function ActionSignalLaunchLayer({ report }: Props) {
                  WebkitMaskImage: "radial-gradient(ellipse at 50% 70%, black 30%, transparent 80%)",
                }}
           />
+          {/* Köşe brackets — institutional terminal */}
+          <span aria-hidden="true" className="absolute top-2 left-2 w-3 h-3 border-t border-l border-cyan-400/40" />
+          <span aria-hidden="true" className="absolute top-2 right-2 w-3 h-3 border-t border-r border-cyan-400/40" />
+          <span aria-hidden="true" className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-cyan-400/40" />
+          <span aria-hidden="true" className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-cyan-400/40" />
+
+          {/* Scanline */}
+          {animate && (
+            <div aria-hidden="true" className="absolute inset-x-0 top-0 h-12 pointer-events-none"
+                 style={{
+                   background: "linear-gradient(180deg, transparent, rgba(34,211,238,0.05) 50%, transparent)",
+                   animation: "lp-scan 8s linear infinite",
+                 }}
+            />
+          )}
           <Rocket mode={mode} animate={animate} />
         </div>
 
