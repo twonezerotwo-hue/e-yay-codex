@@ -298,43 +298,25 @@ export default function AgentHolographicLayer({
     return () => mq.removeEventListener?.("change", onMQ);
   }, []);
 
-  // ── Section navigation: scroll + accordion açma + aktif takip ──────────────
+  // ── Tab navigation: sadece aktif tab içeriği render edilir, scroll yok ─────
   const handleNavClick = (item: NavItem) => {
     setActiveId(item.id);
+    // İçindeki accordion'ları otomatik açabilir
     if (item.opensAccordion === "detail") setDetailOpen(true);
     if (item.opensAccordion === "system") setSystemOpen(true);
-    // Accordion açılıp DOM'da render olduktan sonra scroll
-    requestAnimationFrame(() => {
+    // İçeriğin üst kısmına in-place reset
+    if (typeof window !== "undefined") {
       requestAnimationFrame(() => {
-        const el = typeof document !== "undefined" ? document.getElementById(item.id) : null;
-        if (el) {
-          el.scrollIntoView({
-            behavior: animate ? "smooth" : "auto",
-            block: "start",
-          });
-        }
+        const main = document.getElementById("agent-tab-content");
+        main?.scrollTo({ top: 0, behavior: animate ? "smooth" : "auto" });
       });
-    });
+    }
   };
 
-  // IntersectionObserver — aktif section'ı viewport'a göre takip et
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter(e => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) setActiveId(visible[0].target.id);
-      },
-      { rootMargin: "-25% 0px -55% 0px", threshold: [0, 0.25, 0.5] },
-    );
-    NAV_ITEMS.forEach(item => {
-      const el = document.getElementById(item.id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, [detailOpen, systemOpen]);
+  const activeTab = useMemo(
+    () => NAV_ITEMS.find(i => i.id === activeId) ?? NAV_ITEMS[0],
+    [activeId],
+  );
 
   const mode: BannerMode = banner?.mode ?? "waiting";
   const tone = TONES[mode];
@@ -482,9 +464,20 @@ export default function AgentHolographicLayer({
             })}
           </nav>
 
-          {/* Main */}
-          <div className="min-w-0 flex flex-col gap-4">
+          {/* Main — tab-bazlı içerik */}
+          <div id="agent-tab-content" className="min-w-0 flex flex-col gap-4">
 
+            {/* Tab başlığı */}
+            <div className="flex items-center gap-2 pb-1 border-b border-cyan-500/15">
+              <span aria-hidden="true" className="text-cyan-300 text-sm">{activeTab.icon}</span>
+              <p className="text-[12px] font-mono font-bold text-cyan-100 uppercase tracking-[0.22em]">
+                {activeTab.label}
+              </p>
+            </div>
+
+            {/* ◈ KOMUT MERKEZİ — agent core + thoughts + orbit + insight kısa */}
+            {activeId === "agent-core-section" && (
+            <>
             {/* ── Üst grid: thoughts | core | opinion ── */}
             <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px] gap-4 items-stretch">
 
@@ -594,8 +587,12 @@ export default function AgentHolographicLayer({
               </div>
             </div>
 
-            {/* ── 5 piyasa bağlamı modülü ── */}
-            <div id="market-context-section" data-section="market-context" className="scroll-mt-[80px] grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+            </>
+            )}
+
+            {/* ◇ PİYASA ZEKASI — 5 modül */}
+            {activeId === "market-context-section" && (
+            <div id="market-context-section" data-section="market-context" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
               {ctxModules.map(c => (
                 <details key={c.key} className="group rounded-xl border border-cyan-500/15 bg-black/30 p-2 min-w-0">
                   <summary className="flex items-center gap-1.5 cursor-pointer list-none">
@@ -612,9 +609,133 @@ export default function AgentHolographicLayer({
                 </details>
               ))}
             </div>
+            )}
 
-            {/* ── Aktif Kararlar özeti ── */}
-            <div id="positions-section" data-section="positions" className="scroll-mt-[80px] grid grid-cols-2 md:grid-cols-4 gap-2">
+            {/* △ AI TRADE FİKRİM — opinion genişletilmiş */}
+            {activeId === "trade-opinion-section" && (
+            <div className="flex flex-col gap-3">
+              {best && best.asset !== "NONE" ? (
+                <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-black/40 via-cyan-950/15 to-black/40 p-4 grid grid-cols-1 md:grid-cols-[140px_minmax(0,1fr)] gap-4 items-start">
+                  <ConfidenceRing value={confidence} color={opinionColor} size={132} />
+                  <div className="min-w-0">
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest">Ana Fikir</p>
+                    <p className="text-[20px] font-mono font-black tracking-wider" style={{ color: opinionColor }}>
+                      {best.asset} {best.bias?.toUpperCase() === "LONG" ? "LONG" : best.bias?.toUpperCase() === "SHORT" ? "SHORT" : "WAIT"}
+                    </p>
+                    {best.reason && <p className="text-[10px] font-mono text-eyay-dim mt-1 leading-snug">{best.reason}</p>}
+                    {best.trigger && <p className="text-[10px] font-mono text-cyan-300/80 mt-2 leading-snug">⚡ Tetikleyici: {best.trigger}</p>}
+                    {best.risk && <p className="text-[10px] font-mono text-amber-300/80 mt-1 leading-snug">⚠ Invalidation: {best.risk}</p>}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-eyay-border bg-black/30 p-4">
+                  <p className="text-[10px] font-mono text-eyay-faint italic">AI Trade fikri bekleniyor.</p>
+                  {opinion?.no_trade_reason && (
+                    <p className="text-[10px] font-mono text-eyay-dim mt-1.5 leading-snug">{opinion.no_trade_reason}</p>
+                  )}
+                </div>
+              )}
+
+              {opinion?.market_opinion && (
+                <div className="rounded-xl border border-cyan-500/15 bg-black/30 p-3">
+                  <p className="text-[8px] font-mono text-cyan-400/70 uppercase tracking-widest mb-1">Piyasa Görüşü</p>
+                  <p className="text-[10.5px] font-mono text-eyay-dim leading-snug">{opinion.market_opinion}</p>
+                </div>
+              )}
+
+              {(opinion?.asset_opinions?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-cyan-500/15 bg-black/30 p-3">
+                  <p className="text-[8px] font-mono text-cyan-400/70 uppercase tracking-widest mb-2">Varlık Görüşleri</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {opinion!.asset_opinions!.map(a => {
+                      const c = OPINION_TONE[a.opinion?.toUpperCase()] ?? "#94a3b8";
+                      return (
+                        <div key={a.asset} className="rounded-lg border bg-black/40 px-2 py-1.5"
+                             style={{ borderColor: `${c}44` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold" style={{ color: c }}>{a.asset}</span>
+                            <span className="text-[8.5px] font-mono px-1 rounded border"
+                                  style={{ color: c, borderColor: `${c}55` }}>{a.opinion}</span>
+                            <span className="ml-auto text-[8px] font-mono text-eyay-faint">{a.conviction}</span>
+                          </div>
+                          {a.trigger_needed && (
+                            <p className="text-[9px] font-mono text-eyay-dim mt-1 leading-snug line-clamp-2">⚡ {a.trigger_needed}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(opinion?.open_position_opinions?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-cyan-500/15 bg-black/30 p-3">
+                  <p className="text-[8px] font-mono text-cyan-400/70 uppercase tracking-widest mb-2">Açık Pozisyon Görüşleri</p>
+                  <div className="space-y-1.5">
+                    {opinion!.open_position_opinions!.map(p => {
+                      const c = OPINION_TONE[p.opinion?.toUpperCase()] ?? "#94a3b8";
+                      return (
+                        <div key={`${p.pair}-${p.side}`} className="rounded-lg border bg-black/40 px-2 py-1.5"
+                             style={{ borderColor: `${c}44` }}>
+                          <p className="text-[10px] font-mono font-bold" style={{ color: c }}>{p.pair} {p.side} · {p.opinion}</p>
+                          {p.reason && <p className="text-[9px] font-mono text-eyay-dim mt-0.5 leading-snug">{p.reason}</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(opinion?.next_3_triggers?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-cyan-500/15 bg-black/30 p-3">
+                  <p className="text-[8px] font-mono text-cyan-400/70 uppercase tracking-widest mb-1.5">Sonraki Tetikleyiciler</p>
+                  <ul className="space-y-0.5 text-[9.5px] font-mono text-eyay-dim">
+                    {opinion!.next_3_triggers!.map((t, i) => <li key={i}>› {t}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+            )}
+
+            {/* ⊙ HABER RADARI */}
+            {activeId === "news-radar-section" && (
+            <div id="news-radar-section" className="rounded-xl border border-red-700/30 bg-black/30 p-2">
+              <p className="text-[8px] font-mono text-red-300/70 uppercase tracking-widest mb-1.5 px-1">
+                🚨 Son Dakika Haber Radarı
+              </p>
+              <BreakingNewsPanelShell headlines={headlines} />
+
+              {insights.length > 0 && (
+                <div className="mt-3 rounded-xl border border-cyan-500/15 bg-black/30 px-3 py-2">
+                  <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-1.5">
+                    Ajan Günlüğü ({insights.length})
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {insights.slice(0, 8).map((ins, i) => {
+                      const sevColor = ins.severity === "CRITICAL" ? "#f87171"
+                                    : ins.severity === "WARNING"  ? "#fbbf24"
+                                    : ins.severity === "OPPORTUNITY" ? "#34d399"
+                                    : "#94a3b8";
+                      return (
+                        <div key={i} className="shrink-0 max-w-[260px] rounded-lg border px-2 py-1"
+                             style={{ borderColor: `${sevColor}55`, background: `${sevColor}11` }}>
+                          <p className="text-[7.5px] font-mono font-black uppercase tracking-widest" style={{ color: sevColor }}>
+                            {ins.severity} · {ins.asset_code}
+                          </p>
+                          <p className="text-[9px] font-mono text-eyay-dim leading-snug truncate">{ins.headline}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
+
+            {/* ▤ AKTİF KARARLAR */}
+            {activeId === "positions-section" && (
+            <>
+            <div id="positions-section" data-section="positions" className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Stat label="Açık Pozisyon" value={String(openCount)} tone={openCount > 0 ? "#34d399" : "#94a3b8"} />
               <Stat label="Günlük PnL"    value={`${dailyPnl >= 0 ? "+" : "−"}${Math.abs(dailyPnl).toFixed(0)} USD`}
                     tone={dailyPnl >= 0 ? "#34d399" : "#f87171"} />
@@ -622,8 +743,39 @@ export default function AgentHolographicLayer({
               <Stat label="Risk Durumu"   value={anomaly ? "ANOMALİ" : "OK"} tone={anomaly ? "#f87171" : "#34d399"} />
             </div>
 
-            {/* ── Insight ticker (kısa) ── */}
-            {insights.length > 0 && (
+              {/* Açık pozisyon listesi — pozisyon varsa */}
+              {(trading?.open_positions?.length ?? 0) > 0 && (
+                <div className="col-span-2 md:col-span-4 rounded-xl border border-cyan-500/15 bg-black/30 p-3 mt-1">
+                  <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-2">
+                    Açık Pozisyonlar
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {trading!.open_positions.map(p => {
+                      const c = p.pnl_usd >= 0 ? "#34d399" : "#f87171";
+                      return (
+                        <div key={`${p.pair}-${p.side}`} className="rounded-lg border bg-black/40 px-2.5 py-1.5"
+                             style={{ borderColor: `${c}44` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono font-bold text-eyay-text">{p.pair}</span>
+                            <span className="text-[8.5px] font-mono px-1 rounded border" style={{ color: c, borderColor: `${c}55` }}>{p.side}</span>
+                            <span className="ml-auto text-[10px] font-mono font-bold" style={{ color: c }}>
+                              {p.pnl_usd >= 0 ? "+" : "−"}{Math.abs(p.pnl_usd).toFixed(0)} USD
+                            </span>
+                          </div>
+                          <p className="text-[8.5px] font-mono text-eyay-faint mt-0.5">
+                            Giriş {p.entry_price.toFixed(2)} · Şimdi {p.current_price.toFixed(2)} · {p.pnl_pct.toFixed(2)}%
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+            )}
+
+            {/* (Insight ticker artık ◊ Komut Merkezi yerine Haber Radarı tab'ında) */}
+            {false && insights.length > 0 && (
               <div className="rounded-xl border border-cyan-500/15 bg-black/30 px-3 py-2">
                 <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-1.5">
                   Ajan Günlüğü ({insights.length})
@@ -648,18 +800,20 @@ export default function AgentHolographicLayer({
               </div>
             )}
 
-            {/* ── Breaking News Radar ── */}
-            <div id="news-radar-section" data-section="news-radar" className="scroll-mt-[80px] rounded-xl border border-red-700/30 bg-black/30 p-2">
+            {/* (Eski sürekli render Breaking News bloğu — tab'a taşındı) */}
+            {false && (
+            <div className="rounded-xl border border-red-700/30 bg-black/30 p-2">
               <p className="text-[8px] font-mono text-red-300/70 uppercase tracking-widest mb-1.5 px-1">
                 🚨 Son Dakika Haber Radarı
               </p>
               <BreakingNewsPanelShell headlines={headlines} />
             </div>
+            )}
 
-            {/* ── Karar Detayları accordion (default kapalı) ── */}
-            {decision && (
+            {/* ≡ KARAR DETAYLARI — sadece bu tab seçili iken */}
+            {activeId === "decision-details-section" && decision && (
               <section id="decision-details-section" data-section="decision-details"
-                       className="scroll-mt-[80px] rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+                       className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setDetailOpen(o => !o)}
@@ -684,9 +838,10 @@ export default function AgentHolographicLayer({
               </section>
             )}
 
-            {/* ── Sistem Kontrolleri accordion (default kapalı) ── */}
+            {/* ⚙ SİSTEM KONTROLLERİ — sadece bu tab seçili iken */}
+            {activeId === "system-controls-section" && (
             <section id="system-controls-section" data-section="system-controls"
-                     className="scroll-mt-[80px] rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+                     className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setSystemOpen(o => !o)}
@@ -715,6 +870,7 @@ export default function AgentHolographicLayer({
                 </div>
               )}
             </section>
+            )}
 
             {/* ── Footer ── */}
             <div className="pt-2 border-t border-cyan-500/15">
