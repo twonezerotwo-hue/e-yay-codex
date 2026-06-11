@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import ActionCenter from "@/components/ActionCenter";
+import AgentCoreVisual from "@/components/AgentCoreVisual";
 import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
 import LearningPanel from "@/components/LearningPanel";
 import SystemHealthPanel from "@/components/SystemHealthPanel";
@@ -136,9 +137,9 @@ function confidenceFromOpinion(o: TradeOpinion | null): number {
   return 30;
 }
 
-// ── Agent Core SVG ───────────────────────────────────────────────────────────
-
-function AgentCore({ tone, animate }: { tone: Tone; animate: boolean }) {
+// ── Agent Core SVG (legacy; artık shared AgentCoreVisual kullanılıyor) ──────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _LegacyAgentCore({ tone, animate }: { tone: Tone; animate: boolean }) {
   return (
     <svg viewBox="0 0 280 280" className="w-full h-full max-w-[340px] max-h-[340px]"
          xmlns="http://www.w3.org/2000/svg">
@@ -531,7 +532,7 @@ export default function AgentHolographicLayer({
                 <span aria-hidden="true" className="absolute top-2 right-2 w-3 h-3 border-t border-r border-cyan-400/40" />
                 <span aria-hidden="true" className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-cyan-400/40" />
                 <span aria-hidden="true" className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-cyan-400/40" />
-                <AgentCore tone={tone} animate={animate} />
+                <AgentCoreVisual ring={tone.ring} soft={tone.soft} animate={animate} size={280} />
 
                 {/* 4 floating orbit cards */}
                 <div className="absolute top-3 left-3">

@@ -11,6 +11,7 @@
  */
 import { useEffect, useState } from "react";
 
+import AgentCoreVisual from "@/components/AgentCoreVisual";
 import type { Decision, RegimeReport } from "@/lib/types";
 
 // ── Mode mapping ─────────────────────────────────────────────────────────────
@@ -82,39 +83,6 @@ const MODE_META: Record<Mode, ModeMeta> = {
   },
 };
 
-// ── Mini Agent Core SVG ──────────────────────────────────────────────────────
-
-function MiniAgentCore({ tone, animate }: { tone: string; animate: boolean }) {
-  return (
-    <svg viewBox="0 0 100 100" className="w-full h-full max-w-[110px] max-h-[110px]"
-         xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <radialGradient id="abp-core" cx="50%" cy="50%" r="60%">
-          <stop offset="0%"  stopColor="#fff" stopOpacity="0.8" />
-          <stop offset="30%" stopColor={tone} stopOpacity="0.7" />
-          <stop offset="100%" stopColor="#020812" />
-        </radialGradient>
-      </defs>
-      <g style={animate ? { transformOrigin: "50px 50px", animation: "abp-spin 30s linear infinite" } : undefined}>
-        <circle cx="50" cy="50" r="42" fill="none" stroke={tone} strokeWidth="0.6" strokeDasharray="4 6" opacity="0.5" />
-        {Array.from({ length: 6 }, (_, i) => {
-          const a = (i / 6) * Math.PI * 2;
-          const x = 50 + Math.cos(a) * 42;
-          const y = 50 + Math.sin(a) * 42;
-          return <circle key={i} cx={x} cy={y} r="1.6" fill={tone} opacity="0.8" />;
-        })}
-      </g>
-      <g style={animate ? { transformOrigin: "50px 50px", animation: "abp-spin 20s linear infinite reverse" } : undefined}>
-        <circle cx="50" cy="50" r="30" fill="none" stroke={tone} strokeWidth="0.5" strokeDasharray="2 4" opacity="0.55" />
-      </g>
-      <circle cx="50" cy="50" r="22" fill="none" stroke={tone} strokeWidth="0.8" opacity="0.55"
-              style={animate ? { transformOrigin: "50px 50px", animation: "abp-pulse 2.6s ease-in-out infinite" } : undefined} />
-      <circle cx="50" cy="50" r="17" fill="url(#abp-core)" />
-      <circle cx="50" cy="50" r="17" fill="none" stroke={tone} strokeWidth="0.8" />
-    </svg>
-  );
-}
-
 // ── Component ────────────────────────────────────────────────────────────────
 
 interface Props { report: RegimeReport; }
@@ -173,9 +141,9 @@ export default function AgentBriefPanel({ report }: Props) {
       {/* Body: agent core | brief | status chips */}
       <div className="grid grid-cols-1 sm:grid-cols-[110px_minmax(0,1fr)_220px] gap-3 p-3"
            style={{ minHeight: 0 }}>
-        {/* Sol: Mini Agent Core */}
+        {/* Sol: Agent Core — modal'la birebir aynı görsel dil, kompakt boyut */}
         <div className="hidden sm:flex items-center justify-center min-w-0">
-          <MiniAgentCore tone={m.toneRing} animate={animate} />
+          <AgentCoreVisual ring={m.toneRing} soft={m.toneSoft} animate={animate} size={140} />
         </div>
 
         {/* Orta: Action brief */}
