@@ -247,15 +247,15 @@ function ConfidenceRing({ value, color, size = 96 }: { value: number; color: str
 
 // ── Sidebar icons ────────────────────────────────────────────────────────────
 
-interface NavItem { icon: string; label: string; id: string; opensAccordion?: "detail" | "system"; }
+interface NavItem { icon: string; label: string; description: string; id: string; opensAccordion?: "detail" | "system"; }
 const NAV_ITEMS: readonly NavItem[] = [
-  { icon: "◈", label: "Komut Merkezi",     id: "agent-core-section" },
-  { icon: "◇", label: "Piyasa Zekası",     id: "market-context-section" },
-  { icon: "△", label: "AI Trade Fikrim",   id: "trade-opinion-section" },
-  { icon: "⊙", label: "Haber Radarı",      id: "news-radar-section" },
-  { icon: "▤", label: "Aktif Kararlar",    id: "positions-section" },
-  { icon: "≡", label: "Karar Detayları",   id: "decision-details-section", opensAccordion: "detail" },
-  { icon: "⚙", label: "Sistem Kontrolleri", id: "system-controls-section", opensAccordion: "system" },
+  { icon: "◈", label: "Komut Merkezi",     description: "Agent'ın anlık düşünce katmanı",      id: "agent-core-section" },
+  { icon: "◇", label: "Piyasa Zekası",     description: "Haber, fiyat ve makro bağlam",       id: "market-context-section" },
+  { icon: "△", label: "AI Trade Fikrim",   description: "Deterministik trade opinion",        id: "trade-opinion-section" },
+  { icon: "⊙", label: "Haber Radarı",      description: "Son dakika risk taraması",           id: "news-radar-section" },
+  { icon: "▤", label: "Aktif Kararlar",    description: "Paper pozisyon ve PnL izleme",       id: "positions-section" },
+  { icon: "≡", label: "Karar Detayları",   description: "Uzun karar koşulları",               id: "decision-details-section", opensAccordion: "detail" },
+  { icon: "⚙", label: "Sistem Kontrolleri", description: "Health, learning, auto-tune",       id: "system-controls-section", opensAccordion: "system" },
 ] as const;
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -448,15 +448,15 @@ export default function AgentHolographicLayer({
                         aria-pressed={isActive}
                         aria-label={item.label}
                         title={item.label}
-                        className={`group relative shrink-0 w-12 h-12 sm:w-full sm:aspect-square rounded-lg flex items-center justify-center text-base transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                        className={`group relative shrink-0 w-12 h-12 sm:w-full sm:aspect-square rounded-lg flex items-center justify-center text-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
                           isActive
-                            ? "border border-cyan-500/60 bg-cyan-950/40 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.25)]"
-                            : "border border-transparent text-eyay-faint hover:text-cyan-200 hover:bg-white/5"
+                            ? "border border-cyan-500/60 bg-cyan-950/50 text-cyan-100 shadow-[0_0_12px_rgba(34,211,238,0.30)]"
+                            : "border border-white/5 text-slate-400 hover:text-cyan-200 hover:bg-white/[0.04] hover:border-cyan-700/30"
                         }`}>
                   <span aria-hidden="true">{item.icon}</span>
                   {/* Tooltip label — hover'da yan çıkar */}
                   <span aria-hidden="true"
-                        className="hidden sm:block absolute left-full ml-2 px-2 py-0.5 rounded-md border border-cyan-500/40 bg-black/90 text-cyan-200 text-[9px] font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 pointer-events-none transition-opacity z-30">
+                        className="hidden sm:block absolute left-full ml-2 px-2.5 py-1 rounded-md border border-cyan-500/50 bg-[#0f1118] text-cyan-100 text-[10.5px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 pointer-events-none transition-opacity z-30 shadow-lg shadow-black/40">
                     {item.label}
                   </span>
                 </button>
@@ -467,12 +467,30 @@ export default function AgentHolographicLayer({
           {/* Main — tab-bazlı içerik */}
           <div id="agent-tab-content" className="min-w-0 flex flex-col gap-4">
 
-            {/* Tab başlığı */}
-            <div className="flex items-center gap-2 pb-1 border-b border-cyan-500/15">
-              <span aria-hidden="true" className="text-cyan-300 text-sm">{activeTab.icon}</span>
-              <p className="text-[12px] font-mono font-bold text-cyan-100 uppercase tracking-[0.22em]">
-                {activeTab.label}
-              </p>
+            {/* Tab başlığı — açıklamalı, sağda safety chipler */}
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-cyan-500/20 bg-[#0f1118]/60 backdrop-blur-sm rounded-t-lg px-3 pt-2.5 -mx-1">
+              <div className="flex items-start gap-3 min-w-0">
+                <span aria-hidden="true" className="text-cyan-300 text-2xl leading-none mt-0.5 shrink-0"
+                      style={animate ? { textShadow: "0 0 12px rgba(34,211,238,0.55)" } : undefined}>
+                  {activeTab.icon}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-base font-bold text-cyan-50 leading-tight tracking-tight">
+                    {activeTab.label}
+                  </p>
+                  <p className="text-[11px] text-slate-300/85 leading-relaxed mt-0.5">
+                    {activeTab.description}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                <span className="rounded-md border border-emerald-700/50 bg-emerald-950/50 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-200 uppercase tracking-wider">
+                  PAPER_SAFE
+                </span>
+                <span className="hidden sm:inline-block rounded-md border border-cyan-700/40 bg-cyan-950/40 px-2 py-0.5 text-[10px] font-mono text-cyan-200 uppercase tracking-wider">
+                  NO_EXECUTION
+                </span>
+              </div>
             </div>
 
             {/* ◈ KOMUT MERKEZİ — agent core + thoughts + orbit + insight kısa */}
