@@ -11,6 +11,7 @@
  * PAPER_SAFE / NO_EXECUTION.
  */
 import { useEffect, useMemo, useState } from "react";
+import AgentHolographicLayer from "@/components/AgentHolographicLayer";
 import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
 import LearningPanel from "@/components/LearningPanel";
 import SystemHealthPanel from "@/components/SystemHealthPanel";
@@ -323,6 +324,8 @@ export default function AgentCommandCenter({
 }) {
   const [diagOpen, setDiagOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // FAZ 28 — Holografik agent layer (default). "classic" → mevcut tam görünüm.
+  const [viewMode, setViewMode] = useState<"holo" | "classic">("holo");
   // ── State ──────────────────────────────────────────────────────────────────
   const [banner,    setBanner]    = useState<AgentBanner | null>(null);
   const [opinion,   setOpinion]   = useState<TradeOpinion | null>(null);
@@ -473,6 +476,37 @@ export default function AgentCommandCenter({
   const bannerMode: BannerMode = banner?.mode ?? "waiting";
   const narrativeBorderCls = modeBorder(bannerMode);
   const narrativeTextCls   = modeColor(bannerMode);
+
+  // ── FAZ 28 — Holografik agent layer (default) ──────────────────────────────
+  if (viewMode === "holo") {
+    return (
+      <>
+        <AgentHolographicLayer
+          banner={banner}
+          opinion={opinion}
+          insights={insights}
+          trading={trading}
+          headlines={headlines}
+          decision={reportDecision}
+          ownerActions={ownerActions}
+          flipConditions={flipConditions}
+          macro={macro}
+          appetite={appetite}
+          onClose={onClose}
+        />
+        {/* Mini view-mode toggle — sticky bottom-right köşe */}
+        <div className="fixed bottom-14 right-3 z-[210] flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setViewMode("classic")}
+            className="rounded-md border border-cyan-700/40 bg-black/70 backdrop-blur-sm px-2.5 py-1 text-[9px] font-mono text-cyan-200 hover:bg-cyan-950/60 transition-colors uppercase tracking-wider"
+            data-testid="agent-toggle-classic">
+            ▤ Klasik
+          </button>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div
@@ -1134,12 +1168,19 @@ export default function AgentCommandCenter({
             <span className="text-[10px] font-mono text-eyay-faint">
               ESC veya backdrop tıkla → kapat
             </span>
-            <button
-              onClick={onClose}
-              className="px-4 py-1.5 rounded-lg border border-eyay-blue/40 text-eyay-blue text-xs font-mono font-bold hover:bg-eyay-blue/10 transition-colors"
-            >
-              DASHBOARD'A DÖN
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setViewMode("holo")}
+                className="px-3 py-1.5 rounded-lg border border-cyan-700/40 text-cyan-300 text-xs font-mono font-bold hover:bg-cyan-950/30 transition-colors"
+                data-testid="agent-toggle-holo">
+                ◈ Holo
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-1.5 rounded-lg border border-eyay-blue/40 text-eyay-blue text-xs font-mono font-bold hover:bg-eyay-blue/10 transition-colors">
+                DASHBOARD'A DÖN
+              </button>
+            </div>
           </div>
         </div>
       </div>

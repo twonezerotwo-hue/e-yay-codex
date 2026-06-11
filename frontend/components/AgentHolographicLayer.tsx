@@ -1,0 +1,733 @@
+"use client";
+
+/**
+ * FAZ 28 — Agent Holographic Layer (Neural Command Center).
+ *
+ * AgentCommandCenter modal'ının yeni varsayılan görünümü:
+ *   - merkezde holografik Agent Core (SVG)
+ *   - etrafında orbit eden sinyal kartları (Top Signals / Contradictions /
+ *     Watch Next / Market Stance)
+ *   - sağda "AI Trade Fikrim" holografik analiz kartı (confidence ring)
+ *   - 5 piyasa bağlamı mini modülü (haber / fiyat / takvim / fiyatlama / jeopol)
+ *   - aşağıda haber radarı (BreakingNewsPanelShell — Radar default)
+ *   - "Aktif Kararlar" özet bandı
+ *   - default kapalı accordion'lar: Karar Detayları, Sistem Kontrolleri
+ *
+ * Sadece görselleştirme — karar üretmez, broker emri yok. PAPER_SAFE / NO_EXECUTION.
+ */
+import { useEffect, useMemo, useState } from "react";
+
+import ActionCenter from "@/components/ActionCenter";
+import BreakingNewsPanelShell from "@/components/BreakingNewsPanelShell";
+import LearningPanel from "@/components/LearningPanel";
+import SystemHealthPanel from "@/components/SystemHealthPanel";
+import MacroPanel from "@/components/MacroPanel";
+import type {
+  Decision, FlipCondition, MacroLayer, NewsHeadline, RiskAppetiteLayer,
+} from "@/lib/types";
+
+// ── Types (AgentCommandCenter'daki ile aynı, prop drilling için kopya) ───────
+
+type BannerMode = "waiting" | "managing_position" | "contradiction" | "risk_alert" | "learning";
+
+export interface AgentBanner {
+  mode:               BannerMode;
+  headline:           string;
+  main_view:          string;
+  top_signals:        string[];
+  contradictions:     string[];
+  watch_next:         string[];
+  position_note:      string | null;
+  learning_note:      string | null;
+  updated_at:         string;
+  market_thought?:    string;
+  price_story?:       string;
+  event_story?:       string;
+  event_calendar_note?: string;
+  market_pricing_note?: string;
+  next_trigger?:      string;
+  news_story?:        string;
+  source_news_titles?: string[];
+  generated_at?:      string;
+}
+
+export interface AgentInsight {
+  severity:   "CRITICAL" | "WARNING" | "OPPORTUNITY" | "OBSERVATION";
+  headline:   string;
+  detail:     string;
+  asset_code: string;
+  icon:       string;
+  generated_at: string;
+}
+
+export interface AssetOpinion {
+  asset: string; opinion: string; conviction: string; score: number;
+  why: string[]; against: string[]; trigger_needed: string; invalidation: string;
+  suggested_action: string;
+}
+
+export interface PositionOpinion {
+  pair: string; side: string; opinion: string; conviction: string;
+  reason: string; what_to_watch: string[]; invalidation: string;
+}
+
+export interface TradeOpinion {
+  schema_version?: string; generated_at?: string; overall_view?: string;
+  market_opinion?: string; asset_opinions?: AssetOpinion[];
+  open_position_opinions?: PositionOpinion[];
+  best_candidate?: { asset: string; bias: string; reason: string; trigger: string; risk: string };
+  no_trade_reason?: string;
+  next_3_triggers?: string[];
+  what_would_change_my_mind?: string[];
+  owner_brief?: string;
+}
+
+export interface Position {
+  pair: string; side: "LONG" | "SHORT"; entry_price: number;
+  current_price: number; size_usd: number; pnl_usd: number; pnl_pct: number;
+}
+
+export interface TradingState {
+  starting_balance: number; equity: number; realized_pnl_usd: number;
+  unrealized_pnl_usd: number; daily_pnl_usd: number;
+  open_positions: Position[]; trade_count: number;
+  traded_pairs: string[];
+  state_anomaly?: { active: boolean; reasons: string[] };
+}
+
+// ── Mode → tone ──────────────────────────────────────────────────────────────
+
+interface Tone { ring: string; soft: string; text: string; label: string; border: string; }
+const TONES: Record<BannerMode, Tone> = {
+  waiting:           { ring: "#22d3ee", soft: "rgba(34,211,238,0.18)",  text: "text-cyan-300",    label: "BEKLİYOR",    border: "border-cyan-700/40" },
+  managing_position: { ring: "#34d399", soft: "rgba(52,211,153,0.18)",  text: "text-emerald-300", label: "POZİSYONDA",  border: "border-emerald-700/40" },
+  contradiction:     { ring: "#fbbf24", soft: "rgba(251,191,36,0.18)",  text: "text-amber-300",   label: "ÇELİŞKİ",     border: "border-amber-700/40" },
+  risk_alert:        { ring: "#f87171", soft: "rgba(248,113,113,0.18)", text: "text-red-300",     label: "RİSK UYARISI", border: "border-red-700/40" },
+  learning:          { ring: "#a78bfa", soft: "rgba(167,139,250,0.18)", text: "text-violet-300",  label: "ÖĞRENİYOR",   border: "border-violet-700/40" },
+};
+
+const OPINION_TONE: Record<string, string> = {
+  LONG_BIAS:               "#34d399",
+  HOLD:                    "#34d399",
+  SHORT_BIAS:              "#f87171",
+  AVOID:                   "#f87171",
+  CLOSE_WATCH:             "#f87171",
+  REDUCE:                  "#fb923c",
+  WAIT:                    "#94a3b8",
+  WAIT_EVENT_CONFIRMATION: "#fbbf24",
+  MANUAL_REVIEW:           "#60a5fa",
+  ADD_ONLY_IF:             "#60a5fa",
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtTime(iso: string | undefined): string {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }); }
+  catch { return "—"; }
+}
+
+// 0-100 confidence türetir — best candidate varsa
+function confidenceFromOpinion(o: TradeOpinion | null): number {
+  if (!o) return 0;
+  const best = o.asset_opinions?.find(a => a.asset === o.best_candidate?.asset);
+  if (best && typeof best.score === "number") return Math.max(0, Math.min(100, best.score));
+  if (o.best_candidate?.asset && o.best_candidate.asset !== "NONE") return 60;
+  return 30;
+}
+
+// ── Agent Core SVG ───────────────────────────────────────────────────────────
+
+function AgentCore({ tone, animate }: { tone: Tone; animate: boolean }) {
+  return (
+    <svg viewBox="0 0 280 280" className="w-full h-full max-w-[340px] max-h-[340px]"
+         xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="ac-bg" cx="50%" cy="50%" r="60%">
+          <stop offset="0%"  stopColor={tone.ring} stopOpacity="0.18" />
+          <stop offset="55%" stopColor={tone.ring} stopOpacity="0.06" />
+          <stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+        <radialGradient id="ac-core" cx="50%" cy="50%" r="60%">
+          <stop offset="0%"  stopColor="#fff" stopOpacity="0.85" />
+          <stop offset="30%" stopColor={tone.ring} stopOpacity="0.75" />
+          <stop offset="100%" stopColor="#020812" />
+        </radialGradient>
+        <linearGradient id="ac-line" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%"  stopColor={tone.ring} stopOpacity="0" />
+          <stop offset="50%" stopColor={tone.ring} stopOpacity="0.65" />
+          <stop offset="100%" stopColor={tone.ring} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Aura */}
+      <circle cx="140" cy="140" r="135" fill="url(#ac-bg)" />
+
+      {/* Outer rotating ring */}
+      <g style={animate ? { transformOrigin: "140px 140px", animation: "agc-spin 40s linear infinite" } : undefined}>
+        <circle cx="140" cy="140" r="118" fill="none" stroke={tone.ring} strokeWidth="0.8" strokeDasharray="6 8" opacity="0.5" />
+        {/* Sensör noktaları */}
+        {Array.from({ length: 8 }, (_, i) => {
+          const a = (i / 8) * Math.PI * 2;
+          const x = 140 + Math.cos(a) * 118;
+          const y = 140 + Math.sin(a) * 118;
+          return <circle key={i} cx={x} cy={y} r="2.4" fill={tone.ring} opacity="0.85" />;
+        })}
+      </g>
+
+      {/* Middle counter-ring */}
+      <g style={animate ? { transformOrigin: "140px 140px", animation: "agc-spin 28s linear infinite reverse" } : undefined}>
+        <circle cx="140" cy="140" r="92" fill="none" stroke={tone.ring} strokeWidth="0.6" opacity="0.35" />
+        <circle cx="140" cy="140" r="92" fill="none" stroke={tone.ring} strokeWidth="0.5" strokeDasharray="2 10" opacity="0.7" />
+      </g>
+
+      {/* Hexagonal grid mesh (static) */}
+      <g opacity="0.35">
+        {[0, 60, 120].map(rot => (
+          <line key={rot} x1="140" y1="55" x2="140" y2="225" stroke={tone.ring} strokeWidth="0.4"
+                transform={`rotate(${rot} 140 140)`} />
+        ))}
+        <polygon points="140,55 215,97 215,183 140,225 65,183 65,97" fill="none" stroke={tone.ring} strokeWidth="0.5" opacity="0.6" />
+        <polygon points="140,85 188,113 188,167 140,195 92,167 92,113" fill="none" stroke={tone.ring} strokeWidth="0.4" opacity="0.45" />
+      </g>
+
+      {/* Data flow lines (animated dashed lines) */}
+      {animate && Array.from({ length: 6 }, (_, i) => {
+        const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        const x1 = 140 + Math.cos(a) * 50;
+        const y1 = 140 + Math.sin(a) * 50;
+        const x2 = 140 + Math.cos(a) * 110;
+        const y2 = 140 + Math.sin(a) * 110;
+        return (
+          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="url(#ac-line)"
+                strokeWidth="1.2" strokeDasharray="3 6">
+            <animate attributeName="stroke-dashoffset" from="0" to="-36"
+                     dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
+          </line>
+        );
+      })}
+
+      {/* Pulse halka */}
+      <circle cx="140" cy="140" r="56" fill="none" stroke={tone.ring} strokeWidth="1.2" opacity="0.7"
+              style={animate ? { transformOrigin: "140px 140px", animation: "agc-pulse 3s ease-in-out infinite" } : undefined} />
+
+      {/* Core */}
+      <circle cx="140" cy="140" r="44" fill="url(#ac-core)" />
+      <circle cx="140" cy="140" r="44" fill="none" stroke={tone.ring} strokeWidth="1.2" />
+
+      {/* Core text */}
+      <text x="140" y="138" textAnchor="middle" fontSize="10" fontFamily="monospace"
+            fontWeight="bold" fill="#fff" letterSpacing="2">AGENT</text>
+      <text x="140" y="152" textAnchor="middle" fontSize="8" fontFamily="monospace"
+            fill={tone.ring} letterSpacing="3" opacity="0.9">CORE</text>
+    </svg>
+  );
+}
+
+// ── Confidence ring ──────────────────────────────────────────────────────────
+
+function ConfidenceRing({ value, color, size = 96 }: { value: number; color: string; size?: number }) {
+  const r = size / 2 - 6;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, value));
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="3.5" />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="3.5"
+              strokeLinecap="round" strokeDasharray={`${(pct / 100) * c} ${c}`}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              style={{ filter: `drop-shadow(0 0 4px ${color})`, transition: "stroke-dasharray 0.7s ease" }} />
+      <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle"
+            fontSize={size * 0.3} fontFamily="monospace" fontWeight="700" fill={color}>
+        {Math.round(pct)}
+      </text>
+    </svg>
+  );
+}
+
+// ── Sidebar icons ────────────────────────────────────────────────────────────
+
+const SIDEBAR_ITEMS = [
+  { key: "core",    icon: "◈", label: "Komut Merkezi" },
+  { key: "market",  icon: "◇", label: "Piyasa Zekası" },
+  { key: "trade",   icon: "△", label: "Trade Fikirleri" },
+  { key: "risk",    icon: "⊙", label: "Risk Radar" },
+  { key: "port",    icon: "▤", label: "Portföy Bakışı" },
+  { key: "log",     icon: "≡", label: "Ajan Günlüğü" },
+  { key: "sys",     icon: "⚙", label: "Sistem Kontrolleri" },
+] as const;
+
+// ── Main ─────────────────────────────────────────────────────────────────────
+
+interface Props {
+  banner:   AgentBanner | null;
+  opinion:  TradeOpinion | null;
+  insights: AgentInsight[];
+  trading:  TradingState | null;
+  headlines?: NewsHeadline[];
+
+  /** Karar Detayları accordion'u için (opsiyonel). */
+  decision?:       Decision;
+  ownerActions?:   string[];
+  flipConditions?: FlipCondition[];
+
+  /** Sistem Kontrolleri accordion'u için (opsiyonel). */
+  macro?:    MacroLayer;
+  appetite?: RiskAppetiteLayer;
+
+  onClose: () => void;
+}
+
+export default function AgentHolographicLayer({
+  banner, opinion, insights, trading, headlines = [],
+  decision, ownerActions = [], flipConditions = [],
+  macro, appetite, onClose,
+}: Props) {
+  const [animate,       setAnimate]       = useState(false);
+  const [active,        setActive]        = useState<string>("core");
+  const [detailOpen,    setDetailOpen]    = useState(false);
+  const [systemOpen,    setSystemOpen]    = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setAnimate(!mq.matches);
+    const onMQ = () => setAnimate(!mq.matches);
+    mq.addEventListener?.("change", onMQ);
+    return () => mq.removeEventListener?.("change", onMQ);
+  }, []);
+
+  const mode: BannerMode = banner?.mode ?? "waiting";
+  const tone = TONES[mode];
+
+  // Top signals / contradictions / watch — kısa chip
+  const topSignals     = useMemo(() => (banner?.top_signals     ?? []).slice(0, 3), [banner]);
+  const contradictions = useMemo(() => (banner?.contradictions  ?? []).slice(0, 3), [banner]);
+  const watchNext      = useMemo(() => (banner?.watch_next      ?? []).slice(0, 3), [banner]);
+
+  // 3 thought card
+  const thoughts = useMemo(() => {
+    const t: { label: string; text: string; tone: string }[] = [];
+    if (banner?.market_thought)      t.push({ label: "Makro / Rejim",      text: banner.market_thought,      tone: tone.ring });
+    if (banner?.event_story)         t.push({ label: "Risk / Event",       text: banner.event_story,         tone: TONES.contradiction.ring });
+    else if (banner?.price_story)    t.push({ label: "Fiyat Hareketi",     text: banner.price_story,         tone: TONES.contradiction.ring });
+    if (banner?.next_trigger)        t.push({ label: "Sonraki İzlem",      text: banner.next_trigger,        tone: TONES.waiting.ring });
+    return t.slice(0, 3);
+  }, [banner, tone.ring]);
+
+  // 5 piyasa bağlamı modülü
+  const ctxModules = useMemo(() => ([
+    { key: "news",   label: "Haber Hikayesi",   text: banner?.news_story          ?? "",  icon: "📰" },
+    { key: "price",  label: "Fiyat Tepkisi",    text: banner?.price_story         ?? "",  icon: "📈" },
+    { key: "cal",    label: "Olay Takvimi",     text: banner?.event_calendar_note ?? "",  icon: "🗓" },
+    { key: "pricing",label: "Piyasa Fiyatlaması", text: banner?.market_pricing_note ?? "", icon: "⚖" },
+    { key: "geo",    label: "Jeopolitik",       text: banner?.event_story         ?? "",  icon: "🌐" },
+  ]), [banner]);
+
+  // AI trade opinion
+  const best         = opinion?.best_candidate;
+  const confidence   = confidenceFromOpinion(opinion);
+  const opinionColor = best && best.asset !== "NONE"
+    ? (OPINION_TONE[(best.bias?.toUpperCase() === "LONG" ? "LONG_BIAS" : "WAIT")] ?? "#94a3b8")
+    : "#94a3b8";
+
+  // Aktif kararlar
+  const openCount   = trading?.open_positions?.length ?? 0;
+  const dailyPnl    = trading?.daily_pnl_usd ?? 0;
+  const tradedPairs = trading?.traded_pairs?.length ?? 0;
+  const anomaly     = trading?.state_anomaly?.active ?? false;
+
+  // Insight severity counts (risk_alert vb için)
+  const insightCounts = useMemo(() => {
+    const c = { CRITICAL: 0, WARNING: 0, OPPORTUNITY: 0, OBSERVATION: 0 };
+    for (const i of insights) c[i.severity] = (c[i.severity] ?? 0) + 1;
+    return c;
+  }, [insights]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex flex-col"
+      style={{ backgroundColor: "#02060f" }}
+      onClick={onClose}
+    >
+      <style>{`
+        @keyframes agc-spin   { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+        @keyframes agc-pulse  { 0%,100%{transform:scale(1);opacity:0.7} 50%{transform:scale(1.12);opacity:0.35} }
+        @keyframes agc-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+        @keyframes agc-breathe{ 0%,100%{opacity:0.78} 50%{opacity:1} }
+        @keyframes agc-scan   { 0%{transform:translateY(-100%)} 100%{transform:translateY(100%)} }
+        @keyframes agc-flow   { to{stroke-dashoffset:-32} }
+        @keyframes agc-fade   { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+      `}</style>
+
+      <div
+        className="flex-1 overflow-y-auto w-full max-w-full min-w-0"
+        style={{ backgroundColor: "#02060f" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <header className="sticky top-0 z-10 border-b border-cyan-500/15"
+                style={{ background: "linear-gradient(180deg, #050d1a, #02060f)" }}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <span aria-hidden="true" className={tone.text}
+                    style={animate ? { animation: "agc-breathe 2.6s ease-in-out infinite" } : undefined}>
+                ◈
+              </span>
+              <div className="min-w-0">
+                <p className="text-[12px] font-mono font-black uppercase tracking-[0.28em] text-cyan-100 truncate">
+                  e-yAy <span className={tone.text}>AGENT</span>
+                </p>
+                <p className="text-[8.5px] font-mono text-cyan-400/65 truncate">
+                  Agent Layer · Düşünen · Yorumlayan · Karar vermeyen
+                </p>
+              </div>
+            </div>
+
+            <div className="hidden md:flex items-center gap-1 ml-2">
+              <span className="text-[8px] font-mono text-cyan-400/55 uppercase tracking-[0.22em]">
+                Komut Merkezi · Canlı Analiz
+              </span>
+            </div>
+
+            <div className="ml-auto flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+              <span className={`rounded-md border px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-widest ${tone.border}`}
+                    style={{ color: tone.ring, background: tone.soft }}>
+                {tone.label}
+              </span>
+              <span className="rounded-md border border-cyan-700/40 bg-cyan-950/30 px-2 py-0.5 text-[9px] font-mono text-cyan-300">
+                {fmtTime(banner?.updated_at)}
+              </span>
+              <span className="rounded-md border border-emerald-700/40 bg-emerald-950/30 px-2 py-0.5 text-[9px] font-mono text-emerald-300">
+                PAPER_SAFE
+              </span>
+              <span className="rounded-md border border-eyay-border bg-black/30 px-2 py-0.5 text-[9px] font-mono text-eyay-dim">
+                {openCount} pozisyon
+              </span>
+              <button
+                onClick={onClose}
+                className="ml-1 rounded-md border border-cyan-700/40 bg-cyan-950/30 px-2 py-0.5 text-[10px] font-mono text-cyan-200 hover:bg-cyan-900/40 transition-colors">
+                ESC
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* ── Body grid ── */}
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-5 grid grid-cols-[64px_minmax(0,1fr)] gap-3 min-w-0">
+          {/* Sidebar */}
+          <nav className="sticky top-[60px] self-start flex flex-col gap-1 bg-black/30 border border-cyan-500/15 rounded-2xl p-1.5">
+            {SIDEBAR_ITEMS.map(item => (
+              <button key={item.key}
+                      type="button"
+                      onClick={() => setActive(item.key)}
+                      aria-pressed={active === item.key}
+                      title={item.label}
+                      className={`w-full aspect-square rounded-lg flex items-center justify-center text-base transition-all ${
+                        active === item.key
+                          ? "border border-cyan-500/60 bg-cyan-950/40 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.25)]"
+                          : "border border-transparent text-eyay-faint hover:text-cyan-200 hover:bg-white/5"
+                      }`}>
+                <span aria-hidden="true">{item.icon}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* Main */}
+          <div className="min-w-0 flex flex-col gap-4">
+
+            {/* ── Üst grid: thoughts | core | opinion ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)_320px] gap-4 items-stretch">
+
+              {/* Thoughts (sol) */}
+              <div className="flex flex-col gap-2">
+                <p className="text-[9px] font-mono text-cyan-400/65 uppercase tracking-[0.22em]">
+                  ✦ Şu an ne düşünüyorum
+                </p>
+                {thoughts.length > 0 ? (
+                  thoughts.map((t, i) => (
+                    <div key={i} className="rounded-xl border bg-black/40 px-3 py-2.5"
+                         style={{
+                           borderColor: `${t.tone}55`,
+                           boxShadow: animate ? `0 0 12px ${t.tone}18` : undefined,
+                           animation: animate ? `agc-fade 0.5s ease ${i * 0.1}s both` : undefined,
+                         }}>
+                      <p className="text-[8px] font-mono uppercase tracking-widest mb-1"
+                         style={{ color: t.tone, opacity: 0.85 }}>{t.label}</p>
+                      <p className="text-[10.5px] font-mono text-eyay-dim leading-snug line-clamp-3">
+                        {t.text}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[9px] font-mono text-eyay-faint italic">Düşünce verisi bekleniyor.</p>
+                )}
+              </div>
+
+              {/* Agent Core (orta) */}
+              <div className="relative flex items-center justify-center bg-black/30 border border-cyan-500/15 rounded-2xl p-3 min-h-[340px] overflow-hidden">
+                {/* Köşe brackets */}
+                <span aria-hidden="true" className="absolute top-2 left-2 w-3 h-3 border-t border-l border-cyan-400/40" />
+                <span aria-hidden="true" className="absolute top-2 right-2 w-3 h-3 border-t border-r border-cyan-400/40" />
+                <span aria-hidden="true" className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-cyan-400/40" />
+                <span aria-hidden="true" className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-cyan-400/40" />
+                <AgentCore tone={tone} animate={animate} />
+
+                {/* 4 floating orbit cards */}
+                <div className="absolute top-3 left-3">
+                  <OrbitCard label="Top Sinyal" n={topSignals.length} tone={TONES.managing_position.ring} animate={animate} />
+                </div>
+                <div className="absolute top-3 right-3">
+                  <OrbitCard label="Çelişki" n={contradictions.length} tone={TONES.contradiction.ring} animate={animate} />
+                </div>
+                <div className="absolute bottom-3 left-3">
+                  <OrbitCard label="İzlem" n={watchNext.length} tone={TONES.waiting.ring} animate={animate} />
+                </div>
+                <div className="absolute bottom-3 right-3">
+                  <OrbitCard
+                    label="Mod"
+                    value={tone.label}
+                    tone={tone.ring}
+                    animate={animate}
+                  />
+                </div>
+              </div>
+
+              {/* AI Trade Fikrim (sağ) */}
+              <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-black/40 via-cyan-950/15 to-black/40 p-3 flex flex-col gap-2 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-mono text-cyan-300/70 uppercase tracking-[0.22em]">
+                    ✦ AI Trade Fikrim
+                  </p>
+                  <span className="text-[8px] font-mono text-eyay-faint">v{(opinion?.schema_version || "—").replace("ai_trade_opinion_", "")}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <ConfidenceRing value={confidence} color={opinionColor} size={88} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest">Ana Fikir</p>
+                    <p className="text-[14px] font-mono font-black tracking-wider truncate" style={{ color: opinionColor }}>
+                      {best?.asset && best.asset !== "NONE"
+                        ? `${best.asset} ${best.bias?.toUpperCase() === "LONG" ? "LONG" : best.bias?.toUpperCase() === "SHORT" ? "SHORT" : "WAIT"}`
+                        : "NONE"}
+                    </p>
+                    {best?.trigger && (
+                      <p className="text-[9px] font-mono text-eyay-dim leading-snug mt-1 line-clamp-2">⚡ {best.trigger}</p>
+                    )}
+                  </div>
+                </div>
+
+                {best?.risk && (
+                  <div className="border-t border-cyan-700/20 pt-2">
+                    <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-0.5">Invalidation</p>
+                    <p className="text-[9px] font-mono text-eyay-dim leading-snug line-clamp-2">{best.risk}</p>
+                  </div>
+                )}
+
+                {/* Asset opinion chips */}
+                {(opinion?.asset_opinions?.length ?? 0) > 0 && (
+                  <div className="border-t border-cyan-700/20 pt-2">
+                    <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-1">Varlık Görüşleri</p>
+                    <div className="flex flex-wrap gap-1">
+                      {opinion!.asset_opinions!.slice(0, 5).map(a => {
+                        const c = OPINION_TONE[a.opinion?.toUpperCase()] ?? "#94a3b8";
+                        return (
+                          <span key={a.asset}
+                                className="text-[8.5px] font-mono px-1.5 py-0.5 rounded border"
+                                style={{ color: c, borderColor: `${c}55`, background: `${c}11` }}>
+                            {a.asset} · {a.opinion}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── 5 piyasa bağlamı modülü ── */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+              {ctxModules.map(c => (
+                <details key={c.key} className="group rounded-xl border border-cyan-500/15 bg-black/30 p-2 min-w-0">
+                  <summary className="flex items-center gap-1.5 cursor-pointer list-none">
+                    <span aria-hidden="true" className="text-cyan-300/80">{c.icon}</span>
+                    <span className="text-[8.5px] font-mono uppercase tracking-widest text-cyan-300/75 truncate">
+                      {c.label}
+                    </span>
+                    <span className="ml-auto text-[8px] font-mono text-eyay-faint group-open:hidden">▸</span>
+                    <span className="ml-auto text-[8px] font-mono text-eyay-faint hidden group-open:inline">▾</span>
+                  </summary>
+                  <p className="text-[9px] font-mono text-eyay-dim leading-snug mt-1.5 line-clamp-1 group-open:line-clamp-none">
+                    {c.text || "Veri bekleniyor."}
+                  </p>
+                </details>
+              ))}
+            </div>
+
+            {/* ── Aktif Kararlar özeti ── */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <Stat label="Açık Pozisyon" value={String(openCount)} tone={openCount > 0 ? "#34d399" : "#94a3b8"} />
+              <Stat label="Günlük PnL"    value={`${dailyPnl >= 0 ? "+" : "−"}${Math.abs(dailyPnl).toFixed(0)} USD`}
+                    tone={dailyPnl >= 0 ? "#34d399" : "#f87171"} />
+              <Stat label="İşlenen Pair"  value={String(tradedPairs)} tone="#22d3ee" />
+              <Stat label="Risk Durumu"   value={anomaly ? "ANOMALİ" : "OK"} tone={anomaly ? "#f87171" : "#34d399"} />
+            </div>
+
+            {/* ── Insight ticker (kısa) ── */}
+            {insights.length > 0 && (
+              <div className="rounded-xl border border-cyan-500/15 bg-black/30 px-3 py-2">
+                <p className="text-[8px] font-mono text-cyan-400/65 uppercase tracking-widest mb-1.5">
+                  Ajan Günlüğü ({insights.length})
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {insights.slice(0, 6).map((ins, i) => {
+                    const sevColor = ins.severity === "CRITICAL" ? "#f87171"
+                                  : ins.severity === "WARNING"  ? "#fbbf24"
+                                  : ins.severity === "OPPORTUNITY" ? "#34d399"
+                                  : "#94a3b8";
+                    return (
+                      <div key={i} className="shrink-0 max-w-[260px] rounded-lg border px-2 py-1"
+                           style={{ borderColor: `${sevColor}55`, background: `${sevColor}11` }}>
+                        <p className="text-[7.5px] font-mono font-black uppercase tracking-widest" style={{ color: sevColor }}>
+                          {ins.severity} · {ins.asset_code}
+                        </p>
+                        <p className="text-[9px] font-mono text-eyay-dim leading-snug truncate">{ins.headline}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Breaking News Radar ── */}
+            <div className="rounded-xl border border-red-700/30 bg-black/30 p-2">
+              <p className="text-[8px] font-mono text-red-300/70 uppercase tracking-widest mb-1.5 px-1">
+                🚨 Son Dakika Haber Radarı
+              </p>
+              <BreakingNewsPanelShell headlines={headlines} />
+            </div>
+
+            {/* ── Karar Detayları accordion (default kapalı) ── */}
+            {decision && (
+              <section className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setDetailOpen(o => !o)}
+                  aria-expanded={detailOpen}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/[0.02]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-cyan-300/70 text-xs">🎯</span>
+                    <p className="text-[10px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
+                      Karar Detayları
+                    </p>
+                    <span className="text-[8.5px] font-mono text-eyay-faint">
+                      · Aksiyon · İyileşme · Risk
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-eyay-faint">{detailOpen ? "▾ kapat" : "▸ aç"}</span>
+                </button>
+                {detailOpen && (
+                  <div className="border-t border-cyan-500/15 p-3 bg-black/20 max-h-[500px] overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+                    <ActionCenter decision={decision} ownerActions={ownerActions} flipConditions={flipConditions} />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* ── Sistem Kontrolleri accordion (default kapalı) ── */}
+            <section className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setSystemOpen(o => !o)}
+                aria-expanded={systemOpen}
+                className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <span className="text-cyan-300/70 text-xs">⚙</span>
+                  <p className="text-[10px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
+                    Sistem Kontrolleri
+                  </p>
+                  <span className="text-[8.5px] font-mono text-eyay-faint">
+                    · Makro+Risk · Öğrenme · System Health
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono text-eyay-faint">{systemOpen ? "▾ kapat" : "▸ aç"}</span>
+              </button>
+              {systemOpen && (
+                <div className="border-t border-cyan-500/15 p-3 bg-black/20 space-y-3">
+                  {macro && appetite ? (
+                    <MacroPanel macro={macro} appetite={appetite} showUnified={true} />
+                  ) : (
+                    <p className="text-[10px] font-mono text-eyay-faint italic">Makro/Risk sentezi: veri yok.</p>
+                  )}
+                  <LearningPanel />
+                  <SystemHealthPanel />
+                </div>
+              )}
+            </section>
+
+            {/* ── Footer ── */}
+            <div className="pt-2 border-t border-cyan-500/15">
+              <p className="text-[9px] font-mono text-eyay-faint text-center leading-relaxed">
+                Agent canlı izleme · banner 30sn · insight 15sn · saf analiz<br />
+                <span className="text-cyan-300/70">PAPER_SAFE · NO_EXECUTION · tüm gerçek kararlar insana aittir</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Alt sabit kapat çubuğu */}
+        <div className="sticky bottom-0 border-t border-cyan-500/20"
+             style={{ background: "linear-gradient(180deg, #050d1a, #02060f)" }}>
+          <div className="max-w-7xl mx-auto px-6 py-2.5 flex items-center justify-between">
+            <span className="text-[9px] font-mono text-cyan-400/60">
+              ESC veya backdrop → kapat
+            </span>
+            <span className="text-[8px] font-mono text-cyan-400/50">
+              insight critical: {insightCounts.CRITICAL} · warning: {insightCounts.WARNING} · obs: {insightCounts.OBSERVATION}
+            </span>
+            <button
+              onClick={onClose}
+              className="px-3 py-1 rounded-lg border border-cyan-500/40 text-cyan-200 text-[10px] font-mono font-bold hover:bg-cyan-900/30 transition-colors">
+              DASHBOARD'A DÖN
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Mini stat ────────────────────────────────────────────────────────────────
+
+function Stat({ label, value, tone }: { label: string; value: string; tone: string }) {
+  return (
+    <div className="rounded-xl border bg-black/30 px-3 py-2"
+         style={{ borderColor: `${tone}44`, boxShadow: `0 0 10px ${tone}14` }}>
+      <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest">{label}</p>
+      <p className="text-[14px] font-mono font-black mt-0.5" style={{ color: tone }}>{value}</p>
+    </div>
+  );
+}
+
+// ── Orbit floating card ──────────────────────────────────────────────────────
+
+function OrbitCard({
+  label, n, value, tone, animate,
+}: { label: string; n?: number; value?: string; tone: string; animate: boolean }) {
+  return (
+    <div
+      className="rounded-lg border bg-black/55 backdrop-blur-sm px-2 py-1 min-w-[80px]"
+      style={{
+        borderColor: `${tone}55`,
+        boxShadow: animate ? `0 0 10px ${tone}22` : undefined,
+        animation: animate ? "agc-float 6s ease-in-out infinite" : undefined,
+      }}>
+      <p className="text-[7.5px] font-mono uppercase tracking-widest"
+         style={{ color: tone, opacity: 0.85 }}>{label}</p>
+      <p className="text-[14px] font-mono font-black leading-none mt-0.5"
+         style={{ color: tone }}>
+        {value ?? (n ?? 0)}
+      </p>
+    </div>
+  );
+}
