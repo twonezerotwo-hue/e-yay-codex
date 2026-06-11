@@ -247,14 +247,15 @@ function ConfidenceRing({ value, color, size = 96 }: { value: number; color: str
 
 // ── Sidebar icons ────────────────────────────────────────────────────────────
 
-const SIDEBAR_ITEMS = [
-  { key: "core",    icon: "◈", label: "Komut Merkezi" },
-  { key: "market",  icon: "◇", label: "Piyasa Zekası" },
-  { key: "trade",   icon: "△", label: "Trade Fikirleri" },
-  { key: "risk",    icon: "⊙", label: "Risk Radar" },
-  { key: "port",    icon: "▤", label: "Portföy Bakışı" },
-  { key: "log",     icon: "≡", label: "Ajan Günlüğü" },
-  { key: "sys",     icon: "⚙", label: "Sistem Kontrolleri" },
+interface NavItem { icon: string; label: string; id: string; opensAccordion?: "detail" | "system"; }
+const NAV_ITEMS: readonly NavItem[] = [
+  { icon: "◈", label: "Komut Merkezi",     id: "agent-core-section" },
+  { icon: "◇", label: "Piyasa Zekası",     id: "market-context-section" },
+  { icon: "△", label: "AI Trade Fikrim",   id: "trade-opinion-section" },
+  { icon: "⊙", label: "Haber Radarı",      id: "news-radar-section" },
+  { icon: "▤", label: "Aktif Kararlar",    id: "positions-section" },
+  { icon: "≡", label: "Karar Detayları",   id: "decision-details-section", opensAccordion: "detail" },
+  { icon: "⚙", label: "Sistem Kontrolleri", id: "system-controls-section", opensAccordion: "system" },
 ] as const;
 
 // ── Main ─────────────────────────────────────────────────────────────────────
@@ -284,7 +285,7 @@ export default function AgentHolographicLayer({
   macro, appetite, onClose,
 }: Props) {
   const [animate,       setAnimate]       = useState(false);
-  const [active,        setActive]        = useState<string>("core");
+  const [activeId,      setActiveId]      = useState<string>("agent-core-section");
   const [detailOpen,    setDetailOpen]    = useState(false);
   const [systemOpen,    setSystemOpen]    = useState(false);
 
@@ -296,6 +297,44 @@ export default function AgentHolographicLayer({
     mq.addEventListener?.("change", onMQ);
     return () => mq.removeEventListener?.("change", onMQ);
   }, []);
+
+  // ── Section navigation: scroll + accordion açma + aktif takip ──────────────
+  const handleNavClick = (item: NavItem) => {
+    setActiveId(item.id);
+    if (item.opensAccordion === "detail") setDetailOpen(true);
+    if (item.opensAccordion === "system") setSystemOpen(true);
+    // Accordion açılıp DOM'da render olduktan sonra scroll
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = typeof document !== "undefined" ? document.getElementById(item.id) : null;
+        if (el) {
+          el.scrollIntoView({
+            behavior: animate ? "smooth" : "auto",
+            block: "start",
+          });
+        }
+      });
+    });
+  };
+
+  // IntersectionObserver — aktif section'ı viewport'a göre takip et
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter(e => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) setActiveId(visible[0].target.id);
+      },
+      { rootMargin: "-25% 0px -55% 0px", threshold: [0, 0.25, 0.5] },
+    );
+    NAV_ITEMS.forEach(item => {
+      const el = document.getElementById(item.id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [detailOpen, systemOpen]);
 
   const mode: BannerMode = banner?.mode ?? "waiting";
   const tone = TONES[mode];
@@ -414,23 +453,33 @@ export default function AgentHolographicLayer({
         </header>
 
         {/* ── Body grid ── */}
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-5 grid grid-cols-[64px_minmax(0,1fr)] gap-3 min-w-0">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 py-5 grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)] gap-3 min-w-0">
           {/* Sidebar */}
-          <nav className="sticky top-[60px] self-start flex flex-col gap-1 bg-black/30 border border-cyan-500/15 rounded-2xl p-1.5">
-            {SIDEBAR_ITEMS.map(item => (
-              <button key={item.key}
-                      type="button"
-                      onClick={() => setActive(item.key)}
-                      aria-pressed={active === item.key}
-                      title={item.label}
-                      className={`w-full aspect-square rounded-lg flex items-center justify-center text-base transition-all ${
-                        active === item.key
-                          ? "border border-cyan-500/60 bg-cyan-950/40 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.25)]"
-                          : "border border-transparent text-eyay-faint hover:text-cyan-200 hover:bg-white/5"
-                      }`}>
-                <span aria-hidden="true">{item.icon}</span>
-              </button>
-            ))}
+          <nav className="sm:sticky sm:top-[60px] sm:self-start flex sm:flex-col flex-row gap-1 bg-black/30 border border-cyan-500/15 rounded-2xl p-1.5 overflow-x-auto sm:overflow-visible"
+               aria-label="Agent komut merkezi gezinme">
+            {NAV_ITEMS.map(item => {
+              const isActive = activeId === item.id;
+              return (
+                <button key={item.id}
+                        type="button"
+                        onClick={() => handleNavClick(item)}
+                        aria-pressed={isActive}
+                        aria-label={item.label}
+                        title={item.label}
+                        className={`group relative shrink-0 w-12 h-12 sm:w-full sm:aspect-square rounded-lg flex items-center justify-center text-base transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                          isActive
+                            ? "border border-cyan-500/60 bg-cyan-950/40 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.25)]"
+                            : "border border-transparent text-eyay-faint hover:text-cyan-200 hover:bg-white/5"
+                        }`}>
+                  <span aria-hidden="true">{item.icon}</span>
+                  {/* Tooltip label — hover'da yan çıkar */}
+                  <span aria-hidden="true"
+                        className="hidden sm:block absolute left-full ml-2 px-2 py-0.5 rounded-md border border-cyan-500/40 bg-black/90 text-cyan-200 text-[9px] font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 pointer-events-none transition-opacity z-30">
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </nav>
 
           {/* Main */}
@@ -465,7 +514,7 @@ export default function AgentHolographicLayer({
               </div>
 
               {/* Agent Core (orta) */}
-              <div className="relative flex items-center justify-center bg-black/30 border border-cyan-500/15 rounded-2xl p-3 min-h-[340px] overflow-hidden">
+              <div id="agent-core-section" data-section="agent-core" className="scroll-mt-[80px] relative flex items-center justify-center bg-black/30 border border-cyan-500/15 rounded-2xl p-3 min-h-[340px] overflow-hidden">
                 {/* Köşe brackets */}
                 <span aria-hidden="true" className="absolute top-2 left-2 w-3 h-3 border-t border-l border-cyan-400/40" />
                 <span aria-hidden="true" className="absolute top-2 right-2 w-3 h-3 border-t border-r border-cyan-400/40" />
@@ -494,7 +543,7 @@ export default function AgentHolographicLayer({
               </div>
 
               {/* AI Trade Fikrim (sağ) */}
-              <div className="rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-black/40 via-cyan-950/15 to-black/40 p-3 flex flex-col gap-2 min-w-0">
+              <div id="trade-opinion-section" data-section="trade-opinion" className="scroll-mt-[80px] rounded-2xl border border-cyan-500/20 bg-gradient-to-b from-black/40 via-cyan-950/15 to-black/40 p-3 flex flex-col gap-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <p className="text-[9px] font-mono text-cyan-300/70 uppercase tracking-[0.22em]">
                     ✦ AI Trade Fikrim
@@ -546,7 +595,7 @@ export default function AgentHolographicLayer({
             </div>
 
             {/* ── 5 piyasa bağlamı modülü ── */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+            <div id="market-context-section" data-section="market-context" className="scroll-mt-[80px] grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
               {ctxModules.map(c => (
                 <details key={c.key} className="group rounded-xl border border-cyan-500/15 bg-black/30 p-2 min-w-0">
                   <summary className="flex items-center gap-1.5 cursor-pointer list-none">
@@ -565,7 +614,7 @@ export default function AgentHolographicLayer({
             </div>
 
             {/* ── Aktif Kararlar özeti ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <div id="positions-section" data-section="positions" className="scroll-mt-[80px] grid grid-cols-2 md:grid-cols-4 gap-2">
               <Stat label="Açık Pozisyon" value={String(openCount)} tone={openCount > 0 ? "#34d399" : "#94a3b8"} />
               <Stat label="Günlük PnL"    value={`${dailyPnl >= 0 ? "+" : "−"}${Math.abs(dailyPnl).toFixed(0)} USD`}
                     tone={dailyPnl >= 0 ? "#34d399" : "#f87171"} />
@@ -600,7 +649,7 @@ export default function AgentHolographicLayer({
             )}
 
             {/* ── Breaking News Radar ── */}
-            <div className="rounded-xl border border-red-700/30 bg-black/30 p-2">
+            <div id="news-radar-section" data-section="news-radar" className="scroll-mt-[80px] rounded-xl border border-red-700/30 bg-black/30 p-2">
               <p className="text-[8px] font-mono text-red-300/70 uppercase tracking-widest mb-1.5 px-1">
                 🚨 Son Dakika Haber Radarı
               </p>
@@ -609,7 +658,8 @@ export default function AgentHolographicLayer({
 
             {/* ── Karar Detayları accordion (default kapalı) ── */}
             {decision && (
-              <section className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+              <section id="decision-details-section" data-section="decision-details"
+                       className="scroll-mt-[80px] rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setDetailOpen(o => !o)}
@@ -635,7 +685,8 @@ export default function AgentHolographicLayer({
             )}
 
             {/* ── Sistem Kontrolleri accordion (default kapalı) ── */}
-            <section className="rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
+            <section id="system-controls-section" data-section="system-controls"
+                     className="scroll-mt-[80px] rounded-xl border border-cyan-500/15 bg-black/30 overflow-hidden">
               <button
                 type="button"
                 onClick={() => setSystemOpen(o => !o)}
