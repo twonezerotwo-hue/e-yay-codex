@@ -93,15 +93,17 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
   return (
     <svg viewBox="0 0 320 320" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        {/* Brushed-metal body — multi-stop highlight */}
+        {/* Brushed-metal body — daha kontrastlı, koyu shadow kenarlar */}
         <linearGradient id="rk-body" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stopColor="#0a1626" />
-          <stop offset="20%"  stopColor="#475569" />
-          <stop offset="42%"  stopColor="#cbd5e1" />
-          <stop offset="50%"  stopColor="#e2e8f0" />
-          <stop offset="58%"  stopColor="#cbd5e1" />
-          <stop offset="80%"  stopColor="#475569" />
-          <stop offset="100%" stopColor="#0a1626" />
+          <stop offset="0%"   stopColor="#020812" />
+          <stop offset="8%"   stopColor="#0a1220" />
+          <stop offset="22%"  stopColor="#334155" />
+          <stop offset="42%"  stopColor="#b8c4d4" />
+          <stop offset="50%"  stopColor="#dde4ed" />
+          <stop offset="58%"  stopColor="#b8c4d4" />
+          <stop offset="78%"  stopColor="#334155" />
+          <stop offset="92%"  stopColor="#0a1220" />
+          <stop offset="100%" stopColor="#020812" />
         </linearGradient>
         <linearGradient id="rk-nose" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%"  stopColor={m.bodyTint} stopOpacity="1" />
@@ -140,28 +142,29 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
         </filter>
       </defs>
 
-      {/* Pad radial glow */}
-      <ellipse cx="160" cy="294" rx="140" ry="28" fill="url(#rk-pad-glow)" />
+      {/* Pad radial glow — kompakt */}
+      <ellipse cx="160" cy="288" rx="115" ry="22" fill="url(#rk-pad-glow)" opacity="0.75" />
 
-      {/* Multi-layer launch platform rings */}
-      <g style={animate ? { animation: "lp-breathe 3.5s ease-in-out infinite" } : undefined}>
-        <ellipse cx="160" cy="262" rx="98" ry="13" fill="none" stroke={m.toneRing}
-                 strokeWidth="1" opacity={isLaunching ? 0.85 : 0.45} />
-        <ellipse cx="160" cy="262" rx="76" ry="10" fill="none" stroke={m.toneRing}
-                 strokeWidth="0.7" strokeDasharray="5 3" opacity="0.55" />
-        <ellipse cx="160" cy="262" rx="54" ry="7.5" fill="none" stroke={m.toneRing}
-                 strokeWidth="0.6" opacity="0.42" />
+      {/* Multi-layer launch platform rings — daha kurumsal/sönük */}
+      <g style={animate ? { animation: "lp-breathe 4s ease-in-out infinite" } : undefined}>
+        <ellipse cx="160" cy="262" rx="105" ry="13" fill="none" stroke={m.toneRing}
+                 strokeWidth="0.9" opacity={isLaunching ? 0.55 : 0.30} />
+        <ellipse cx="160" cy="262" rx="82" ry="10" fill="none" stroke={m.toneRing}
+                 strokeWidth="0.6" strokeDasharray="4 4" opacity="0.32" />
+        <ellipse cx="160" cy="262" rx="60" ry="7.5" fill="none" stroke={m.toneRing}
+                 strokeWidth="0.5" opacity="0.22" />
       </g>
 
-      {/* Projection beams from pad up — yalnız aktif modlarda */}
+      {/* Projection beams — yalnız aktif modlarda */}
       {(isLaunching || mode === "BEKLE") && (
-        <g opacity={isLaunching ? 0.55 : 0.28}>
-          <line x1="100" y1="262" x2="124" y2="218" stroke={m.toneRing} strokeWidth="0.7" />
-          <line x1="220" y1="262" x2="196" y2="218" stroke={m.toneRing} strokeWidth="0.7" />
+        <g opacity={isLaunching ? 0.32 : 0.16}>
+          <line x1="100" y1="262" x2="130" y2="222" stroke={m.toneRing} strokeWidth="0.6" />
+          <line x1="220" y1="262" x2="190" y2="222" stroke={m.toneRing} strokeWidth="0.6" />
         </g>
       )}
 
-      {/* Roket — lift animation */}
+      {/* Roket — küçültme wrapper (scale 0.85, merkez 160,140) + lift animation */}
+      <g transform="translate(160 140) scale(0.85) translate(-160 -140)">
       <g
         style={animate && isLaunching ? { animation: "lp-lift 2.4s ease-in-out infinite" } : undefined}
         transform={isLaunching ? "translate(0,-8)" : "translate(0,0)"}
@@ -209,30 +212,26 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
         <path d="M 160 38 L 178 78 L 142 78 Z" fill="url(#rk-nose)" stroke={m.toneRing} strokeWidth="0.8" />
         <line x1="160" y1="40" x2="160" y2="76" stroke="#fff" strokeWidth="0.5" opacity="0.32" />
 
-        {/* Ana gövde */}
+        {/* Ana gövde — koyu kenar shadow daha belirgin */}
         <rect x="142" y="78" width="36" height="128" rx="3" fill="url(#rk-body)"
-              stroke={m.toneRing} strokeWidth="0.7" />
-        {/* Body inner highlight stripe */}
-        <line x1="160" y1="80" x2="160" y2="204" stroke="#fff" strokeWidth="0.35" opacity="0.18" />
+              stroke="#0a1220" strokeWidth="0.9" />
+        {/* Sol/sağ koyu shadow stripe */}
+        <line x1="144.5" y1="80" x2="144.5" y2="204" stroke="#020812" strokeWidth="1.2" opacity="0.6" />
+        <line x1="175.5" y1="80" x2="175.5" y2="204" stroke="#020812" strokeWidth="1.2" opacity="0.6" />
+        {/* Center highlight stripe */}
+        <line x1="160" y1="80" x2="160" y2="204" stroke="#fff" strokeWidth="0.5" opacity="0.28" />
+        <line x1="161" y1="80" x2="161" y2="204" stroke="#fff" strokeWidth="0.3" opacity="0.18" />
 
         {/* Pencere — detaylı bolts */}
         <circle cx="160" cy="104" r="7.5" fill="#020812" stroke={m.toneRing} strokeWidth="1.4" />
         <circle cx="160" cy="104" r="5.2" fill={m.bodyTint} opacity="0.42" />
         <circle cx="161" cy="102" r="2" fill="#fff" opacity="0.85" />
-        {[0, 60, 120, 180, 240, 300].map(a => {
-          const rad = (a * Math.PI) / 180;
-          const cx = 160 + Math.cos(rad) * 7.5;
-          const cy = 104 + Math.sin(rad) * 7.5;
-          return <circle key={a} cx={cx} cy={cy} r="0.55" fill={m.toneRing} opacity="0.7" />;
-        })}
-
-        {/* Şerit detaylar + logo bandı */}
-        <rect x="142" y="130" width="36" height="3" fill={m.toneRing} opacity="0.5" />
-        <rect x="142" y="160" width="36" height="1.6" fill="#94a3b8" opacity="0.4" />
-        <rect x="142" y="188" width="36" height="3" fill={m.toneRing} opacity="0.5" />
-        <ellipse cx="160" cy="146" rx="9" ry="3" fill="none" stroke={m.toneRing} strokeWidth="0.6" opacity="0.55" />
-        <text x="160" y="148" textAnchor="middle" fontSize="3.8" fill={m.toneRing}
-              fontFamily="monospace" fontWeight="bold" opacity="0.78">E·YAY</text>
+        {/* Şerit detaylar — sade metal bantlar (logo/yazı yok) */}
+        <rect x="142" y="130" width="36" height="2.5" fill={m.toneRing} opacity="0.35" />
+        <rect x="142" y="134.5" width="36" height="0.6" fill="#0a0f1a" opacity="0.5" />
+        <rect x="142" y="160" width="36" height="1.2" fill="#94a3b8" opacity="0.3" />
+        <rect x="142" y="188" width="36" height="2.5" fill={m.toneRing} opacity="0.35" />
+        <rect x="142" y="192.5" width="36" height="0.6" fill="#0a0f1a" opacity="0.5" />
 
         {/* Kanatlar — fin + trailing edge highlight */}
         <path d="M 142 186 L 116 232 L 142 218 Z" fill="url(#rk-fin)" stroke={m.toneRing} strokeWidth="0.8" />
@@ -258,10 +257,11 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
                   fill={m.toneRing} fontFamily="monospace" fontWeight="bold">LOCK</text>
             {/* Hazard stripes */}
             <line x1="132" y1="170" x2="188" y2="170" stroke={m.toneRing}
-                  strokeWidth="2" strokeDasharray="6 4" opacity="0.65" />
+                  strokeWidth="2" strokeDasharray="6 4" opacity="0.5" />
           </g>
         )}
       </g>
+      </g>{/* /scale wrapper */}
 
       {/* Duman — multi-layer blurred */}
       {showSmoke && (
@@ -275,15 +275,19 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
         </g>
       )}
 
-      {/* Pad — çok katmanlı zemin */}
-      <rect x="50" y="266" width="220" height="6"  rx="2" fill="#1e293b" stroke={m.toneRing} strokeWidth="0.5" />
-      <rect x="50" y="272" width="220" height="8"  rx="1" fill="#0a1220" />
-      <rect x="50" y="280" width="220" height="3"  rx="1" fill="#020812" />
+      {/* Pad — kurumsal çelik plaka, çok katmanlı zemin */}
+      <rect x="40" y="264" width="240" height="2"  rx="0.5" fill="#1e293b" opacity="0.85" />
+      <rect x="40" y="266" width="240" height="7"  rx="0" fill="#0e1726" stroke="#1e293b" strokeWidth="0.4" />
+      <rect x="40" y="273" width="240" height="10" rx="0" fill="#050a14" />
+      <rect x="40" y="283" width="240" height="4"  rx="0" fill="#020812" />
+      <rect x="40" y="287" width="240" height="1"  rx="0" fill="#1e293b" opacity="0.7" />
 
-      {/* Pad surface grid */}
-      {[80, 110, 160, 210, 240].map((x) => (
-        <line key={x} x1={x} y1="266" x2={x} y2="272" stroke={m.toneRing} strokeWidth="0.4" opacity="0.5" />
+      {/* Pad surface grid notches — sade çelik plate */}
+      {[60, 90, 120, 150, 180, 210, 240, 270].map((x) => (
+        <line key={x} x1={x} y1="266" x2={x} y2="273" stroke="#1e293b" strokeWidth="0.5" opacity="0.7" />
       ))}
+      {/* Tone-renkli yalnız 2 noktada subtle vurgu */}
+      <line x1="160" y1="266" x2="160" y2="273" stroke={m.toneRing} strokeWidth="0.5" opacity="0.32" />
 
       {/* Launch clamp arms — detaylı */}
       <g opacity="0.72">
@@ -298,13 +302,13 @@ function Rocket({ mode, animate }: { mode: Mode; animate: boolean }) {
         <line x1="214" y1="228" x2="204" y2="228" stroke={m.toneRing} strokeWidth="1" opacity="0.5" />
       </g>
 
-      {/* Pad ışıkları — küçük blinking ledler + halo */}
-      {[64, 92, 228, 256].map((x, i) => (
+      {/* Pad ışıkları — kurumsal status ledleri, küçük + sönük */}
+      {[58, 88, 232, 262].map((x, i) => (
         <g key={i}>
-          <circle cx={x} cy="266" r="4.4" fill="none" stroke={m.toneRing} strokeWidth="0.45" opacity="0.32" />
-          <circle cx={x} cy="266" r="2.6" fill={m.toneRing}
-                  opacity={animate ? 0.9 : 0.5}
-                  style={animate ? { animation: `lp-blink ${1.4 + i * 0.25}s ease-in-out infinite` } : undefined} />
+          <circle cx={x} cy="266" r="3.2" fill="none" stroke={m.toneRing} strokeWidth="0.4" opacity="0.20" />
+          <circle cx={x} cy="266" r="1.8" fill={m.toneRing}
+                  opacity={animate ? 0.6 : 0.32}
+                  style={animate ? { animation: `lp-blink ${1.6 + i * 0.28}s ease-in-out infinite` } : undefined} />
         </g>
       ))}
     </svg>
@@ -336,7 +340,7 @@ export default function ActionSignalLaunchLayer({ report }: Props) {
     <div
       data-testid="action-signal-launch"
       className={`w-full max-w-full min-w-0 overflow-hidden rounded-2xl border ${m.borderCls} ${m.bgCls}`}
-      style={{ boxShadow: animate ? `0 0 26px ${m.toneSoft}, inset 0 1px 0 ${m.toneRing}44` : `0 0 10px ${m.toneSoft}` }}
+      style={{ boxShadow: animate ? `0 0 16px ${m.toneSoft}, inset 0 1px 0 ${m.toneRing}28` : `0 0 8px ${m.toneSoft}` }}
     >
       <style>{`
         @keyframes lp-lift    { 0%,100%{transform:translateY(-6px)} 50%{transform:translateY(-12px)} }
@@ -352,7 +356,7 @@ export default function ActionSignalLaunchLayer({ report }: Props) {
       <div className="flex items-center justify-between px-4 py-2 border-b border-cyan-500/15 bg-gradient-to-r from-black/40 via-cyan-950/15 to-black/40">
         <div className="flex items-center gap-2 min-w-0">
           <span aria-hidden="true" className={m.textCls}
-                style={animate ? { animation: "lp-fade 0.6s ease" } : undefined}>🚀</span>
+                style={animate ? { animation: "lp-fade 0.6s ease" } : undefined}>◈</span>
           <div className="min-w-0">
             <p className="text-[10px] font-mono font-bold text-cyan-100 uppercase tracking-[0.22em] truncate">
               Decision Launch Pad
@@ -403,12 +407,12 @@ export default function ActionSignalLaunchLayer({ report }: Props) {
           <span aria-hidden="true" className="absolute bottom-2 left-2 w-3 h-3 border-b border-l border-cyan-400/40" />
           <span aria-hidden="true" className="absolute bottom-2 right-2 w-3 h-3 border-b border-r border-cyan-400/40" />
 
-          {/* Scanline */}
+          {/* Scanline — çok sönük, kurumsal sweep */}
           {animate && (
             <div aria-hidden="true" className="absolute inset-x-0 top-0 h-12 pointer-events-none"
                  style={{
-                   background: "linear-gradient(180deg, transparent, rgba(34,211,238,0.05) 50%, transparent)",
-                   animation: "lp-scan 8s linear infinite",
+                   background: "linear-gradient(180deg, transparent, rgba(34,211,238,0.025) 50%, transparent)",
+                   animation: "lp-scan 11s linear infinite",
                  }}
             />
           )}
