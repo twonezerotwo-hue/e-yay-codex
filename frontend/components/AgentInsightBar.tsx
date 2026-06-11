@@ -170,6 +170,13 @@ export default function AgentInsightBar({
     return () => clearInterval(r);
   }, [open, insights.length]);
 
+  // ── Dış event ile modal açma (AgentBriefPanel "Agent Detayı" butonu)
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener("eyay:open-agent-modal", onOpen);
+    return () => window.removeEventListener("eyay:open-agent-modal", onOpen);
+  }, []);
+
   // ── Modal açıkken: ESC + body scroll lock + global event
   useEffect(() => {
     if (!open) return;

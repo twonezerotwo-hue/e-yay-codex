@@ -4,7 +4,7 @@
  * FAZ 20 — Action Signal Panel Shell.
  *
  * "Tavsiye Edilen Aksiyon" alanına [Launch] / [Klasik] toggle ekler.
- * - Launch modu : ActionSignalLaunchLayer (lazy, default).
+ * - Launch modu : AgentBriefPanel (lazy, default).
  * - Klasik modu : legacy DecisionBanner (dokunulmaz, güvenli fallback).
  * Crash/error → DecisionBanner'a düşer. Karar üretmez.
  */
@@ -14,18 +14,18 @@ import ActionSignalErrorBoundary from "@/components/ActionSignalErrorBoundary";
 import DecisionBanner from "@/components/DecisionBanner";
 import type { RegimeReport } from "@/lib/types";
 
-const ActionSignalLaunchLayer = lazy(
-  () => import("@/components/ActionSignalLaunchLayer"),
+const AgentBriefPanel = lazy(
+  () => import("@/components/AgentBriefPanel"),
 );
 
-type ViewMode = "launch" | "classic";
+type ViewMode = "brief" | "classic";
 
 interface Props {
   report: RegimeReport;
 }
 
 export default function ActionSignalPanelShell({ report }: Props) {
-  const [mode, setMode]               = useState<ViewMode>("launch");
+  const [mode, setMode]               = useState<ViewMode>("brief");
   const [degradedMsg, setDegradedMsg] = useState<string | null>(null);
 
   const legacyView = <DecisionBanner report={report} />;
@@ -46,23 +46,23 @@ export default function ActionSignalPanelShell({ report }: Props) {
           </span>
           {degradedMsg && mode === "classic" && (
             <span className="text-[9px] font-mono text-amber-400/80 ml-1 truncate">
-              · Launch görünümü yüklenemedi
+              · Brief görünümü yüklenemedi
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() => { setDegradedMsg(null); setMode("launch"); }}
+            onClick={() => { setDegradedMsg(null); setMode("brief"); }}
             className={`px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider transition-colors ${
-              mode === "launch"
+              mode === "brief"
                 ? "bg-cyan-600/25 text-cyan-200 border border-cyan-500/50 shadow-[0_0_14px_rgba(34,211,238,0.30)]"
                 : "bg-eyay-raised/40 text-eyay-faint border border-eyay-border/40 hover:text-eyay-dim"
             }`}
-            aria-pressed={mode === "launch"}
+            aria-pressed={mode === "brief"}
             data-testid="as-toggle-race"
           >
-            🚀 Launch
+            🤖 Brief
           </button>
           <button
             type="button"
@@ -83,14 +83,14 @@ export default function ActionSignalPanelShell({ report }: Props) {
       {/* Klasik mode: legacy DecisionBanner */}
       {mode === "classic" && legacyView}
 
-      {/* Launch mode */}
-      {mode === "launch" && (
+      {/* Brief mode */}
+      {mode === "brief" && (
         <ActionSignalErrorBoundary
           fallback={legacyView}
           onError={(err) => fallbackToClassic(err?.message || "render_error")}
         >
           <Suspense fallback={legacyView}>
-            <ActionSignalLaunchLayer report={report} />
+            <AgentBriefPanel report={report} />
           </Suspense>
         </ActionSignalErrorBoundary>
       )}
