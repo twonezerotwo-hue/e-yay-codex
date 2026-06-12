@@ -17,6 +17,7 @@ import {
   geoForRegion,
   type GeoPoint,
 } from "@/lib/newsRegionMap";
+import { WORLD_LAND_PATHS } from "@/lib/worldMapPath";
 import type { NewsHeadline } from "@/lib/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -32,6 +33,33 @@ interface EnrichedNode {
   age_min:  number | null;
   assets:   { asset: string; up: boolean; note: string }[];
   geo:      GeoPoint;
+  actor:    { name: string; short: string; img?: string } | null;
+}
+
+// Tanıdık aktör tespiti — headline metninden deterministik; fotoğraf uydurmaz.
+const KNOWN_ACTORS: { re: RegExp; name: string; short: string }[] = [
+  { re: /\btrump\b/i,                       name: "Trump",   short: "DT" },
+  { re: /\bpowell\b/i,                      name: "Powell",  short: "JP" },
+  { re: /\bfed\b|federal reserve|fomc/i,    name: "Fed",     short: "FED" },
+  { re: /\becb\b|avrupa merkez|lagarde/i,   name: "ECB",     short: "ECB" },
+  { re: /\bopec\b/i,                        name: "OPEC",    short: "OPC" },
+  { re: /\bputin\b/i,                       name: "Putin",   short: "VP" },
+  { re: /\bxi\b|jinping/i,                  name: "Xi",      short: "XI" },
+  { re: /\bboj\b|bank of japan|ueda/i,      name: "BoJ",     short: "BOJ" },
+  { re: /\bbiden\b/i,                       name: "Biden",   short: "JB" },
+  { re: /\bnetanyahu\b/i,                   name: "Netanyahu", short: "BN" },
+  { re: /\berdoğan\b|\berdogan\b/i,         name: "Erdoğan", short: "RTE" },
+];
+
+function detectActor(h: NewsHeadline, text: string): EnrichedNode["actor"] {
+  // Veride güvenli speaker/author/thumbnail alanı varsa onu kullan
+  const x = h as NewsHeadline & { speaker?: string; author?: string; thumbnail?: string };
+  const explicit = x.speaker || x.author;
+  if (explicit) {
+    return { name: explicit, short: explicit.slice(0, 3).toUpperCase(), img: x.thumbnail };
+  }
+  for (const a of KNOWN_ACTORS) if (a.re.test(text)) return { name: a.name, short: a.short };
+  return null;
 }
 
 type CyclePhase =
@@ -81,8 +109,15 @@ function enrichHeadlines(headlines: NewsHeadline[]): EnrichedNode[] {
       age_min:  toAgeMin(h.published_at),
       assets,
       geo:      geoForRegion(classifyHeadlineRegion(text, cat)),
+      actor:    detectActor(h, text),
     };
   });
+}
+
+// Haber başına süre: headline okunmadan geçilmez (uzunluğa göre 9–20sn)
+function durForNode(n: EnrichedNode | null): number {
+  if (!n) return PHASE_MS;
+  return Math.min(20_000, Math.max(9_000, 4_000 + n.headline.length * 85));
 }
 
 // ── Style maps ────────────────────────────────────────────────────────────────
@@ -101,50 +136,59 @@ const RISK_BADGE: Record<string, string> = {
   low:      "bg-cyan-950/40 border-cyan-600/40 text-cyan-200",
 };
 
-// ── World map silhouettes ─────────────────────────────────────────────────────
-// 1000×500 equirectangular; gerçek kıyı noktalarından türetildi.
+// ── World map (local/static, equirectangular 1000×500) ───────────────────────
+// x=(lon+180)/360*1000, y=(90-lat)/180*500 — gerçek kıyı koordinatlarından
+// sadeleştirilmiş low-poly path'ler; runtime fetch yok.
 
-const LANDMASS: string[] = [
-  "M 42,83 L 67,53 L 130,46 L 194,50 L 240,58 L 264,69 L 300,80 L 333,97 L 347,114 L 322,122 L 306,133 L 296,152 L 282,168 L 275,181 L 258,176 L 236,169 L 231,189 L 258,192 L 267,217 L 281,228 L 270,222 L 247,206 L 224,200 L 208,197 L 196,186 L 189,172 L 174,158 L 161,147 L 156,131 L 153,117 L 138,103 L 125,89 L 94,87 L 64,92 Z",
-  "M 297,33 L 360,22 L 420,20 L 444,28 L 439,56 L 410,72 L 381,83 L 358,74 L 347,64 L 322,50 Z",
-  "M 286,228 L 300,217 L 330,224 L 356,236 L 381,250 L 403,269 L 397,292 L 389,311 L 367,330 L 344,347 L 330,361 L 319,375 L 314,392 L 311,403 L 303,392 L 300,375 L 297,342 L 306,306 L 292,283 L 275,267 L 278,250 Z",
-  "M 483,153 L 506,144 L 528,147 L 553,153 L 583,164 L 592,167 L 608,183 L 625,203 L 642,219 L 631,239 L 614,256 L 611,269 L 603,286 L 597,306 L 583,328 L 569,344 L 556,347 L 542,333 L 533,300 L 530,283 L 533,267 L 525,239 L 506,228 L 483,222 L 464,211 L 453,208 L 456,192 L 464,178 L 472,164 Z",
-  "M 569,53 L 611,67 L 656,50 L 700,42 L 778,36 L 830,38 L 869,42 L 910,47 L 944,53 L 994,67 L 975,80 L 958,89 L 944,106 L 925,97 L 894,100 L 875,117 L 867,131 L 853,153 L 836,164 L 819,181 L 806,194 L 797,222 L 778,236 L 789,247 L 775,242 L 769,231 L 758,206 L 753,189 L 742,194 L 728,211 L 714,228 L 706,211 L 700,194 L 683,181 L 658,178 L 664,192 L 647,206 L 625,214 L 608,192 L 597,169 L 594,156 L 583,150 L 572,142 L 561,139 L 550,133 L 542,136 L 525,128 L 511,131 L 508,133 L 500,139 L 483,150 L 475,144 L 475,131 L 497,122 L 486,117 L 503,108 L 522,94 L 536,94 L 517,86 L 514,78 L 536,64 Z",
-  "M 486,111 L 503,106 L 500,97 L 494,89 L 483,97 L 481,106 Z",
-  "M 442,72 L 456,67 L 458,75 L 444,78 Z",
-  "M 861,161 L 875,156 L 886,147 L 893,131 L 897,125 L 890,138 L 880,153 L 867,164 Z",
-  "M 772,250 L 794,267 L 786,272 L 767,256 Z",
-  "M 797,269 L 819,272 L 819,277 L 797,275 Z",
-  "M 803,236 L 825,239 L 822,256 L 800,253 Z",
-  "M 836,200 L 842,194 L 844,211 L 837,217 Z",
-  "M 869,261 L 906,253 L 911,264 L 872,272 Z",
-  "M 817,308 L 842,292 L 864,283 L 894,281 L 911,300 L 925,325 L 922,342 L 917,353 L 897,353 L 878,347 L 850,350 L 819,344 L 811,328 Z",
-  "M 968,389 L 978,381 L 981,397 L 970,403 Z",
-  "M 625,294 L 633,283 L 636,303 L 628,311 Z",
-];
+const LANDMASS: string[] = WORLD_LAND_PATHS;
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function WorldMap({
-  nodes, phase, animate, activeNode, activeSv,
+  nodes, phase, animate, activeNode, activeSv, fill = false, durationMs = PHASE_MS,
 }: {
   nodes:     EnrichedNode[];
   phase:     CyclePhase;
   animate:   boolean;
   activeNode: EnrichedNode | null;
   activeSv:  typeof SEV["low"] | null;
+  /** true → modülün tamamını kaplayan arka plan modu */
+  fill?:     boolean;
+  /** Aktif haberin toplam süresi — zoom/marquee bununla senkron */
+  durationMs?: number;
 }) {
   const allPulse  = phase.mode === "all_pulse";
   const activeIdx = phase.mode === "sequence" ? phase.idx : -1;
 
-  // Ticker position: flip side near edges
+  // Zoom haber süresiyle senkron: haber başında zoom-in, headline bitene
+  // kadar bölgede kal, bitişten ~1.6sn önce zoom-out. Reduced-motion → zoom yok.
+  const [zoomed, setZoomed] = useState(false);
+  const activeId = activeNode?.id ?? null;
+  useEffect(() => {
+    if (!animate || !activeId) { setZoomed(false); return; }
+    setZoomed(true);
+    const t = setTimeout(() => setZoomed(false), Math.max(2_500, durationMs - 1_600));
+    return () => clearTimeout(t);
+  }, [activeId, animate, durationMs]);
+
+  const ZK = 2.1;
+  const zcx = activeNode ? Math.min(762, Math.max(238, activeNode.geo.x)) : 500;
+  const zcy = activeNode ? Math.min(381, Math.max(119, activeNode.geo.y)) : 250;
+  const mapTransform = zoomed
+    ? `translate(500px,250px) scale(${ZK}) translate(${-zcx}px,${-zcy}px)`
+    : "translate(0px,0px) scale(1)";
+
+  // Ticker position: zoom'da merkez; değilse nokta yanı (kenarlarda taraf değiştir)
   const tickerAnchorLeft = activeNode ? activeNode.geo.x > 620 : false;
   const tickerAnchorLow  = activeNode ? activeNode.geo.y < 130 : false;
-  const tickerTransformX = tickerAnchorLeft ? "calc(-100% - 14px)" : "14px";
-  const tickerTransformY = tickerAnchorLow  ? "4px" : "-50%";
+  const tickerTransformX = zoomed ? "-50%" : tickerAnchorLeft ? "calc(-100% - 14px)" : "14px";
+  const tickerTransformY = zoomed ? "20px" : tickerAnchorLow ? "4px" : "-50%";
+  const tickerLeftPct = zoomed ? 50 : activeNode ? (activeNode.geo.x / 1000) * 100 : 50;
+  const tickerTopPct  = zoomed ? 50 : activeNode ? (activeNode.geo.y / 500)  * 100 : 50;
 
   return (
-    <div className="relative w-full" style={{ paddingBottom: "50%" }}>
+    <div className={fill ? "absolute inset-0 w-full h-full" : "relative w-full"}
+         style={fill ? undefined : { paddingBottom: "50%" }}>
       {/* Radar sweep HTML overlay */}
       {animate && (
         <div
@@ -162,38 +206,73 @@ function WorldMap({
         <div
           className="absolute pointer-events-none z-20"
           style={{
-            left:      `${(activeNode.geo.x / 1000) * 100}%`,
-            top:       `${(activeNode.geo.y / 500)  * 100}%`,
+            left:      `${tickerLeftPct}%`,
+            top:       `${tickerTopPct}%`,
             transform: `translate(${tickerTransformX}, ${tickerTransformY})`,
-            maxWidth:  "34%",
-            minWidth:  "120px",
+            maxWidth:  zoomed ? "60%" : "42%",
+            minWidth:  "160px",
+            transition: animate ? "left 1.3s cubic-bezier(.4,0,.2,1), top 1.3s cubic-bezier(.4,0,.2,1)" : undefined,
           }}
           key={activeNode.id}
         >
-          <div
-            className="rounded border backdrop-blur-sm px-2 py-1"
-            style={{
-              background:   "rgba(2,10,22,0.93)",
-              borderColor:  activeSv.dot + "44",
-              boxShadow:    `0 0 14px ${activeSv.dot}22`,
-            }}
-          >
-            <p className="text-[7px] font-mono truncate whitespace-nowrap"
-               style={{ color: activeSv.dot, opacity: 0.75 }}>
-              {activeNode.geo.region} · {activeNode.source}
-            </p>
-            <div className="overflow-hidden" style={{ maxWidth: "100%" }}>
-              <span
-                className="inline-block text-[8px] font-mono whitespace-nowrap"
-                style={{
-                  color:     activeSv.dot,
-                  animation: animate && activeNode.headline.length > 42
-                    ? "bnm-ticker 11s ease-in-out infinite"
-                    : undefined,
-                }}
-              >
-                {activeNode.headline}
-              </span>
+          <div className="flex items-end gap-2">
+            {/* Speaker/aktör avatar bubble — sadece tespit edilen aktörde */}
+            {activeNode.actor && (
+              <div className="flex flex-col items-center shrink-0 pb-0.5">
+                <span
+                  className="flex h-9 w-9 items-center justify-center rounded-full border-2 overflow-hidden font-mono font-black text-[10px] text-white"
+                  style={{
+                    borderColor: activeSv.dot,
+                    background: activeNode.actor.img
+                      ? undefined
+                      : `radial-gradient(circle at 35% 30%, ${activeSv.dot}55, rgba(2,10,22,0.95))`,
+                    boxShadow: `0 0 12px ${activeSv.dot}55`,
+                  }}
+                >
+                  {activeNode.actor.img
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={activeNode.actor.img} alt={activeNode.actor.name} className="h-full w-full object-cover" />
+                    : activeNode.actor.short}
+                </span>
+                <span className="mt-0.5 text-[10px] font-mono leading-none" style={{ color: activeSv.dot }}>
+                  {activeNode.actor.name}
+                </span>
+              </div>
+            )}
+
+            {/* Glass speech-pill */}
+            <div
+              className="relative rounded-xl border backdrop-blur-md px-3 py-2"
+              style={{
+                background:   "rgba(2,10,22,0.92)",
+                borderColor:  activeSv.dot + "66",
+                boxShadow:    `0 0 18px ${activeSv.dot}33, inset 0 1px 0 ${activeSv.dot}33`,
+              }}
+            >
+              {/* Speech beam — avatar'dan çıkıyormuş hissi */}
+              {activeNode.actor && (
+                <span aria-hidden="true" className="absolute -left-1.5 bottom-3 w-3 h-3 rotate-45 border-l border-b"
+                      style={{ background: "rgba(2,10,22,0.92)", borderColor: activeSv.dot + "66" }} />
+              )}
+              <p className="text-[10px] font-mono truncate whitespace-nowrap"
+                 style={{ color: activeSv.dot, opacity: 0.85 }}>
+                {activeNode.geo.region} · {activeNode.source}
+                {activeNode.age_min !== null ? ` · ${activeNode.age_min}dk` : ""}
+              </p>
+              <div className="overflow-hidden" style={{ maxWidth: "100%" }}>
+                <span
+                  className="inline-block text-sm sm:text-base font-semibold whitespace-nowrap"
+                  style={{
+                    color:     activeSv.dot,
+                    textShadow: `0 0 10px ${activeSv.dot}44`,
+                    animation: animate && activeNode.headline.length > 36
+                      ? `bnm-ticker ${((durationMs - 1_200) / 1000).toFixed(1)}s ease-in-out infinite`
+                      : undefined,
+                  }}
+                >
+                  {activeNode.headline}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -201,6 +280,7 @@ function WorldMap({
 
       <svg
         viewBox="0 0 1000 500"
+        preserveAspectRatio={fill ? "none" : "xMidYMid meet"}
         className="absolute inset-0 w-full h-full"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
@@ -222,6 +302,13 @@ function WorldMap({
         </defs>
 
         <rect width="1000" height="500" fill="url(#bnm-bg)" />
+
+        {/* Zoom grubu — aktif haberin bölgesine smooth yakınlaşma */}
+        <g style={{
+          transform: mapTransform,
+          transition: animate ? "transform 1.3s cubic-bezier(.4,0,.2,1)" : undefined,
+          transformOrigin: "0 0",
+        }}>
 
         {Array.from({ length: 17 }, (_, i) => (
           <line key={`v${i}`} x1={(i + 1) * 55.5} y1="0" x2={(i + 1) * 55.5} y2="500"
@@ -291,6 +378,8 @@ function WorldMap({
           );
         })}
 
+        </g>
+
         <rect width="1000" height="500" fill="none" stroke="#22d3ee" strokeWidth="1" opacity="0.10" />
       </svg>
     </div>
@@ -301,6 +390,11 @@ function SideNewsCard({
   node, active, dimmed, onClick,
 }: { node: EnrichedNode; active: boolean; dimmed: boolean; onClick: () => void }) {
   const sv = SEV[node.severity] ?? SEV.low;
+  // age_min Date.now() ile hesaplanır → SSR ve client farklı dakika üretip
+  // hydration mismatch yapar. İlk render'da (server + client) deterministik
+  // placeholder göster; mount sonrası gerçek dakikayı ver.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   return (
     <button
       type="button"
@@ -314,16 +408,18 @@ function SideNewsCard({
       }`}
     >
       <div className="flex items-center gap-1.5 mb-1">
-        <span className={`rounded px-1 py-0.5 text-[7px] font-mono font-black uppercase tracking-widest border ${sv.badge}`}>
+        <span className={`rounded px-1 py-0.5 text-[10px] font-mono font-black uppercase tracking-widest border ${sv.badge}`}>
           {sv.label}
         </span>
-        <span className="text-[8px] font-mono text-eyay-faint truncate max-w-[90px]">{node.source}</span>
+        <span className="text-[10px] font-mono text-eyay-faint truncate max-w-[90px]">{node.source}</span>
         {node.age_min !== null && (
-          <span className="text-[8px] font-mono text-eyay-faint/60 ml-auto shrink-0">{node.age_min}dk</span>
+          <span className="text-[10px] font-mono text-eyay-faint/60 ml-auto shrink-0">
+            {mounted ? `${node.age_min}dk` : "—"}
+          </span>
         )}
       </div>
-      <p className="text-[9px] text-eyay-dim leading-snug line-clamp-2">{node.headline}</p>
-      <p className="text-[8px] font-mono text-eyay-faint/70 mt-0.5">📍 {node.geo.region} · {node.category}</p>
+      <p className="text-[10px] text-eyay-dim leading-snug line-clamp-2">{node.headline}</p>
+      <p className="text-[10px] font-mono text-eyay-faint/70 mt-0.5">📍 {node.geo.region} · {node.category}</p>
     </button>
   );
 }
@@ -347,8 +443,8 @@ function AssetCard({ a }: { a: { asset: string; up: boolean; note: string } }) {
       <div className="flex items-center gap-2">
         <span className={`text-sm font-bold shrink-0 ${meta.color}`}>{meta.icon}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-mono font-bold text-eyay-dim">{a.asset}</p>
-          <p className="text-[8px] font-mono text-eyay-faint truncate">{a.note}</p>
+          <p className="text-[10px] font-mono font-bold text-eyay-dim">{a.asset}</p>
+          <p className="text-[10px] font-mono text-eyay-faint truncate">{a.note}</p>
         </div>
         <span className={`text-[10px] font-mono font-semibold shrink-0 ${a.up ? "text-red-300" : "text-cyan-300"}`}>
           {a.up ? "↑ risk" : "↓ baskı"}
@@ -388,6 +484,11 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
   const enriched  = enrichHeadlines(headlines);
   const nodeCount = enriched.length;
 
+  // Haber okunmadan geçilmez — süre headline uzunluğuna göre
+  const phaseDur = phase.mode === "sequence"
+    ? durForNode(enriched[phase.idx % Math.max(nodeCount, 1)] ?? null)
+    : PHASE_MS;
+
   useEffect(() => {
     if (nodeCount === 0) return;
     const t = setTimeout(() => {
@@ -396,9 +497,9 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
         if (p.idx >= nodeCount - 1)    return nodeCount > 1 ? { mode: "all_pulse" } : { mode: "sequence", idx: 0 };
         return { mode: "sequence", idx: p.idx + 1 };
       });
-    }, PHASE_MS);
+    }, phaseDur);
     return () => clearTimeout(t);
-  }, [phase, nodeCount]);
+  }, [phase, nodeCount, phaseDur]);
 
   if (enriched.length === 0) {
     return (
@@ -422,7 +523,7 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
 
   return (
     <div
-      className="rounded-2xl border border-eyay-border bg-[#030e1c] overflow-hidden"
+      className="w-full max-w-full min-w-0 rounded-xl border border-eyay-border bg-[#030e1c] overflow-hidden"
       data-testid="news-map-radar"
       data-cycle-mode={phase.mode}
       data-reduced-motion={!animate ? "true" : "false"}
@@ -442,30 +543,43 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
           <p className="text-[11px] font-mono font-bold text-eyay-dim uppercase tracking-widest">
             Son Dakika Haber Radarı
           </p>
-          <p className="text-[9px] font-mono text-eyay-faint mt-0.5">
+          <p className="text-[10px] font-mono text-eyay-faint mt-0.5">
             {enriched.length} haber · PAPER_SAFE · sadece görselleştirme
           </p>
         </div>
         <div className="flex items-center gap-2">
           {allPulse && (
-            <span className="text-[8px] font-mono text-cyan-300/80 uppercase tracking-widest"
+            <span className="text-[10px] font-mono text-cyan-300/80 uppercase tracking-widest"
                   style={animate ? { animation: "bnm-fadein 0.6s ease" } : undefined}>
               ◉ Global görünüm
             </span>
           )}
-          <span className={`rounded-md border px-2 py-0.5 text-[8px] font-mono uppercase tracking-widest ${riskBadge}`}>
+          <span className={`rounded-md border px-2 py-0.5 text-[10px] font-mono uppercase tracking-widest ${riskBadge}`}>
             Risk: {riskLevel}
           </span>
         </div>
       </div>
 
-      {/* ── Desktop layout ── */}
+      {/* ── Desktop layout — harita tüm modülün arka planı ── */}
       {!isMobile && (
-        <div className="grid grid-cols-[190px_1fr_175px] min-h-[320px]">
+        <div className="relative min-h-[440px]">
+          {/* ARKA PLAN: tam genişlik dünya haritası */}
+          <WorldMap
+            fill
+            nodes={enriched}
+            phase={phase}
+            animate={animate}
+            activeNode={!allPulse ? activeNode : null}
+            activeSv={!allPulse ? sv : null}
+            durationMs={phaseDur}
+          />
+
+          {/* ÖN KATMAN: yan kolonlar + alt bilgi şeridi */}
+          <div className="relative z-10 grid grid-cols-[190px_minmax(0,1fr)_175px] min-h-[440px] pointer-events-none">
 
           {/* SOL: haber kartları */}
-          <div className="border-r border-eyay-border/25 p-3 flex flex-col gap-2 bg-black/20 overflow-y-auto max-h-[460px]">
-            <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest shrink-0">
+          <div className="pointer-events-auto border-r border-eyay-border/25 p-3 flex flex-col gap-2 bg-black/45 backdrop-blur-[2px] overflow-y-auto max-h-[460px]">
+            <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest shrink-0">
               Haberler · {enriched.length}
             </p>
             {enriched.map((n, i) => (
@@ -478,31 +592,22 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
             ))}
           </div>
 
-          {/* ORTA: harita + aktif bilgi şeridi */}
-          <div className="flex flex-col bg-[#020a16]">
-            <div className="flex-1 relative">
-              <WorldMap
-                nodes={enriched}
-                phase={phase}
-                animate={animate}
-                activeNode={!allPulse ? activeNode : null}
-                activeSv={!allPulse ? sv : null}
-              />
-            </div>
-            <div className="px-4 py-2 border-t border-eyay-border/20 bg-black/40 text-center"
+          {/* ORTA: harita görünür kalsın — sadece alt bilgi şeridi */}
+          <div className="flex flex-col justify-end min-w-0">
+            <div className="pointer-events-auto px-4 py-2 border-t border-eyay-border/20 bg-black/55 backdrop-blur-[2px] text-center"
                  key={allPulse ? "all" : activeNode.id}
                  style={animate ? { animation: "bnm-fadein 0.5s ease" } : undefined}>
               {allPulse ? (
-                <p className="text-[9px] font-mono text-cyan-300/90">
+                <p className="text-[10px] font-mono text-cyan-300/90">
                   ◉ GLOBAL RİSK GÖRÜNÜMÜ · {enriched.length} aktif bölge
                 </p>
               ) : (
                 <>
-                  <p className="text-[9px] font-mono">
+                  <p className="text-[10px] font-mono">
                     <span className={`font-bold ${sv.text}`}>● {activeNode.geo.region}</span>
                     <span className="text-eyay-faint"> · {activeNode.source}</span>
                   </p>
-                  <p className="text-[8px] text-eyay-faint/70 truncate mt-0.5 max-w-[420px] mx-auto">
+                  <p className="text-xs text-eyay-faint/80 truncate mt-0.5 max-w-[460px] mx-auto">
                     {activeNode.headline.slice(0, 95)}{activeNode.headline.length > 95 ? "…" : ""}
                   </p>
                 </>
@@ -511,14 +616,15 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
           </div>
 
           {/* SAĞ: etkilenen varlıklar */}
-          <div className="border-l border-eyay-border/25 p-3 flex flex-col gap-2 bg-black/20">
-            <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest shrink-0">
+          <div className="pointer-events-auto border-l border-eyay-border/25 p-3 flex flex-col gap-2 bg-black/45 backdrop-blur-[2px]">
+            <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest shrink-0">
               Etkilenen Varlıklar
             </p>
             {impacts.length > 0
               ? impacts.map((a, i) => <AssetCard key={i} a={a} />)
-              : <p className="text-[9px] font-mono text-eyay-faint/50 italic">Varlık etkisi yok.</p>
+              : <p className="text-[10px] font-mono text-eyay-faint/50 italic">Varlık etkisi yok.</p>
             }
+          </div>
           </div>
         </div>
       )}
@@ -531,10 +637,10 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
             activeNode={null} activeSv={null}
           />
           <div className={`rounded-xl border p-3 ${sv.badge}`}>
-            <p className="text-[8px] font-mono mb-0.5">
+            <p className="text-[10px] font-mono mb-0.5">
               {activeNode.source} · 📍 {activeNode.geo.region}
             </p>
-            <p className="text-[10px] text-eyay-dim leading-snug">{activeNode.headline}</p>
+            <p className="text-xs text-eyay-dim leading-snug">{activeNode.headline}</p>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {impacts.slice(0, 4).map((a, i) => <AssetCard key={i} a={a} />)}
@@ -557,7 +663,7 @@ export default function NewsMapRadarLayer({ headlines, onDegraded: _onDegraded }
 
       {/* ── Footer ── */}
       <div className="px-4 py-2 border-t border-eyay-border/30 bg-black/30">
-        <p className="text-[8px] font-mono text-eyay-faint/55 text-center">
+        <p className="text-[10px] font-mono text-eyay-faint/55 text-center">
           Radar yalnızca haber görselleştirmesidir · karar üretmez · veri alınamazsa klasik liste görünümüne dönülür
         </p>
       </div>
