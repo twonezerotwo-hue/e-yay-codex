@@ -32,10 +32,14 @@ def test_full_chain_single_double_triple(tmp_state):
     assert c.confirmed_timeframes == ["1d"]
     assert c.auto_open_reason == ""
 
-    # 2) Aynı TF tekrar — duplicate, auto-open yok
-    c = sct.observe("BTCUSD", "LONG", "1d", {"1d": "bullish"})
+    # 2) Aynı TF tekrar — duplicate, auto-open yok. Tekrar tekrar gelse de
+    #    duplicate_timeframes distinct kalır (sınırsız büyümez); hits sayacı artar.
+    for _ in range(3):
+        c = sct.observe("BTCUSD", "LONG", "1d", {"1d": "bullish"})
     assert c.signal_level == sct.DUPLICATE
     assert "1d" in c.duplicate_timeframes
+    assert c.duplicate_timeframes == ["1d"]   # distinct — tick başına büyümez
+    assert c.duplicate_hits == 3              # toplam tekrar tick sayısı
     assert c.auto_open_reason == ""
 
     # 3) İkinci farklı TF aynı yön — double, 30s
@@ -57,7 +61,8 @@ def test_full_chain_single_double_triple(tmp_state):
     assert set(ctx["confirmed_timeframes"]) == {"1d", "4h", "1h"}
     assert ctx["auto_open_reason"] == sct.TRIPLE
     assert ctx["countdown_seconds"] == 0
-    assert ctx["duplicate_count"] >= 1
+    assert ctx["duplicate_count"] == 1   # distinct duplicate TF — tick sayısı değil
+    assert ctx["duplicate_hits"] == 3    # toplam tekrar tick sayısı (additive)
     assert isinstance(ctx["rejected_before_open"], list)
     assert ctx["conflict_count"] == 0
 
@@ -105,6 +110,27 @@ def test_snapshot_shape_and_countdown(tmp_state):
     assert 0 <= entry["countdown_seconds"] <= 60
     assert entry["last_notification"]["tone"] == "amber"
     assert entry["last_notification"]["text"]
+
+
+def test_legacy_duplicate_list_dedups_on_load(tmp_state):
+    # Eski/bozuk state: duplicate_timeframes tick başına büyümüş, duplicate_hits yok.
+    import json
+
+    legacy = {
+        "chains": {
+            "ETHUSD": {
+                "asset": "ETHUSD",
+                "side": "LONG",
+                "confirmed_timeframes": ["1h"],
+                "duplicate_timeframes": ["1h"] * 200,
+            },
+        },
+    }
+    tmp_state.write_text(json.dumps(legacy), encoding="utf-8")
+
+    ctx = sct.context_for("ETHUSD")
+    assert ctx["duplicate_count"] == 1     # distinct'e indirgendi (200 → 1)
+    assert ctx["duplicate_hits"] == 200    # eski liste uzunluğu hits'e taşındı
 
 
 def test_observe_never_raises_on_empty_inputs(tmp_state):

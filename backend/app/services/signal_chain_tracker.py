@@ -95,6 +95,17 @@ def _parse_iso(ts: str | None) -> datetime | None:
         return None
 
 
+def _dedup_keep_order(items: list[str]) -> list[str]:
+    """Sırayı koruyarak boş olmayan değerleri tekilleştir."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for it in items or []:
+        if it and it not in seen:
+            seen.add(it)
+            out.append(it)
+    return out
+
+
 # ── SignalChain state ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -104,7 +115,8 @@ class SignalChain:
     status: str = "watching"  # watching | auto_opening | conflict | cancelled
     confirmed_timeframes: list[str] = field(default_factory=list)
     rejected_timeframes: list[str] = field(default_factory=list)
-    duplicate_timeframes: list[str] = field(default_factory=list)
+    duplicate_timeframes: list[str] = field(default_factory=list)  # distinct TF'ler
+    duplicate_hits: int = 0  # toplam yinelenen tick sayısı (liste değil sayaç)
     conflict_timeframes: list[str] = field(default_factory=list)
     first_seen_at: str = ""
     last_seen_at: str = ""
@@ -127,7 +139,15 @@ def _chain_from_dict(asset: str, d: dict[str, Any]) -> SignalChain:
     clean = {k: v for k, v in (d or {}).items() if k in _CHAIN_FIELD_NAMES}
     clean.setdefault("asset", asset)
     clean.setdefault("side", "LONG")
-    return SignalChain(**clean)
+    chain = SignalChain(**clean)
+    # Geriye-dönük iyileştirme: eski state'lerde duplicate_timeframes her tick'te
+    # büyüyen tekrarlı bir listeydi. Distinct TF listesine indir; toplam tekrarı
+    # duplicate_hits sayacına taşı (alan yoksa eski liste uzunluğundan türet).
+    raw_dups = list(chain.duplicate_timeframes)
+    if "duplicate_hits" not in clean:
+        chain.duplicate_hits = len(raw_dups)
+    chain.duplicate_timeframes = _dedup_keep_order(raw_dups)
+    return chain
 
 
 def _load() -> dict[str, SignalChain]:
@@ -299,8 +319,12 @@ def observe(
 
         if not new_tfs:
             # ── Duplicate: aynı TF tekrar, yeni TF yok ──
+            # Liste distinct TF'leri tutar (sınırsız büyümez); toplam tekrarı
+            # duplicate_hits sayar. Aynı TF tick başına yeniden eklenmez.
             if primary_tf:
-                chain.duplicate_timeframes.append(primary_tf)
+                chain.duplicate_hits += 1
+                if primary_tf not in chain.duplicate_timeframes:
+                    chain.duplicate_timeframes.append(primary_tf)
             chain.signal_level = DUPLICATE
             chain.last_seen_at = now_iso
             if experiment_labels:
@@ -389,7 +413,8 @@ def context_for(asset: str) -> dict[str, Any]:
             "side": chain.side,
             "confirmed_timeframes": list(chain.confirmed_timeframes),
             "rejected_before_open": list(chain.rejected_timeframes),
-            "duplicate_count": len(chain.duplicate_timeframes),
+            "duplicate_count": len(chain.duplicate_timeframes),  # distinct TF sayısı
+            "duplicate_hits": int(chain.duplicate_hits or 0),    # toplam tekrar tick
             "conflict_count": len(chain.conflict_timeframes),
             "auto_open_reason": chain.auto_open_reason,
             "countdown_seconds": int(chain.countdown_seconds or 0),
