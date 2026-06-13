@@ -653,6 +653,9 @@ def _build_outcome_fields(trade: Any) -> dict[str, Any]:
     mod  = base.get("module_scores") or {}
     adv  = osig.get("advanced_technical") or {}
     agg  = osig.get("aggression_context") or {}
+    # Signal chain (gözlemci/etiketleyici) bağlamı — açılışta sig'e damgalandı.
+    # Yoksa boş dict → tüm chain alanları None/0 olarak akar (additive, schema kırmaz).
+    chain = osig.get("signal_chain") or {}
     return {
         "asset":            getattr(trade, "pair", ""),
         "side":             getattr(trade, "side", ""),
@@ -670,6 +673,14 @@ def _build_outcome_fields(trade: Any) -> dict[str, Any]:
         "exit_reason":      getattr(trade, "reason", "") or "",
         "opened_at":        getattr(trade, "entry_at", None),
         "closed_at":        getattr(trade, "exit_at", None),
+        # ── Signal chain etiketleri (additive) — single/double/triple öğrenmesi ──
+        "signal_chain_type":    chain.get("signal_chain_type"),
+        "confirmed_timeframes": chain.get("confirmed_timeframes") or [],
+        "rejected_before_open": chain.get("rejected_before_open") or [],
+        "duplicate_count":      chain.get("duplicate_count"),
+        "conflict_count":       chain.get("conflict_count"),
+        "auto_open_reason":     chain.get("auto_open_reason"),
+        "countdown_seconds":    chain.get("countdown_seconds"),
     }
 
 
