@@ -921,6 +921,25 @@ def _route_new_open_signal(
     except Exception:  # noqa: BLE001
         pass  # opinion entegrasyonu hatası trade açılışını bloke etmez
 
+    # Paper deney etiketleri + stale davranışı — YALNIZCA PAPER_EXPERIMENT_MODE'da.
+    # Standart modda bu blok tamamen atlanır → mevcut davranış birebir korunur.
+    try:
+        from app.core.paper_experiment import PAPER_EXPERIMENT_MODE as _EXP_ON  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        _EXP_ON = False
+    if _EXP_ON:
+        size_usd, _exp_labels, _exp_skip = _experiment_labels_and_stale(
+            st, signal_snapshot=signal_snapshot, side=side, price=price,
+            size_usd=size_usd, fingerprint=fingerprint, now_dt=now_dt,
+        )
+        if _exp_skip:
+            # Çok stale / geçersiz fiyat → açma da kuyruğa da alma (deney modunda skip)
+            _record_experiment_label(pair, side, [_exp_skip])
+            return
+        if _exp_labels:
+            signal_snapshot = {**signal_snapshot, "experiment_labels": _exp_labels}
+            _record_experiment_label(pair, side, _exp_labels)
+
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
         is_same_candidate = (
@@ -2484,12 +2503,97 @@ def get_snapshot(
 
 
 def _paper_experiment_view() -> dict[str, Any]:
-    """Leaf config'i salt-oku; import hatası olsa bile state bozulmasın."""
+    """Leaf config'i salt-oku; import hatası olsa bile state bozulmasın.
+    recent_labels: son experiment etiketleri (module-level, persist edilmez)."""
     try:
         from app.core.paper_experiment import experiment_view  # noqa: PLC0415
-        return experiment_view()
+        return {**experiment_view(), "recent_labels": list(_RECENT_EXPERIMENT_LABELS)}
     except Exception:  # noqa: BLE001
-        return {"mode": "standard", "experiment_mode": False, "paper_safe": True, "no_execution": True}
+        return {"mode": "standard", "experiment_mode": False, "paper_safe": True,
+                "no_execution": True, "recent_labels": []}
+
+
+# ── Paper deney etiketleme (yalnız PAPER_EXPERIMENT_MODE'da çağrılır) ──────────
+# Module-level ring buffer — son etiketler; state dosyasına yazılmaz (schema kırmaz).
+_RECENT_EXPERIMENT_LABELS: list[dict[str, Any]] = []
+
+
+def _record_experiment_label(pair: str, side: str, labels: list[str]) -> None:
+    """Son deney etiketlerini kaydet (son 10). get_snapshot bunu salt-okur."""
+    _RECENT_EXPERIMENT_LABELS.append({
+        "pair": pair, "side": side, "labels": labels, "at": _utc_now().isoformat(),
+    })
+    if len(_RECENT_EXPERIMENT_LABELS) > 10:
+        del _RECENT_EXPERIMENT_LABELS[:-10]
+
+
+def _experiment_labels_and_stale(
+    st: TradingState,
+    *,
+    signal_snapshot: dict[str, Any],
+    side: str,
+    price: float,
+    size_usd: float,
+    fingerprint: str,
+    now_dt: datetime,
+) -> tuple[float, list[str], str | None]:
+    """PAPER_EXPERIMENT_MODE açıkken aday için etiket + stale davranışı.
+
+    Döner: (size_usd, labels, skip_reason | None).
+      - price geçersiz veya tick_age > hard limit → skip="invalid_or_too_stale"
+      - max < tick_age <= hard (ve izinliyse) → label "stale_experiment", size hafif düşer
+      - opinion ile çelişki → "divergence_experiment"
+      - fingerprint geçmişi → "learning_boost" / "learning_penalty"
+    Standart modda bu fonksiyon HİÇ çağrılmaz (route'ta gate var).
+    """
+    labels: list[str] = []
+    try:
+        from app.core.paper_experiment import (  # noqa: PLC0415
+            PAPER_HARD_STALE_SECONDS,
+            PAPER_MAX_TICK_AGE_SECONDS,
+            PAPER_STALE_EXPERIMENT_ALLOWED,
+        )
+    except Exception:  # noqa: BLE001
+        return size_usd, labels, None
+
+    # 1) Stale (tick yaşı) + fiyat geçerliliği
+    price_invalid = not isinstance(price, (int, float)) or price <= 0 or price != price  # NaN guard
+    tick_age: float | None = None
+    if st.last_tick_at:
+        try:
+            tick_age = (now_dt - datetime.fromisoformat(st.last_tick_at)).total_seconds()
+        except Exception:  # noqa: BLE001
+            tick_age = None
+    if price_invalid or (tick_age is not None and tick_age > PAPER_HARD_STALE_SECONDS):
+        return size_usd, labels, "invalid_or_too_stale"
+    if (tick_age is not None and tick_age > PAPER_MAX_TICK_AGE_SECONDS
+            and PAPER_STALE_EXPERIMENT_ALLOWED):
+        labels.append("stale_experiment")
+        size_usd = round(size_usd * 0.85, 2)  # hafif küçült (düşük confidence)
+
+    # 2) Divergence — strategist görüşüyle çelişki
+    op = signal_snapshot.get("agent_trade_opinion_context") or {}
+    if op.get("available") and (
+        op.get("agrees_with_main_decision") is False
+        or str(op.get("asset_opinion", "")).upper() == "AVOID"
+    ):
+        labels.append("divergence_experiment")
+
+    # 3) Learning boost/penalty — fingerprint geçmişi (mevcut learning_engine)
+    try:
+        from app.services.learning_engine import (  # noqa: PLC0415
+            win_rate_for_fingerprint,
+        )
+        wr = win_rate_for_fingerprint(fingerprint, st.trades)
+        decision = wr.get("decision")
+        if decision == "BOOST":
+            labels.append("learning_boost")
+        elif decision == "AVOID":
+            labels.append("learning_penalty")
+    except Exception:  # noqa: BLE001
+        pass
+
+    return size_usd, labels, None
 
 
 def reset_state() -> None:

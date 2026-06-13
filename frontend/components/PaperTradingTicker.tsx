@@ -218,7 +218,17 @@ interface PaperExperiment {
   hard_stale_seconds?: number;
   paper_safe?: boolean;
   no_execution?: boolean;
+  recent_labels?: { pair: string; side: string; labels: string[]; at: string }[];
 }
+
+// Deney etiketi → kısa Türkçe + renk
+const EXP_LABEL_STYLE: Record<string, { tr: string; cls: string }> = {
+  stale_experiment:      { tr: "stale",       cls: "border-amber-600/60 bg-amber-950/40 text-amber-300" },
+  divergence_experiment: { tr: "divergence",  cls: "border-fuchsia-600/60 bg-fuchsia-950/40 text-fuchsia-300" },
+  learning_boost:        { tr: "boost",       cls: "border-emerald-600/60 bg-emerald-950/40 text-emerald-300" },
+  learning_penalty:      { tr: "penalty",     cls: "border-red-600/60 bg-red-950/40 text-red-300" },
+  invalid_or_too_stale:  { tr: "skip:stale",  cls: "border-slate-600/60 bg-slate-900/50 text-slate-300" },
+};
 
 interface TradingState {
   starting_balance: number;
@@ -2238,6 +2248,25 @@ function PaperExperimentBadge({ exp }: { exp: PaperExperiment }) {
         Paper {on ? "Experiment" : "Standard"}
       </span>
       <span className="opacity-70 hidden sm:inline">· {flags}</span>
+      {/* Son deney etiketleri — yalnız experiment modda dolu olur */}
+      {(() => {
+        const recent = exp.recent_labels ?? [];
+        const last = recent.length > 0 ? recent[recent.length - 1] : null;
+        if (!last || last.labels.length === 0) return null;
+        return (
+          <span className="flex items-center gap-1" data-testid="paper-experiment-labels">
+            {last.labels.slice(0, 3).map((l, i) => {
+              const s = EXP_LABEL_STYLE[l] ?? { tr: l, cls: "border-eyay-border bg-black/30 text-eyay-faint" };
+              return (
+                <span key={i} className={`rounded border px-1 py-0.5 text-[9px] font-bold ${s.cls}`}
+                      title={`${last.pair} ${last.side} · ${l}`}>
+                  {s.tr}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })()}
     </div>
   );
 }
