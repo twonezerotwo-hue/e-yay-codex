@@ -219,6 +219,14 @@ interface PaperExperiment {
   paper_safe?: boolean;
   no_execution?: boolean;
   recent_labels?: { pair: string; side: string; labels: string[]; at: string }[];
+  active_adjustments?: Record<string, {
+    label: "learning_boost" | "learning_penalty";
+    threshold_delta: number;
+    size_multiplier: number;
+    wins: number;
+    losses: number;
+    net: number;
+  }>;
 }
 
 // Deney etiketi → kısa Türkçe + renk
@@ -2261,6 +2269,29 @@ function PaperExperimentBadge({ exp }: { exp: PaperExperiment }) {
                 <span key={i} className={`rounded border px-1 py-0.5 text-[9px] font-bold ${s.cls}`}
                       title={`${last.pair} ${last.side} · ${l}`}>
                   {s.tr}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })()}
+      {/* Learning auto-tune chip'leri — memory boşken görünmez */}
+      {(() => {
+        const adj = exp.active_adjustments ?? {};
+        const entries = Object.entries(adj).slice(0, 2);
+        if (entries.length === 0) return null;
+        return (
+          <span className="flex items-center gap-1" data-testid="paper-auto-tune-chips">
+            {entries.map(([key, a]) => {
+              const boost = a.label === "learning_boost";
+              const cls = boost
+                ? "border-emerald-600/60 bg-emerald-950/40 text-emerald-300"
+                : "border-red-600/60 bg-red-950/40 text-red-300";
+              const asset = key.split("|")[0];
+              return (
+                <span key={key} className={`rounded border px-1 py-0.5 text-[9px] font-bold ${cls}`}
+                      title={`${key} · ${a.wins}W/${a.losses}L · size x${a.size_multiplier} · threshold ${a.threshold_delta >= 0 ? "+" : ""}${a.threshold_delta}`}>
+                  {asset} {boost ? "BOOST" : "PENALTY"} x{a.size_multiplier} {a.threshold_delta >= 0 ? "+" : ""}{a.threshold_delta}
                 </span>
               );
             })}

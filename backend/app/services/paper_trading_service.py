@@ -1045,6 +1045,35 @@ def _route_new_open_signal(
             # Çok stale / geçersiz fiyat → açma da kuyruğa da alma (deney modunda skip)
             _record_experiment_label(pair, side, [_exp_skip])
             return
+
+        # Aşama 4 — learning auto-tune (yalnız experiment+learning açıkken).
+        # Memory boşsa _adj=None → hiçbir şey değişmez. Best-effort; read fail
+        # paper akışını bozmaz (warning loglanır).
+        try:
+            from app.core.paper_experiment import PAPER_LEARNING_ENABLED  # noqa: PLC0415
+            _adj = (
+                _auto_tune_adjustment(pair, side) if PAPER_LEARNING_ENABLED else None
+            )
+        except Exception as _exc:  # noqa: BLE001
+            logger.warning("paper_trading: auto-tune read failed (%s %s): %s", pair, side, _exc)
+            _adj = None
+        if _adj:
+            size_usd = round(size_usd * float(_adj.get("size_multiplier", 1.0)), 2)
+            _adj_label = str(_adj.get("label", ""))
+            if _adj_label and _adj_label not in _exp_labels:
+                _exp_labels.append(_adj_label)
+            signal_snapshot = {
+                **signal_snapshot,
+                "auto_tune": {
+                    **_adj,
+                    "reason": (
+                        f"{_adj_label}: {pair} {side} son {_adj.get('wins', 0)}W/"
+                        f"{_adj.get('losses', 0)}L → size x{_adj.get('size_multiplier')}, "
+                        f"threshold {_adj.get('threshold_delta'):+d}"
+                    ),
+                },
+            }
+
         if _exp_labels:
             signal_snapshot = {**signal_snapshot, "experiment_labels": _exp_labels}
             _record_experiment_label(pair, side, _exp_labels)
@@ -2613,13 +2642,36 @@ def get_snapshot(
 
 def _paper_experiment_view() -> dict[str, Any]:
     """Leaf config'i salt-oku; import hatası olsa bile state bozulmasın.
-    recent_labels: son experiment etiketleri (module-level, persist edilmez)."""
+    recent_labels: son experiment etiketleri (module-level, persist edilmez).
+    active_adjustments: learning auto-tune haritası (read-only, salt görünüm)."""
     try:
         from app.core.paper_experiment import experiment_view  # noqa: PLC0415
-        return {**experiment_view(), "recent_labels": list(_RECENT_EXPERIMENT_LABELS)}
+        return {
+            **experiment_view(),
+            "recent_labels": list(_RECENT_EXPERIMENT_LABELS),
+            "active_adjustments": _auto_tune_adjustments_all(),
+        }
     except Exception:  # noqa: BLE001
         return {"mode": "standard", "experiment_mode": False, "paper_safe": True,
-                "no_execution": True, "recent_labels": []}
+                "no_execution": True, "recent_labels": [], "active_adjustments": {}}
+
+
+def _auto_tune_adjustment(pair: str, side: str) -> dict[str, Any] | None:
+    """Tek asset|side için learning auto-tune ayarı (best-effort; yoksa None)."""
+    try:
+        from app.services.paper_auto_tune import adjustment_for  # noqa: PLC0415
+        return adjustment_for(pair, side)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _auto_tune_adjustments_all() -> dict[str, Any]:
+    """Tüm aktif learning auto-tune ayarları (read-only görünüm; best-effort)."""
+    try:
+        from app.services.paper_auto_tune import compute_adjustments  # noqa: PLC0415
+        return compute_adjustments()
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 # ── Paper deney etiketleme (yalnız PAPER_EXPERIMENT_MODE'da çağrılır) ──────────
