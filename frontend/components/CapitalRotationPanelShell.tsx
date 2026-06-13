@@ -26,12 +26,24 @@ const CapitalFlowAnimatedLayer = lazy(
 
 type ViewMode = "classic" | "flow";
 
+export type RotationTimeframe = "1d" | "7d" | "30d";
+
+// Backend artık 1D/7D/30D momentumu aynı günlük kapanış serilerinden hesaplıyor
+// (endpoint ?timeframe=...). Hepsi seçilebilir; veri yoksa animated layer içinde
+// "veri yok" mesajı gösterilir (fake üretilmez).
+const TF_OPTIONS: { key: RotationTimeframe; label: string; hint: string }[] = [
+  { key: "1d",  label: "1D",  hint: "günlük flow/momentum" },
+  { key: "7d",  label: "7D",  hint: "haftalık flow/momentum" },
+  { key: "30d", label: "30D", hint: "ana rotasyon" },
+];
+
 interface Props {
   rotation: CapitalRotation | null | undefined;
 }
 
 export default function CapitalRotationPanelShell({ rotation }: Props) {
-  const [mode, setMode]               = useState<ViewMode>("classic");
+  const [mode, setMode]               = useState<ViewMode>("flow");
+  const [timeframe, setTimeframe]     = useState<RotationTimeframe>("30d");
   const [degradedMsg, setDegradedMsg] = useState<string | null>(null);
 
   const legacyView = <CapitalFlowWidget rotation={rotation} />;
@@ -45,10 +57,33 @@ export default function CapitalRotationPanelShell({ rotation }: Props) {
   return (
     <div className="space-y-2" data-testid="cap-rotation-shell">
       <div className="flex items-center justify-between rounded-lg border border-eyay-border/40 bg-eyay-raised/20 px-3 py-1.5">
-        <span className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
-          Sermaye Rotasyonu
-        </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <span className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
+            Sermaye Rotasyonu
+          </span>
+          {/* Timeframe segmented control — veri olmayanlar disabled */}
+          <div className="flex items-center rounded-md border border-eyay-border/50 bg-black/30 p-0.5"
+               role="group" aria-label="Rotasyon zaman aralığı">
+            {TF_OPTIONS.map(o => (
+              <button
+                key={o.key}
+                type="button"
+                onClick={() => setTimeframe(o.key)}
+                title={o.hint}
+                aria-pressed={timeframe === o.key}
+                data-testid={`cap-tf-${o.key}`}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
+                  timeframe === o.key
+                    ? "bg-cyan-600/30 text-cyan-200 border border-cyan-500/60 shadow-[0_0_10px_rgba(34,211,238,0.40)]"
+                    : "border border-transparent text-eyay-faint hover:text-eyay-dim"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={() => setMode("classic")}
@@ -100,7 +135,7 @@ export default function CapitalRotationPanelShell({ rotation }: Props) {
           onError={(err) => fallbackToClassic(err?.message || "render_error")}
         >
           <Suspense fallback={legacyView}>
-            <CapitalFlowAnimatedLayer onDegraded={fallbackToClassic} />
+            <CapitalFlowAnimatedLayer onDegraded={fallbackToClassic} timeframe={timeframe} />
           </Suspense>
         </CapitalFlowErrorBoundary>
       )}

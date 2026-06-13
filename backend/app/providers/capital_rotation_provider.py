@@ -21,6 +21,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -118,6 +119,12 @@ _ROT_CACHE:    CapitalRotation | None = None
 _ROT_CACHE_TS: float = 0.0
 _ROT_CACHE_TTL = 180.0  # 3 dk — yfinance ile uyumlu (teknik provider ile aynı sıklık)
 
+# Ham günlük kapanış serileri cache'i — 1d/7d windowed momentum için. 30d compute
+# ile PAYLAŞILIR (compute her çalıştığında doldurur) → 1d/7d ekstra yfinance
+# çağrısı yapmaz, rate-limit pattern'i korunur. Bayatsa _get_closes_cached çeker.
+_CLOSES_CACHE: dict[str, "np.ndarray"] | None = None
+_CLOSES_TS: float = 0.0
+
 
 # ---------------------------------------------------------------------------
 # Veri çekimi
@@ -154,6 +161,113 @@ def _momentum_30d(series: np.ndarray) -> float:
     if old <= 0:
         return 0.0
     return round((new - old) / old * 100, 2)
+
+
+# Window (etiket) → momentum geriye-bakış bar sayısı. 30d, mevcut _momentum_30d
+# ile birebir aynıdır (series[-31]). 1d = son/önceki kapanış, 7d = son/7 işlem
+# günü önce. Veri 120 günlük günlük seri olduğu için 1d/7d zaten hesaplanabilir.
+WINDOW_BARS: dict[str, int] = {"1d": 1, "7d": 7, "30d": 30}
+
+
+def _momentum_window(series: np.ndarray | None, bars: int) -> float | None:
+    """series[-1] ile series[-(bars+1)] arası yüzde değişim. Yetersiz veri → None."""
+    if series is None or len(series) < bars + 1:
+        return None
+    old, new = series[-(bars + 1)], series[-1]
+    if old <= 0:
+        return None
+    return round((float(new) - float(old)) / float(old) * 100, 2)
+
+
+def _set_closes_cache(closes: dict[str, np.ndarray]) -> None:
+    """30d compute ham serileri çektiğinde cache'i doldurur (yan etki, additive)."""
+    global _CLOSES_CACHE, _CLOSES_TS
+    if len(closes) >= 3:
+        _CLOSES_CACHE = dict(closes)
+        _CLOSES_TS = time.monotonic()
+
+
+def _get_closes_cached(force_refresh: bool = False) -> dict[str, np.ndarray]:
+    """Günlük kapanış serilerini cache'den döner; bayatsa yfinance'tan çeker.
+
+    30d compute zaten cache'i doldurduğundan 1d/7d ekstra ağ çağrısı yapmaz.
+    """
+    global _CLOSES_CACHE, _CLOSES_TS
+    now = time.monotonic()
+    if (not force_refresh and _CLOSES_CACHE is not None
+            and (now - _CLOSES_TS) < _ROT_CACHE_TTL):
+        return _CLOSES_CACHE
+    closes: dict[str, np.ndarray] = {}
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        futures = {
+            pool.submit(_fetch_close, name, cfg): name
+            for name, cfg in _ROTATION_TICKERS.items()
+        }
+        for fut in as_completed(futures, timeout=60):
+            try:
+                k, arr = fut.result()
+                if arr is not None:
+                    closes[k] = arr
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("CapitalRotation closes future: %s", exc)
+    if closes:
+        _set_closes_cache(closes)
+        return closes
+    return _CLOSES_CACHE or {}
+
+
+def compute_window_rotation(window: str) -> dict[str, Any]:
+    """1d/7d/30d için pencere-bazlı sınıf momentumlarını hesaplar ve
+    build_visual_payload'a verilebilen rotation-benzeri dict döner.
+
+    YALNIZCA görsel katman içindir — AI rotation_context / karar akışına ASLA
+    dokunmaz, çekirdek 30d analizini değiştirmez. Fake/placeholder skor üretmez:
+    veri yoksa window_available=False, reason='insufficient_history' döner.
+    """
+    bars = WINDOW_BARS.get(window)
+    if bars is None:
+        return {"error": None, "window_available": False,
+                "reason": "unknown_window", "class_scores": []}
+
+    closes = _get_closes_cached()
+    if len(closes) < 3:
+        return {"error": None, "window_available": False,
+                "reason": "insufficient_history", "class_scores": []}
+
+    class_scores: list[dict[str, Any]] = []
+    for cls, main_asset in _CLASS_MAIN_ASSET.items():
+        m = _momentum_window(closes.get(main_asset), bars)
+        if m is None:
+            continue
+        # _score_class ile aynı normalize: 5% hareket = 1 puan, [-1.5, 1.5] cap.
+        sc = round(max(-1.5, min(1.5, m / 5.0)), 4)
+        class_scores.append({
+            "name": cls, "momentum_30d": m, "score": sc, "direction": _direction(sc),
+        })
+
+    if not class_scores:
+        return {"error": None, "window_available": False,
+                "reason": "insufficient_history", "class_scores": []}
+
+    ranked = sorted(class_scores, key=lambda c: -c["score"])
+    top = ranked[0]
+    second = ranked[1] if len(ranked) > 1 else None
+    gap = top["score"] - (second["score"] if second else 0.0)
+    conviction = max(0, min(100, int(gap * 70)))  # 30d ile aynı ölçek
+    primary = top["name"] if top["score"] > 0.15 else "KARISIK"
+    secondary = second["name"] if second and second["score"] > 0.10 else None
+    if conviction < 12:
+        primary, secondary = "KARISIK", None
+
+    return {
+        "error":            None,
+        "window_available": True,
+        "reason":           None,
+        "primary_flow":     primary,
+        "secondary_flow":   secondary,
+        "conviction":       conviction,
+        "class_scores":     class_scores,
+    }
 
 
 def _rolling_corr(a: np.ndarray, b: np.ndarray, window: int = 30) -> float | None:
@@ -684,6 +798,10 @@ class CapitalRotationProvider:
                     except Exception as exc:
                         logger.debug("CapitalRotation future %s: %s", key, exc)
 
+            # 1d/7d windowed momentum aynı ham serileri kullansın diye cache'i
+            # doldur (ekstra yfinance çağrısını önler).
+            _set_closes_cache(closes)
+
             if len(closes) < 3:
                 return _error_result("data_insufficient: 3+ varlık verisi alınamadı.")
 
@@ -828,4 +946,5 @@ def _error_result(msg: str) -> CapitalRotation:
 __all__ = [
     "CapitalRotationProvider", "CapitalRotation",
     "AssetClassScore", "KeyInsight", "RatioSignal", "CorrelationPair",
+    "compute_window_rotation", "WINDOW_BARS",
 ]
