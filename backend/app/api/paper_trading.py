@@ -334,6 +334,31 @@ def dismiss_manual_ready_route(pair: str) -> dict:
     }
 
 
+@router.post("/signal-chain/{pair}/cancel", dependencies=[Depends(require_paper_safe)])
+def cancel_signal_chain(pair: str) -> dict:
+    """Signal chain bildirimini iptal et (orb 'İPTAL ET' butonu).
+
+    Chain SİLİNMEZ — watch memory'de 'cancelled' olarak kalır (rejected_then_
+    confirmed izlenebilsin diye). Aynı parite için gerçek bir pending order
+    varsa o da reddedilir (mevcut reject_pending_open → manual_ready akışı).
+    PAPER_SAFE / NO_EXECUTION.
+    """
+    from dataclasses import asdict, is_dataclass
+
+    from app.services import signal_chain_tracker
+
+    pair_upper = pair.upper()
+    chain = signal_chain_tracker.apply_user_action(pair_upper, "cancel")
+    pending_rejected = pts.reject_pending_open(pair_upper)
+    _invalidate_caches()
+    return {
+        "status":           "cancelled" if chain is not None else "not_found",
+        "pair":             pair_upper,
+        "pending_rejected": pending_rejected,
+        "chain":            asdict(chain) if is_dataclass(chain) else None,
+    }
+
+
 @router.post("/train", dependencies=[Depends(require_paper_safe)])
 def force_retrain() -> dict:
     """Manuel olarak otomatik eğitim tetikle (debug için)."""
