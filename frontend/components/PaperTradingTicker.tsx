@@ -206,6 +206,20 @@ interface StateAnomaly {
   action: "OK" | "REPAIR_OR_RESET_REQUIRED";
 }
 
+// Backend get_snapshot → additive paper_experiment bloğu (salt-okunur).
+interface PaperExperiment {
+  mode: "experiment" | "standard";
+  experiment_mode: boolean;
+  allow_auto_test_trades?: boolean;
+  learning_enabled?: boolean;
+  stale_experiment_allowed?: boolean;
+  max_open_positions?: number | null;
+  max_tick_age_seconds?: number;
+  hard_stale_seconds?: number;
+  paper_safe?: boolean;
+  no_execution?: boolean;
+}
+
 interface TradingState {
   starting_balance: number;
   equity: number;
@@ -219,6 +233,7 @@ interface TradingState {
   last_event: TradeEvent | null;
   last_event_at: string | null;
   state_anomaly?: StateAnomaly;
+  paper_experiment?: PaperExperiment;
 }
 
 interface AlertEvent {
@@ -432,8 +447,22 @@ export default function PaperTradingTicker() {
     }
   }
 
+  // Veri yokken (backend kapalı / ilk fetch bekleniyor) tamamen kaybolma:
+  // küçük "izleniyor" durumu göster — kullanıcı ticker'ın canlı olduğunu görür.
   if (!state) {
-    return null;
+    if (agentOpen) return null;
+    return (
+      <div
+        data-testid="paper-trading-ticker"
+        data-state="idle"
+        className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-[120] rounded-xl border border-eyay-border/70 bg-eyay-surface/90 backdrop-blur-sm px-3 py-1.5 shadow-card"
+      >
+        <p className="text-[10px] font-mono text-eyay-faint flex items-center gap-1.5">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400/70 animate-pulse" />
+          Paper trading izleniyor…
+        </p>
+      </div>
+    );
   }
 
   const pendingOrders = state.pending_orders ?? [];
@@ -555,10 +584,32 @@ export default function PaperTradingTicker() {
         />
       ))}
 
+      {/* Açılmaya hazır (manual_ready) işlemler — pending yokken bile üstte net
+          banner. NOT: manual_ready backend tarafından OTOMATİK açılmaz; kullanıcı
+          panelden "Aç" demeli. Bu yüzden burada sahte 60sn auto-open sayacı yok;
+          countdown yalnızca gerçek auto-open olan pending_orders'ta gösterilir. */}
+      {pendingOrders.length === 0 && manualReadyTrades.length > 0 && (
+        <ManualReadyBanner
+          count={manualReadyTrades.length}
+          first={manualReadyTrades[0]}
+          onCancelAll={async () => {
+            for (const mr of manualReadyTrades) {
+              await dismissManualReady(mr.pair);
+            }
+          }}
+          onDetail={() => setExpanded(true)}
+        />
+      )}
+
       {banner && <TradeBanner event={banner} />}
 
       {showWidget && (
-        <div className="fixed top-4 right-4 z-40 flex flex-col items-end gap-1">
+        <div data-testid="paper-trading-ticker" data-state="live"
+             className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-[120] flex flex-col items-end gap-1">
+          {/* Paper deney (sandbox) modu rozeti — küçük ama görünür. Salt durum;
+              karar/threshold değiştirmez. */}
+          {state.paper_experiment && <PaperExperimentBadge exp={state.paper_experiment} />}
+
           {/* Sesli uyarı toggle'ı artık panelin altında (footer) — bkz. aşağıdaki
               "expanded" bloğu içindeki sticky footer. Burada panel kapalıyken
               kullanıcı toggle'a erişemez; bu kasıtlı — toggle paneli açtığında görünür. */}
@@ -569,7 +620,7 @@ export default function PaperTradingTicker() {
             <div className="flex items-center gap-3">
               {anomalyActive ? (
                 <div className="text-right">
-                  <p className="text-[8px] font-mono text-red-300 uppercase tracking-wider font-bold">⚠ Anomaly</p>
+                  <p className="text-[10px] font-mono text-red-300 uppercase tracking-wider font-bold">⚠ Anomaly</p>
                   <p className="font-mono font-black text-sm leading-tight text-red-400">
                     Reset / Repair
                   </p>
@@ -577,7 +628,7 @@ export default function PaperTradingTicker() {
               ) : (
                 <>
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Equity</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Equity</p>
                     <p className={`font-mono font-black text-sm leading-tight ${equityColor}`}>
                       ${state.equity.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                     </p>
@@ -586,7 +637,7 @@ export default function PaperTradingTicker() {
                   <div className="w-px h-8 bg-eyay-border" />
 
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Günlük</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Günlük</p>
                     <p className={`font-mono font-bold text-sm leading-tight ${dailyColor}`}>
                       {fmtUsd(state.daily_pnl_usd)}
                     </p>
@@ -598,7 +649,7 @@ export default function PaperTradingTicker() {
                 <>
                   <div className="w-px h-8 bg-eyay-border" />
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Açık</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Açık</p>
                     <p className="font-mono font-bold text-sm leading-tight text-eyay-blue">
                       {state.open_positions.length}
                     </p>
@@ -610,7 +661,7 @@ export default function PaperTradingTicker() {
                 <>
                   <div className="w-px h-8 bg-eyay-border" />
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Bekleyen</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Bekleyen</p>
                     <p className="font-mono font-bold text-sm leading-tight text-amber-300">
                       {pendingOrders.length}
                     </p>
@@ -622,7 +673,7 @@ export default function PaperTradingTicker() {
                 <>
                   <div className="w-px h-8 bg-eyay-border" />
                   <div className="text-right">
-                    <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-wider">Hazır</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Hazır</p>
                     <p className="font-mono font-bold text-sm leading-tight text-violet-300">
                       {manualReadyTrades.length}
                     </p>
@@ -649,7 +700,7 @@ export default function PaperTradingTicker() {
               {anomalyActive && state.open_positions.length === 0 && anomalyBanner}
               <div className="grid grid-cols-3 gap-2 text-center pb-2 border-b border-eyay-border/40">
                 <div>
-                  <p className="text-[8px] font-mono text-eyay-faint">REALIZED</p>
+                  <p className="text-[10px] font-mono text-eyay-faint">REALIZED</p>
                   {anomalyActive ? (
                     <p className="text-xs font-mono font-bold text-eyay-faint italic">— gizli —</p>
                   ) : (
@@ -659,7 +710,7 @@ export default function PaperTradingTicker() {
                   )}
                 </div>
                 <div>
-                  <p className="text-[8px] font-mono text-eyay-faint">UNREALIZED</p>
+                  <p className="text-[10px] font-mono text-eyay-faint">UNREALIZED</p>
                   {anomalyActive ? (
                     <p className="text-xs font-mono font-bold text-eyay-faint italic">— gizli —</p>
                   ) : (
@@ -669,14 +720,14 @@ export default function PaperTradingTicker() {
                   )}
                 </div>
                 <div>
-                  <p className="text-[8px] font-mono text-eyay-faint">TRADES</p>
+                  <p className="text-[10px] font-mono text-eyay-faint">TRADES</p>
                   <p className="text-xs font-mono font-bold text-eyay-text">{state.trade_count}</p>
                 </div>
               </div>
 
               {state.open_positions.length > 0 ? (
                 <div>
-                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1.5">
+                  <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1.5">
                     Açık Pozisyonlar
                   </p>
                   <div className="space-y-4">
@@ -710,7 +761,7 @@ export default function PaperTradingTicker() {
 
               {pendingOrders.length > 0 && (
                 <div className="pt-2 border-t border-eyay-border/40 space-y-1.5">
-                  <p className="text-[9px] font-mono text-amber-300 uppercase tracking-wider">
+                  <p className="text-[10px] font-mono text-amber-300 uppercase tracking-wider">
                     Bekleyen Agent Islemleri ({pendingOrders.length})
                   </p>
                   {pendingOrders.map((order) => {
@@ -729,13 +780,13 @@ export default function PaperTradingTicker() {
                         <div className="min-w-0">
                           <p className={`font-bold ${recurring ? "text-fuchsia-300" : "text-amber-300"}`}>
                             {recurring && (
-                              <span className="px-1 py-0.5 rounded text-[8px] mr-1.5 bg-fuchsia-500/20 border border-fuchsia-700/40">
+                              <span className="px-1 py-0.5 rounded text-[10px] mr-1.5 bg-fuchsia-500/20 border border-fuchsia-700/40">
                                 YİNELENEN
                               </span>
                             )}
                             {order.side} {order.pair}
                             {order.primary_tf && (
-                              <span className="text-eyay-faint ml-1 text-[9px]">· TF {order.primary_tf}</span>
+                              <span className="text-eyay-faint ml-1 text-[10px]">· TF {order.primary_tf}</span>
                             )}
                           </p>
                           <p className="text-eyay-faint">
@@ -759,7 +810,7 @@ export default function PaperTradingTicker() {
 
               {manualReadyTrades.length > 0 && (
                 <div className="pt-2 border-t border-eyay-border/40 space-y-1.5">
-                  <p className="text-[9px] font-mono text-violet-300 uppercase tracking-wider">
+                  <p className="text-[10px] font-mono text-violet-300 uppercase tracking-wider">
                     Açılmaya Hazır İşlemler ({manualReadyTrades.length})
                   </p>
                   {manualReadyTrades.map((mr) => {
@@ -784,21 +835,21 @@ export default function PaperTradingTicker() {
                           <p className="font-bold text-violet-300 flex items-baseline gap-1.5 flex-wrap">
                             <span>{mr.side} {mr.pair}</span>
                             {mr.primary_tf && (
-                              <span className="text-eyay-faint text-[9px] font-normal">TF {mr.primary_tf}</span>
+                              <span className="text-eyay-faint text-[10px] font-normal">TF {mr.primary_tf}</span>
                             )}
-                            <span className="text-eyay-dim text-[9px] font-normal">· {mr.last_signal}</span>
+                            <span className="text-eyay-dim text-[10px] font-normal">· {mr.last_signal}</span>
                           </p>
                           <p className="flex items-baseline gap-1.5 mt-0.5">
-                            <span className="text-eyay-faint text-[9px]">şu an</span>
+                            <span className="text-eyay-faint text-[10px]">şu an</span>
                             <span className="text-violet-200 font-bold text-[11px]">
                               ${livePrice.toLocaleString("en-US", { maximumFractionDigits: 2 })}
                             </span>
                             {Math.abs(deltaPct) >= 0.01 && (
-                              <span className={`text-[9px] ${deltaCls}`}>
+                              <span className={`text-[10px] ${deltaCls}`}>
                                 {sign}${Math.abs(delta).toLocaleString("en-US", { maximumFractionDigits: 2 })} ({sign}{Math.abs(deltaPct).toFixed(2)}%)
                               </span>
                             )}
-                            <span className="text-eyay-faint/70 text-[9px]" title={`Referans fiyat (kuyruğa girdiği an): $${orig.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}>
+                            <span className="text-eyay-faint/70 text-[10px]" title={`Referans fiyat (kuyruğa girdiği an): $${orig.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}>
                               vs ${orig.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                             </span>
                           </p>
@@ -834,7 +885,7 @@ export default function PaperTradingTicker() {
                 </div>
               )}
 
-              <p className="text-[8px] font-mono text-eyay-faint/50 pt-1 border-t border-eyay-border/40">
+              <p className="text-[10px] font-mono text-eyay-faint/50 pt-1 border-t border-eyay-border/40">
                 Agent sinyalleri · 4 parite (BTC/XAU/XAG/BRENT) · PAPER_SAFE
               </p>
               </div>
@@ -847,7 +898,7 @@ export default function PaperTradingTicker() {
                 <button
                   onClick={toggleVoiceEnabled}
                   title={voiceEnabled ? "Sesli uyarılar açık — kapatmak için tıkla" : "Sesli uyarılar kapalı — açmak için tıkla"}
-                  className={`w-full flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[9px] font-mono font-bold uppercase tracking-wider transition-colors ${
+                  className={`w-full flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[10px] font-mono font-bold uppercase tracking-wider transition-colors ${
                     voiceEnabled
                       ? "border-emerald-800/60 bg-emerald-950/30 text-emerald-300 hover:border-emerald-600/60"
                       : "border-eyay-border bg-eyay-raised text-eyay-faint hover:border-eyay-muted"
@@ -892,19 +943,19 @@ function StateAnomalyBanner({
         <div className="ml-auto flex items-center gap-1">
           <button
             onClick={onReset}
-            className="text-[9px] px-1.5 py-0.5 rounded border border-red-700/60 text-red-200 hover:bg-red-900/40"
+            className="text-[10px] px-1.5 py-0.5 rounded border border-red-700/60 text-red-200 hover:bg-red-900/40"
           >
             Reset
           </button>
           <button
             onClick={() => onRepair(true)}
-            className="text-[9px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
+            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
           >
             Repair
           </button>
           <button
             onClick={() => setDetailOpen((v) => !v)}
-            className="text-[9px] px-1.5 py-0.5 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text"
+            className="text-[10px] px-1.5 py-0.5 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text"
           >
             Detay {detailOpen ? "▴" : "▾"}
           </button>
@@ -913,7 +964,7 @@ function StateAnomalyBanner({
       {detailOpen && (
         <div className="mt-1.5 pt-1.5 border-t border-red-800/40 space-y-1">
           {anomaly.reasons.length > 0 && (
-            <ul className="text-[9px] text-red-100/80 list-disc list-inside space-y-0.5">
+            <ul className="text-[10px] text-red-100/80 list-disc list-inside space-y-0.5">
               {anomaly.reasons.slice(0, 4).map((r, i) => (
                 <li key={i}>{r}</li>
               ))}
@@ -922,13 +973,13 @@ function StateAnomalyBanner({
           <div className="flex flex-wrap gap-1">
             <button
               onClick={() => onRepair(true)}
-              className="text-[9px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
+              className="text-[10px] px-1.5 py-0.5 rounded border border-amber-700/60 text-amber-200 hover:bg-amber-950/30"
             >
               Dry-run Repair
             </button>
             <button
               onClick={() => onRepair(false)}
-              className="text-[9px] px-1.5 py-0.5 rounded border border-emerald-700/60 text-emerald-200 hover:bg-emerald-950/30"
+              className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-700/60 text-emerald-200 hover:bg-emerald-950/30"
             >
               Apply Repair
             </button>
@@ -968,7 +1019,7 @@ function StatusBadge({ status }: { status: AddPlanControl["status"] | AddLevel["
   };
   const m = map[status] ?? { cls: "border-eyay-border text-eyay-faint", label: status };
   return (
-    <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${m.cls}`}>
+    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${m.cls}`}>
       {m.label}
     </span>
   );
@@ -1133,7 +1184,7 @@ function AddToPositionModal({
 
         {/* Miktar preset */}
         <div>
-          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Eklenecek miktar</p>
+          <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Eklenecek miktar</p>
           <div className="flex flex-wrap gap-1.5">
             {ADD_PRESETS.map(v => (
               <button
@@ -1160,7 +1211,7 @@ function AddToPositionModal({
 
         {/* Sebep */}
         <div>
-          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Ekleme nedeni</p>
+          <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Ekleme nedeni</p>
           <select
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1350,7 +1401,7 @@ function ManualRiskOverrideModal({
         </div>
 
         <div>
-          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni SL</p>
+          <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni SL</p>
           <input
             type="number"
             value={sl}
@@ -1359,7 +1410,7 @@ function ManualRiskOverrideModal({
           />
         </div>
         <div>
-          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni TP</p>
+          <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Yeni TP</p>
           <input
             type="number"
             value={tp}
@@ -1400,7 +1451,7 @@ function ManualRiskOverrideModal({
         </div>
 
         <div>
-          <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Değişiklik nedeni</p>
+          <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">Değişiklik nedeni</p>
           <select
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -1569,11 +1620,11 @@ function OpenPositionCard({
           <span className={`text-sm font-black ${sideTextClr}`}>
             {p.side === "LONG" ? "▲" : "▼"} {p.pair}
           </span>
-          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sideBadgeClr}`}>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sideBadgeClr}`}>
             {p.side}
           </span>
           <span
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sourceBadgeClr}`}
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border ${sourceBadgeClr}`}
             title={sourceTooltip}
           >
             {isManual ? "MANUEL" : "PAPER"}
@@ -1593,7 +1644,7 @@ function OpenPositionCard({
             onClick={onClose}
             disabled={isClosing}
             title="Pozisyonu anlık fiyattan elle kapat"
-            className="text-[9px] font-bold border border-red-800/50 text-red-300 hover:text-red-100 hover:bg-red-900/40 hover:border-red-600/60 px-2 py-1 rounded transition-colors disabled:opacity-40 leading-tight whitespace-nowrap"
+            className="text-[10px] font-bold border border-red-800/50 text-red-300 hover:text-red-100 hover:bg-red-900/40 hover:border-red-600/60 px-2 py-1 rounded transition-colors disabled:opacity-40 leading-tight whitespace-nowrap"
           >
             {isClosing ? "···" : "Kapat"}
           </button>
@@ -1604,7 +1655,7 @@ function OpenPositionCard({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-2.5">
         {/* B) Pozisyon Özeti */}
         <section className="bg-eyay-surface/30 rounded-md p-2.5 border border-eyay-border/40">
-          <h4 className="text-[9px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
+          <h4 className="text-[10px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
             Pozisyon Özeti
           </h4>
           <dl className="space-y-1.5 text-[11px]">
@@ -1631,7 +1682,7 @@ function OpenPositionCard({
 
         {/* C) Risk Planı */}
         <section className="bg-eyay-surface/30 rounded-md p-2.5 border border-eyay-border/40">
-          <h4 className="text-[9px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
+          <h4 className="text-[10px] uppercase tracking-wider text-eyay-faint mb-2 font-semibold">
             Risk Planı
           </h4>
           <dl className="space-y-1.5 text-[11px]">
@@ -1704,7 +1755,7 @@ function OpenPositionCard({
               </dl>
               {p.add_plan.add_levels.length > 0 && (
                 <div className="mt-2 pt-2 border-t border-eyay-border/30 space-y-1">
-                  <p className="text-[8px] uppercase tracking-wider text-eyay-faint">Ekleme Seviyeleri</p>
+                  <p className="text-[10px] uppercase tracking-wider text-eyay-faint">Ekleme Seviyeleri</p>
                   {p.add_plan.add_levels.map((lv, i) => (
                     <div key={lv.id || i} className="flex items-center justify-between gap-2 text-[10px] font-mono">
                       <span className="text-eyay-text truncate">
@@ -1717,7 +1768,7 @@ function OpenPositionCard({
                 </div>
               )}
               {p.add_plan.last_control_result?.reason && (
-                <p className="text-[9px] text-eyay-dim italic mt-1.5 leading-snug">
+                <p className="text-[10px] text-eyay-dim italic mt-1.5 leading-snug">
                   Son kontrol: {p.add_plan.last_control_result.reason}
                 </p>
               )}
@@ -1725,13 +1776,13 @@ function OpenPositionCard({
                 <button
                   onClick={() => setAddOpen(true)}
                   disabled={p.add_plan.mode === "off" || p.add_plan.remaining_add_capacity_usd <= 0}
-                  className="text-[9px] font-mono px-2 py-1 rounded border border-emerald-700/70 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
+                  className="text-[10px] font-mono px-2 py-1 rounded border border-emerald-700/70 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40 disabled:opacity-40"
                 >
                   Manuel Ekle
                 </button>
                 <button
                   onClick={() => setRiskOpen(true)}
-                  className="text-[9px] font-mono px-2 py-1 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text hover:border-eyay-blue/60"
+                  className="text-[10px] font-mono px-2 py-1 rounded border border-eyay-border text-eyay-faint hover:text-eyay-text hover:border-eyay-blue/60"
                 >
                   SL/TP Düzenle
                 </button>
@@ -1768,7 +1819,7 @@ function OpenPositionCard({
             </h4>
             <span className="flex items-center gap-1.5 shrink-0">
               {!explanOpen && (
-                <span className="text-[9px] font-mono text-eyay-faint truncate max-w-xs">
+                <span className="text-[10px] font-mono text-eyay-faint truncate max-w-xs">
                   {p.open_signal
                     ? (() => {
                         const tfEval = buildTimeframeEval(p.open_signal);
@@ -1778,14 +1829,14 @@ function OpenPositionCard({
                     : "kayıt yok"}
                 </span>
               )}
-              <span className="text-eyay-faint text-[9px]">{explanOpen ? "▴" : "▾"}</span>
+              <span className="text-eyay-faint text-[10px]">{explanOpen ? "▴" : "▾"}</span>
             </span>
           </button>
           {explanOpen && (
             <div className="px-2 pb-2 border-t border-eyay-border/30 pt-2 space-y-2.5 text-[11px]">
               {/* A) Consensus Skoru Nasıl Oluştu */}
               <div>
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">A) Consensus Skoru</p>
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">A) Consensus Skoru</p>
                 {p.open_signal ? (
                   <>
                     <pre className="text-[10px] text-eyay-text/90 leading-snug whitespace-pre-wrap font-mono">
@@ -1793,7 +1844,7 @@ function OpenPositionCard({
                     </pre>
                     {/* Modül katkıları */}
                     {buildModuleScores(p.open_signal) && (
-                      <p className="text-[9px] text-eyay-faint mt-1 leading-snug">
+                      <p className="text-[10px] text-eyay-faint mt-1 leading-snug">
                         Modül katkıları: {buildModuleScores(p.open_signal)}
                       </p>
                     )}
@@ -1802,12 +1853,12 @@ function OpenPositionCard({
                       const cp = p.open_signal?.base?.module_scores?.["chart_pattern"];
                       if (cp == null) return null;
                       if (cp < 50) return (
-                        <p className="text-[9px] text-amber-300/80 mt-0.5">
+                        <p className="text-[10px] text-amber-300/80 mt-0.5">
                           Pattern karşı sinyal verdi (skor {cp.toFixed(0)}/100) — final kararın ana sürücüsü değildi; consensus + confluence ile açıldı.
                         </p>
                       );
                       if (cp >= 65) return (
-                        <p className="text-[9px] text-emerald-300/70 mt-0.5">
+                        <p className="text-[10px] text-emerald-300/70 mt-0.5">
                           Pattern işlem yönünü destekledi (skor {cp.toFixed(0)}/100).
                         </p>
                       );
@@ -1821,14 +1872,14 @@ function OpenPositionCard({
 
               {/* B) Timeframe Değerlendirmesi */}
               <div>
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">B) Timeframe Değerlendirmesi</p>
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">B) Timeframe Değerlendirmesi</p>
                 {p.open_signal ? (() => {
                   const tfEval = buildTimeframeEval(p.open_signal);
                   return (
                     <>
                       <table className="w-full text-[10px] font-mono border-collapse">
                         <thead>
-                          <tr className="text-eyay-faint text-[8px] uppercase tracking-wider">
+                          <tr className="text-eyay-faint text-[10px] uppercase tracking-wider">
                             <th className="text-left pb-1 pr-2 w-8">TF</th>
                             <th className="text-left pb-1 pr-2 w-16">Yön</th>
                             <th className="text-left pb-1 pr-2 w-16">Skor</th>
@@ -1841,12 +1892,12 @@ function OpenPositionCard({
                               <td className="pr-2 align-top">{d.tf}</td>
                               <td className="pr-2 align-top">{d.direction}</td>
                               <td className="pr-2 align-top">{d.score !== "—" ? `${d.score}/100` : "—"}</td>
-                              <td className="text-eyay-faint text-[9px] align-top">{d.note}</td>
+                              <td className="text-eyay-faint text-[10px] align-top">{d.note}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      <p className="text-[9px] text-eyay-dim italic mt-1.5">
+                      <p className="text-[10px] text-eyay-dim italic mt-1.5">
                         💡 {
                           tfEval.details.filter(d => d.direction === "bullish").length >= 2 ? "Birden fazla TF bullish — confluence işlem yönünü destekledi." :
                           tfEval.details.filter(d => d.direction === "bearish").length >= 2 ? "Kısa vadeler karşı sinyal veriyor; risk kontrollü izlemeli." :
@@ -1854,7 +1905,7 @@ function OpenPositionCard({
                         }
                       </p>
                       {/* TF anlamı — üç farklı TF kavramı */}
-                      <div className="mt-1.5 pt-1.5 border-t border-eyay-border/30 text-[9px] text-eyay-faint space-y-0.5">
+                      <div className="mt-1.5 pt-1.5 border-t border-eyay-border/30 text-[10px] text-eyay-faint space-y-0.5">
                         {p.open_signal?.primary_tf && (
                           <p>Sinyal TF: <span className="text-eyay-dim">{p.open_signal.primary_tf.toUpperCase()}</span> (agent bu TF'de sinyal üretti)</p>
                         )}
@@ -1874,7 +1925,7 @@ function OpenPositionCard({
 
               {/* C) Manuel Takip Notu */}
               <div>
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">C) Manuel Takip Notu</p>
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">C) Manuel Takip Notu</p>
                 <div className="text-[10px] text-eyay-text/90 leading-snug space-y-0.5">
                   {buildManualFollowNote(p.open_signal).split("\n").map((line, i) => (
                     <p key={i}>{line}</p>
@@ -1884,7 +1935,7 @@ function OpenPositionCard({
 
               {/* D) Haber / Event Etkisi */}
               <div>
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-1">D) Haber / Event Etkisi</p>
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-1">D) Haber / Event Etkisi</p>
                 <p className="text-[10px] text-eyay-text/90 leading-snug">
                   {buildNewsImpact(p.open_signal)}
                 </p>
@@ -1893,7 +1944,7 @@ function OpenPositionCard({
               {/* E) Karar Özeti (açıklama varsa) */}
               {p.opening_explanation?.primary_reason && (
                 <div>
-                  <p className="text-[9px] font-mono text-emerald-300/80 uppercase tracking-wider mb-1">E) Karar Özeti</p>
+                  <p className="text-[10px] font-mono text-emerald-300/80 uppercase tracking-wider mb-1">E) Karar Özeti</p>
                   <p className="text-[10px] text-eyay-text/90 leading-snug italic">
                     {p.opening_explanation.primary_reason}
                   </p>
@@ -1905,7 +1956,7 @@ function OpenPositionCard({
       )}
 
       {/* ────────────── Karar cümlesi ────────────── */}
-      <p className="px-2.5 pb-2 text-[9px] text-eyay-dim italic leading-snug">
+      <p className="px-2.5 pb-2 text-[10px] text-eyay-dim italic leading-snug">
         {decisionSentence}
         {isManual && (
           <span className="block text-violet-300/70 mt-0.5">
@@ -2093,7 +2144,7 @@ function PatternList({ items }: { items: string[] }) {
   const shown = expanded ? items : items.slice(0, 3);
   const hasMore = items.length > 3;
   return (
-    <div className="text-[9px] text-eyay-text/90 leading-snug">
+    <div className="text-[10px] text-eyay-text/90 leading-snug">
       <span>{shown.join(" · ")}</span>
       {hasMore && (
         <button
@@ -2124,7 +2175,7 @@ function PendingTradeBanner({
   const recurring = !!order.is_recurring;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[260]">
+    <div data-testid="pending-trade-banner" className="fixed top-0 left-0 right-0 z-[260]">
       <div className={`shadow-2xl text-white ${
         recurring
           ? "bg-gradient-to-r from-fuchsia-700 to-fuchsia-900"
@@ -2162,6 +2213,88 @@ function PendingTradeBanner({
   );
 }
 
+// Paper deney (sandbox) modu rozeti — durum görseli; karar/threshold değiştirmez.
+function PaperExperimentBadge({ exp }: { exp: PaperExperiment }) {
+  const on = exp.mode === "experiment" || exp.experiment_mode;
+  const maxOpen = exp.max_open_positions ?? null;
+  const flags = [
+    exp.learning_enabled ? "öğrenme✓" : "öğrenme✗",
+    exp.stale_experiment_allowed ? "stale-exp✓" : "stale-exp✗",
+    maxOpen != null ? `max ${maxOpen}` : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <div
+      data-testid="paper-experiment-badge"
+      data-experiment={on ? "on" : "off"}
+      title={`Paper ${on ? "Experiment" : "Standard"} Mode — ${flags}\nPAPER_SAFE · NO_EXECUTION (gerçek emir yok)`}
+      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[10px] font-mono ${
+        on
+          ? "border-cyan-500/60 bg-cyan-950/40 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.30)]"
+          : "border-eyay-border/70 bg-eyay-surface/80 text-eyay-faint"
+      }`}
+    >
+      <span aria-hidden="true">🧪</span>
+      <span className="font-bold uppercase tracking-wider">
+        Paper {on ? "Experiment" : "Standard"}
+      </span>
+      <span className="opacity-70 hidden sm:inline">· {flags}</span>
+    </div>
+  );
+}
+
+// Açılmaya hazır (manual_ready) işlemler için üst banner.
+// manual_ready OTOMATİK açılmadığı için sayaç göstermez; kullanıcıyı panele
+// yönlendirir (DETAY) ve kuyruktan çıkarma (İPTAL ET) sunar.
+function ManualReadyBanner({
+  count,
+  first,
+  onCancelAll,
+  onDetail,
+}: {
+  count: number;
+  first: ManualReadyTrade;
+  onCancelAll: () => void;
+  onDetail: () => void;
+}) {
+  return (
+    <div data-testid="manual-ready-banner" className="fixed top-0 left-0 right-0 z-[260]">
+      <div className="bg-gradient-to-r from-violet-700 to-violet-900 text-white shadow-2xl">
+        <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl font-black shrink-0">⚡</span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-mono font-bold tracking-widest opacity-80">
+                İŞLEM AÇILMAYA HAZIR{count > 1 ? ` · ${count} ADET` : ""}
+              </p>
+              <p className="text-base font-black tracking-tight truncate">
+                {first.side} {first.pair} açılmaya hazır — manuel onay bekliyor
+              </p>
+              <p className="text-[11px] opacity-85">
+                Otomatik açılmaz. Açmak için DETAY → “Aç”, kuyruktan çıkarmak için İPTAL ET.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={onDetail}
+              className="rounded-lg border border-white/30 bg-white/10 px-4 py-2 text-sm font-mono font-bold text-white hover:bg-white/20"
+            >
+              DETAY
+            </button>
+            <button
+              onClick={onCancelAll}
+              className="rounded-lg border border-red-300/40 bg-red-950/40 px-4 py-2 text-sm font-mono font-bold text-red-100 hover:bg-red-950/60"
+            >
+              İPTAL ET
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TradeBanner({ event }: { event: TradeEvent }) {
   const isOpen = event.type === "OPEN";
   const isLong = event.side === "LONG";
@@ -2176,7 +2309,7 @@ function TradeBanner({ event }: { event: TradeEvent }) {
     : `${event.side} ${event.pair} KAPATILDI`;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[250] pointer-events-none">
+    <div data-testid="paper-trade-banner" className="fixed top-0 left-0 right-0 z-[250] pointer-events-none">
       <div
         className={`bg-gradient-to-r ${bg} text-white shadow-2xl`}
         style={{

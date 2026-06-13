@@ -2477,7 +2477,19 @@ def get_snapshot(
             "reasons": anomaly["reasons"],
             "action":  "REPAIR_OR_RESET_REQUIRED" if anomaly["detected"] else "OK",
         },
+        # Additive — paper deney (sandbox) konfig görünümü. Mevcut alanları
+        # değiştirmez; default'lar experiment kapalı → davranış aynı.
+        "paper_experiment": _paper_experiment_view(),
     }
+
+
+def _paper_experiment_view() -> dict[str, Any]:
+    """Leaf config'i salt-oku; import hatası olsa bile state bozulmasın."""
+    try:
+        from app.core.paper_experiment import experiment_view  # noqa: PLC0415
+        return experiment_view()
+    except Exception:  # noqa: BLE001
+        return {"mode": "standard", "experiment_mode": False, "paper_safe": True, "no_execution": True}
 
 
 def reset_state() -> None:
