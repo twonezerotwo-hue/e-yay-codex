@@ -638,6 +638,113 @@ def _emit_attributions(st: TradingState) -> None:
             _ATTRIBUTION_SEEN_IDS.add(tid)
 
 
+# ── Paper trade outcome memory (Aşama 3) ──────────────────────────────────────
+# Kapanan paper trade'leri mevcut learning store'larına yazar. Best-effort,
+# additive (JSONL append) — paper state'i / trade akışını ASLA değiştirmez.
+# Schema kırmaz. PAPER_LEARNING_ENABLED kapalıysa hiç çalışmaz.
+_OUTCOME_SEEN_IDS: set[int] = set()
+_OUTCOME_BASELINE_DONE = False
+
+
+def _build_outcome_fields(trade: Any) -> dict[str, Any]:
+    """Kapanan trade'den learning memory alanlarını best-effort çıkarır."""
+    osig = getattr(trade, "open_signal", None) or {}
+    base = osig.get("base") or {}
+    mod  = base.get("module_scores") or {}
+    adv  = osig.get("advanced_technical") or {}
+    agg  = osig.get("aggression_context") or {}
+    return {
+        "asset":            getattr(trade, "pair", ""),
+        "side":             getattr(trade, "side", ""),
+        "entry_reason":     osig.get("agent_command") or getattr(trade, "reason", "") or "",
+        "labels":           osig.get("experiment_labels") or [],
+        "confidence":       osig.get("final_score"),
+        "tick_age_seconds": osig.get("tick_age_at_open"),
+        "macro_regime":     osig.get("raw_regime"),
+        "appetite":         agg.get("aggression_level"),
+        "news_pressure":    mod.get("news"),
+        "technical_status": adv.get("market_structure") or base.get("direction"),
+        "pnl_usd":          getattr(trade, "pnl_usd", None),
+        "pnl_pct":          getattr(trade, "pnl_pct", None),
+        "duration_min":     getattr(trade, "duration_min", None),
+        "exit_reason":      getattr(trade, "reason", "") or "",
+        "opened_at":        getattr(trade, "entry_at", None),
+        "closed_at":        getattr(trade, "exit_at", None),
+    }
+
+
+def _record_trade_outcomes(st: TradingState) -> None:
+    """Yeni kapanan paper trade'leri learning memory'ye yazar (best-effort).
+
+    WIN  → learning_candidate_store (positive_memory)
+    LOSS → mistake_memory_store    (mistake_memory)
+    BREAK_EVEN / bilinmeyen → atlanır.
+
+    İlk çağrıda mevcut (geçmiş) trade'ler "görüldü" olarak işaretlenir →
+    restart'ta tekrar yazma yok (duplicate guard). PAPER_LEARNING_ENABLED
+    kapalıysa hiç çalışmaz. Tüm hatalar yutulur — paper akışını bozmaz.
+    """
+    global _OUTCOME_BASELINE_DONE
+    try:
+        from app.core.paper_experiment import PAPER_LEARNING_ENABLED  # noqa: PLC0415
+        if not PAPER_LEARNING_ENABLED:
+            return
+    except Exception:  # noqa: BLE001
+        return
+
+    if not _OUTCOME_BASELINE_DONE:
+        for t in st.trades:
+            tid = getattr(t, "id", None)
+            if isinstance(tid, int):
+                _OUTCOME_SEEN_IDS.add(tid)
+        _OUTCOME_BASELINE_DONE = True
+        return
+
+    for t in st.trades:
+        tid = getattr(t, "id", None)
+        if not isinstance(tid, int) or tid in _OUTCOME_SEEN_IDS:
+            continue
+        try:
+            verdict = getattr(t, "verdict", "")
+            if verdict not in ("WIN", "LOSS"):
+                continue  # BREAK_EVEN → kaydetme
+            f  = _build_outcome_fields(t)
+            fp = getattr(t, "fingerprint", "") or ""
+            if verdict == "WIN":
+                from app.storage.learning_candidate_store import (  # noqa: PLC0415
+                    save_learning_candidate,
+                )
+                save_learning_candidate({
+                    "pair": f["asset"], "side": f["side"],
+                    "entry_price":   getattr(t, "entry_price", 0.0),
+                    "current_price": getattr(t, "exit_price", 0.0),
+                    "pnl_pct":       f["pnl_pct"] or 0.0,
+                    "source": {"source_trade_fingerprint": fp, "origin": "paper_trade_outcome"},
+                    "opening_evidence": f,
+                    "candidate_labels": ["positive_memory", *f["labels"]],
+                    "candidate_summary": {"verdict": verdict, "exit_reason": f["exit_reason"],
+                                          "pnl_usd": f["pnl_usd"]},
+                })
+            else:  # LOSS
+                from app.storage.mistake_memory_store import (  # noqa: PLC0415
+                    save_mistake_memory,
+                )
+                save_mistake_memory({
+                    "source_trade_fingerprint": fp,
+                    "trade": {"pair": f["asset"], "side": f["side"],
+                              "pnl_usd": f["pnl_usd"], "pnl_pct": f["pnl_pct"],
+                              "duration_min": f["duration_min"], "verdict": verdict},
+                    "opening_context": f,
+                    "final_labels": ["mistake_memory", *f["labels"]],
+                    "final_summary": {"verdict": verdict, "exit_reason": f["exit_reason"]},
+                })
+        except Exception as exc:  # noqa: BLE001
+            # Best-effort — memory yazımı paper trading'i ASLA crash ettirmez.
+            logger.warning("paper_trading: outcome memory write failed (trade %s): %s", tid, exc)
+        finally:
+            _OUTCOME_SEEN_IDS.add(tid)
+
+
 def _save_state(st: TradingState) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -663,6 +770,8 @@ def _save_state(st: TradingState) -> None:
     tmp_path.replace(_STATE_PATH)
     # Persist sonrası yeni trade'ler için attribution emit (best-effort, hata yutulur)
     _emit_attributions(st)
+    # Aşama 3 — kapanan trade'leri learning memory'ye yaz (best-effort, hata yutulur)
+    _record_trade_outcomes(st)
 
 
 # ── PnL helpers ───────────────────────────────────────────────────────────────
