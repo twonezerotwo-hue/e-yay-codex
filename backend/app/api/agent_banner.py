@@ -46,5 +46,16 @@ def get_agent_banner() -> dict[str, Any]:
         return _BANNER_CACHE[1]
 
     result = build_agent_banner()
+
+    # Aşama 6 — additive agent_orchestration bloğu (fail-safe).
+    # build_agent_banner DOKUNULMAZ; orchestration hata verse bile banner döner.
+    try:
+        from app.services.agent_orchestration import build_orchestration_status  # noqa: PLC0415
+        result = {**result, "agent_orchestration": build_orchestration_status(result)}
+    except Exception:  # noqa: BLE001
+        result = {**result, "agent_orchestration": {
+            "status": "degraded", "reason": "orchestration_unavailable",
+        }}
+
     _BANNER_CACHE = (now, result)
     return result

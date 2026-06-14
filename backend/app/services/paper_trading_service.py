@@ -638,6 +638,113 @@ def _emit_attributions(st: TradingState) -> None:
             _ATTRIBUTION_SEEN_IDS.add(tid)
 
 
+# ── Paper trade outcome memory (Aşama 3) ──────────────────────────────────────
+# Kapanan paper trade'leri mevcut learning store'larına yazar. Best-effort,
+# additive (JSONL append) — paper state'i / trade akışını ASLA değiştirmez.
+# Schema kırmaz. PAPER_LEARNING_ENABLED kapalıysa hiç çalışmaz.
+_OUTCOME_SEEN_IDS: set[int] = set()
+_OUTCOME_BASELINE_DONE = False
+
+
+def _build_outcome_fields(trade: Any) -> dict[str, Any]:
+    """Kapanan trade'den learning memory alanlarını best-effort çıkarır."""
+    osig = getattr(trade, "open_signal", None) or {}
+    base = osig.get("base") or {}
+    mod  = base.get("module_scores") or {}
+    adv  = osig.get("advanced_technical") or {}
+    agg  = osig.get("aggression_context") or {}
+    return {
+        "asset":            getattr(trade, "pair", ""),
+        "side":             getattr(trade, "side", ""),
+        "entry_reason":     osig.get("agent_command") or getattr(trade, "reason", "") or "",
+        "labels":           osig.get("experiment_labels") or [],
+        "confidence":       osig.get("final_score"),
+        "tick_age_seconds": osig.get("tick_age_at_open"),
+        "macro_regime":     osig.get("raw_regime"),
+        "appetite":         agg.get("aggression_level"),
+        "news_pressure":    mod.get("news"),
+        "technical_status": adv.get("market_structure") or base.get("direction"),
+        "pnl_usd":          getattr(trade, "pnl_usd", None),
+        "pnl_pct":          getattr(trade, "pnl_pct", None),
+        "duration_min":     getattr(trade, "duration_min", None),
+        "exit_reason":      getattr(trade, "reason", "") or "",
+        "opened_at":        getattr(trade, "entry_at", None),
+        "closed_at":        getattr(trade, "exit_at", None),
+    }
+
+
+def _record_trade_outcomes(st: TradingState) -> None:
+    """Yeni kapanan paper trade'leri learning memory'ye yazar (best-effort).
+
+    WIN  → learning_candidate_store (positive_memory)
+    LOSS → mistake_memory_store    (mistake_memory)
+    BREAK_EVEN / bilinmeyen → atlanır.
+
+    İlk çağrıda mevcut (geçmiş) trade'ler "görüldü" olarak işaretlenir →
+    restart'ta tekrar yazma yok (duplicate guard). PAPER_LEARNING_ENABLED
+    kapalıysa hiç çalışmaz. Tüm hatalar yutulur — paper akışını bozmaz.
+    """
+    global _OUTCOME_BASELINE_DONE
+    try:
+        from app.core.paper_experiment import PAPER_LEARNING_ENABLED  # noqa: PLC0415
+        if not PAPER_LEARNING_ENABLED:
+            return
+    except Exception:  # noqa: BLE001
+        return
+
+    if not _OUTCOME_BASELINE_DONE:
+        for t in st.trades:
+            tid = getattr(t, "id", None)
+            if isinstance(tid, int):
+                _OUTCOME_SEEN_IDS.add(tid)
+        _OUTCOME_BASELINE_DONE = True
+        return
+
+    for t in st.trades:
+        tid = getattr(t, "id", None)
+        if not isinstance(tid, int) or tid in _OUTCOME_SEEN_IDS:
+            continue
+        try:
+            verdict = getattr(t, "verdict", "")
+            if verdict not in ("WIN", "LOSS"):
+                continue  # BREAK_EVEN → kaydetme
+            f  = _build_outcome_fields(t)
+            fp = getattr(t, "fingerprint", "") or ""
+            if verdict == "WIN":
+                from app.storage.learning_candidate_store import (  # noqa: PLC0415
+                    save_learning_candidate,
+                )
+                save_learning_candidate({
+                    "pair": f["asset"], "side": f["side"],
+                    "entry_price":   getattr(t, "entry_price", 0.0),
+                    "current_price": getattr(t, "exit_price", 0.0),
+                    "pnl_pct":       f["pnl_pct"] or 0.0,
+                    "source": {"source_trade_fingerprint": fp, "origin": "paper_trade_outcome"},
+                    "opening_evidence": f,
+                    "candidate_labels": ["positive_memory", *f["labels"]],
+                    "candidate_summary": {"verdict": verdict, "exit_reason": f["exit_reason"],
+                                          "pnl_usd": f["pnl_usd"]},
+                })
+            else:  # LOSS
+                from app.storage.mistake_memory_store import (  # noqa: PLC0415
+                    save_mistake_memory,
+                )
+                save_mistake_memory({
+                    "source_trade_fingerprint": fp,
+                    "trade": {"pair": f["asset"], "side": f["side"],
+                              "pnl_usd": f["pnl_usd"], "pnl_pct": f["pnl_pct"],
+                              "duration_min": f["duration_min"], "verdict": verdict},
+                    "opening_context": f,
+                    "final_labels": ["mistake_memory", *f["labels"]],
+                    "final_summary": {"verdict": verdict, "exit_reason": f["exit_reason"]},
+                })
+        except Exception as exc:  # noqa: BLE001
+            # Best-effort — memory yazımı paper trading'i ASLA crash ettirmez.
+            logger.warning("paper_trading: outcome memory write failed (trade %s): %s", tid, exc)
+        finally:
+            _OUTCOME_SEEN_IDS.add(tid)
+
+
 def _save_state(st: TradingState) -> None:
     _STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -663,6 +770,8 @@ def _save_state(st: TradingState) -> None:
     tmp_path.replace(_STATE_PATH)
     # Persist sonrası yeni trade'ler için attribution emit (best-effort, hata yutulur)
     _emit_attributions(st)
+    # Aşama 3 — kapanan trade'leri learning memory'ye yaz (best-effort, hata yutulur)
+    _record_trade_outcomes(st)
 
 
 # ── PnL helpers ───────────────────────────────────────────────────────────────
@@ -920,6 +1029,54 @@ def _route_new_open_signal(
             return
     except Exception:  # noqa: BLE001
         pass  # opinion entegrasyonu hatası trade açılışını bloke etmez
+
+    # Paper deney etiketleri + stale davranışı — YALNIZCA PAPER_EXPERIMENT_MODE'da.
+    # Standart modda bu blok tamamen atlanır → mevcut davranış birebir korunur.
+    try:
+        from app.core.paper_experiment import PAPER_EXPERIMENT_MODE as _EXP_ON  # noqa: PLC0415
+    except Exception:  # noqa: BLE001
+        _EXP_ON = False
+    if _EXP_ON:
+        size_usd, _exp_labels, _exp_skip = _experiment_labels_and_stale(
+            st, signal_snapshot=signal_snapshot, side=side, price=price,
+            size_usd=size_usd, fingerprint=fingerprint, now_dt=now_dt,
+        )
+        if _exp_skip:
+            # Çok stale / geçersiz fiyat → açma da kuyruğa da alma (deney modunda skip)
+            _record_experiment_label(pair, side, [_exp_skip])
+            return
+
+        # Aşama 4 — learning auto-tune (yalnız experiment+learning açıkken).
+        # Memory boşsa _adj=None → hiçbir şey değişmez. Best-effort; read fail
+        # paper akışını bozmaz (warning loglanır).
+        try:
+            from app.core.paper_experiment import PAPER_LEARNING_ENABLED  # noqa: PLC0415
+            _adj = (
+                _auto_tune_adjustment(pair, side) if PAPER_LEARNING_ENABLED else None
+            )
+        except Exception as _exc:  # noqa: BLE001
+            logger.warning("paper_trading: auto-tune read failed (%s %s): %s", pair, side, _exc)
+            _adj = None
+        if _adj:
+            size_usd = round(size_usd * float(_adj.get("size_multiplier", 1.0)), 2)
+            _adj_label = str(_adj.get("label", ""))
+            if _adj_label and _adj_label not in _exp_labels:
+                _exp_labels.append(_adj_label)
+            signal_snapshot = {
+                **signal_snapshot,
+                "auto_tune": {
+                    **_adj,
+                    "reason": (
+                        f"{_adj_label}: {pair} {side} son {_adj.get('wins', 0)}W/"
+                        f"{_adj.get('losses', 0)}L → size x{_adj.get('size_multiplier')}, "
+                        f"threshold {_adj.get('threshold_delta'):+d}"
+                    ),
+                },
+            }
+
+        if _exp_labels:
+            signal_snapshot = {**signal_snapshot, "experiment_labels": _exp_labels}
+            _record_experiment_label(pair, side, _exp_labels)
 
     if raw_regime in _MANUAL_APPROVAL_REGIMES:
         existing = st.manual_ready_trades.get(pair)
@@ -2477,7 +2634,127 @@ def get_snapshot(
             "reasons": anomaly["reasons"],
             "action":  "REPAIR_OR_RESET_REQUIRED" if anomaly["detected"] else "OK",
         },
+        # Additive — paper deney (sandbox) konfig görünümü. Mevcut alanları
+        # değiştirmez; default'lar experiment kapalı → davranış aynı.
+        "paper_experiment": _paper_experiment_view(),
     }
+
+
+def _paper_experiment_view() -> dict[str, Any]:
+    """Leaf config'i salt-oku; import hatası olsa bile state bozulmasın.
+    recent_labels: son experiment etiketleri (module-level, persist edilmez).
+    active_adjustments: learning auto-tune haritası (read-only, salt görünüm)."""
+    try:
+        from app.core.paper_experiment import experiment_view  # noqa: PLC0415
+        return {
+            **experiment_view(),
+            "recent_labels": list(_RECENT_EXPERIMENT_LABELS),
+            "active_adjustments": _auto_tune_adjustments_all(),
+        }
+    except Exception:  # noqa: BLE001
+        return {"mode": "standard", "experiment_mode": False, "paper_safe": True,
+                "no_execution": True, "recent_labels": [], "active_adjustments": {}}
+
+
+def _auto_tune_adjustment(pair: str, side: str) -> dict[str, Any] | None:
+    """Tek asset|side için learning auto-tune ayarı (best-effort; yoksa None)."""
+    try:
+        from app.services.paper_auto_tune import adjustment_for  # noqa: PLC0415
+        return adjustment_for(pair, side)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _auto_tune_adjustments_all() -> dict[str, Any]:
+    """Tüm aktif learning auto-tune ayarları (read-only görünüm; best-effort)."""
+    try:
+        from app.services.paper_auto_tune import compute_adjustments  # noqa: PLC0415
+        return compute_adjustments()
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+# ── Paper deney etiketleme (yalnız PAPER_EXPERIMENT_MODE'da çağrılır) ──────────
+# Module-level ring buffer — son etiketler; state dosyasına yazılmaz (schema kırmaz).
+_RECENT_EXPERIMENT_LABELS: list[dict[str, Any]] = []
+
+
+def _record_experiment_label(pair: str, side: str, labels: list[str]) -> None:
+    """Son deney etiketlerini kaydet (son 10). get_snapshot bunu salt-okur."""
+    _RECENT_EXPERIMENT_LABELS.append({
+        "pair": pair, "side": side, "labels": labels, "at": _utc_now().isoformat(),
+    })
+    if len(_RECENT_EXPERIMENT_LABELS) > 10:
+        del _RECENT_EXPERIMENT_LABELS[:-10]
+
+
+def _experiment_labels_and_stale(
+    st: TradingState,
+    *,
+    signal_snapshot: dict[str, Any],
+    side: str,
+    price: float,
+    size_usd: float,
+    fingerprint: str,
+    now_dt: datetime,
+) -> tuple[float, list[str], str | None]:
+    """PAPER_EXPERIMENT_MODE açıkken aday için etiket + stale davranışı.
+
+    Döner: (size_usd, labels, skip_reason | None).
+      - price geçersiz veya tick_age > hard limit → skip="invalid_or_too_stale"
+      - max < tick_age <= hard (ve izinliyse) → label "stale_experiment", size hafif düşer
+      - opinion ile çelişki → "divergence_experiment"
+      - fingerprint geçmişi → "learning_boost" / "learning_penalty"
+    Standart modda bu fonksiyon HİÇ çağrılmaz (route'ta gate var).
+    """
+    labels: list[str] = []
+    try:
+        from app.core.paper_experiment import (  # noqa: PLC0415
+            PAPER_HARD_STALE_SECONDS,
+            PAPER_MAX_TICK_AGE_SECONDS,
+            PAPER_STALE_EXPERIMENT_ALLOWED,
+        )
+    except Exception:  # noqa: BLE001
+        return size_usd, labels, None
+
+    # 1) Stale (tick yaşı) + fiyat geçerliliği
+    price_invalid = not isinstance(price, (int, float)) or price <= 0 or price != price  # NaN guard
+    tick_age: float | None = None
+    if st.last_tick_at:
+        try:
+            tick_age = (now_dt - datetime.fromisoformat(st.last_tick_at)).total_seconds()
+        except Exception:  # noqa: BLE001
+            tick_age = None
+    if price_invalid or (tick_age is not None and tick_age > PAPER_HARD_STALE_SECONDS):
+        return size_usd, labels, "invalid_or_too_stale"
+    if (tick_age is not None and tick_age > PAPER_MAX_TICK_AGE_SECONDS
+            and PAPER_STALE_EXPERIMENT_ALLOWED):
+        labels.append("stale_experiment")
+        size_usd = round(size_usd * 0.85, 2)  # hafif küçült (düşük confidence)
+
+    # 2) Divergence — strategist görüşüyle çelişki
+    op = signal_snapshot.get("agent_trade_opinion_context") or {}
+    if op.get("available") and (
+        op.get("agrees_with_main_decision") is False
+        or str(op.get("asset_opinion", "")).upper() == "AVOID"
+    ):
+        labels.append("divergence_experiment")
+
+    # 3) Learning boost/penalty — fingerprint geçmişi (mevcut learning_engine)
+    try:
+        from app.services.learning_engine import (  # noqa: PLC0415
+            win_rate_for_fingerprint,
+        )
+        wr = win_rate_for_fingerprint(fingerprint, st.trades)
+        decision = wr.get("decision")
+        if decision == "BOOST":
+            labels.append("learning_boost")
+        elif decision == "AVOID":
+            labels.append("learning_penalty")
+    except Exception:  # noqa: BLE001
+        pass
+
+    return size_usd, labels, None
 
 
 def reset_state() -> None:

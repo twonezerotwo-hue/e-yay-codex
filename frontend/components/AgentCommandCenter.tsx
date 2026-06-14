@@ -311,6 +311,7 @@ function modeBorder(mode: BannerMode): string {
 export default function AgentCommandCenter({
   onClose, headlines = [], macro, appetite,
   reportDecision, ownerActions = [], flipConditions = [],
+  confirmationChecklist = [], asymmetry,
 }: {
   onClose: () => void;
   headlines?: NewsHeadline[];
@@ -321,6 +322,9 @@ export default function AgentCommandCenter({
   reportDecision?: Decision;
   ownerActions?: string[];
   flipConditions?: FlipCondition[];
+  /** Teyit + Asimetri — ana dashboard'dan Karar Detayları'na taşındı. */
+  confirmationChecklist?: import("@/lib/types").ConfirmationItem[];
+  asymmetry?: import("@/lib/types").AsymmetrySignal;
 }) {
   const [diagOpen, setDiagOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -490,6 +494,8 @@ export default function AgentCommandCenter({
           decision={reportDecision}
           ownerActions={ownerActions}
           flipConditions={flipConditions}
+          confirmationChecklist={confirmationChecklist}
+          asymmetry={asymmetry}
           macro={macro}
           appetite={appetite}
           onClose={onClose}
@@ -499,7 +505,7 @@ export default function AgentCommandCenter({
           <button
             type="button"
             onClick={() => setViewMode("classic")}
-            className="rounded-md border border-cyan-700/40 bg-black/70 backdrop-blur-sm px-2.5 py-1 text-[9px] font-mono text-cyan-200 hover:bg-cyan-950/60 transition-colors uppercase tracking-wider"
+            className="rounded-md border border-cyan-700/40 bg-black/70 backdrop-blur-sm px-2.5 py-1 text-[10px] font-mono text-cyan-200 hover:bg-cyan-950/60 transition-colors uppercase tracking-wider"
             data-testid="agent-toggle-classic">
             ▤ Klasik
           </button>
@@ -606,7 +612,7 @@ export default function AgentCommandCenter({
             {/* Top signals */}
             {topSignals.length > 0 && (
               <div className="mt-3 space-y-1">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
                   Öne çıkan sinyaller
                 </p>
                 {topSignals.map((sig, i) => (
@@ -621,7 +627,7 @@ export default function AgentCommandCenter({
             {/* Contradictions */}
             {contradictions.length > 0 && (
               <div className="mt-3 space-y-1">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
                   Çelişkiler
                 </p>
                 {contradictions.map((c, i) => (
@@ -636,7 +642,7 @@ export default function AgentCommandCenter({
             {/* Watch next */}
             {watchNext.length > 0 && (
               <div className="mt-3 space-y-1">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1">
                   İzlenecekler
                 </p>
                 {watchNext.map((w, i) => (
@@ -660,7 +666,7 @@ export default function AgentCommandCenter({
             {/* FAZ 13 — Piyasa fikri satırları (market_thought önce) */}
             {banner?.market_thought && (
               <div className="mt-3 p-3 rounded-lg bg-eyay-raised/50 border border-eyay-border/40 space-y-2">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">
                   Piyasa fikri
                 </p>
                 <p className="text-xs text-eyay-text leading-relaxed">{banner.market_thought}</p>
@@ -693,10 +699,10 @@ export default function AgentCommandCenter({
           {opinion && (
             <section className="rounded-2xl border border-cyan-900/40 bg-cyan-950/10 p-5" data-testid="ai-trade-opinion">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[9px] font-mono text-cyan-300/80 uppercase tracking-widest">
+                <p className="text-[10px] font-mono text-cyan-300/80 uppercase tracking-widest">
                   🎯 AI Trade Fikrim
                 </p>
-                <span className="text-[8px] font-mono text-eyay-faint border border-eyay-border/60 rounded px-1.5 py-0.5">
+                <span className="text-[10px] font-mono text-eyay-faint border border-eyay-border/60 rounded px-1.5 py-0.5">
                   {opinion.overall_view} · PAPER_SAFE · emir yok
                 </span>
               </div>
@@ -705,7 +711,7 @@ export default function AgentCommandCenter({
               {/* Açık Pozisyon Görüşüm */}
               {opinion.open_position_opinions.length > 0 && (
                 <div className="mb-4">
-                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
+                  <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
                     Açık Pozisyon Görüşüm
                   </p>
                   <div className="flex flex-col gap-2">
@@ -713,13 +719,13 @@ export default function AgentCommandCenter({
                       <div key={po.pair} className="rounded-xl border border-eyay-border/60 bg-eyay-raised/30 px-3 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[11px] font-mono font-bold text-eyay-text">{po.pair} {po.side}</span>
-                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${OPINION_STYLE[po.opinion] ?? OPINION_STYLE.WAIT}`}>
+                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${OPINION_STYLE[po.opinion] ?? OPINION_STYLE.WAIT}`}>
                             {po.opinion}
                           </span>
-                          <span className="text-[8px] font-mono text-eyay-faint">conviction: {po.conviction}</span>
+                          <span className="text-[10px] font-mono text-eyay-faint">conviction: {po.conviction}</span>
                         </div>
                         <p className="text-[10px] text-eyay-dim mt-1 leading-snug">{po.reason}</p>
-                        <p className="text-[9px] font-mono text-amber-400/70 mt-1">⚠ {po.invalidation}</p>
+                        <p className="text-[10px] font-mono text-amber-400/70 mt-1">⚠ {po.invalidation}</p>
                       </div>
                     ))}
                   </div>
@@ -728,7 +734,7 @@ export default function AgentCommandCenter({
 
               {/* Asset fikirleri — kompakt çip satırı */}
               <div className="mb-4">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-2">
                   Varlık Görüşleri
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -736,7 +742,7 @@ export default function AgentCommandCenter({
                     <span
                       key={ao.asset}
                       title={`${ao.suggested_action} · skor ${ao.score} · ${ao.trigger_needed}`}
-                      className={`text-[9px] font-mono font-semibold px-2 py-1 rounded-lg border ${OPINION_STYLE[ao.opinion] ?? OPINION_STYLE.WAIT}`}
+                      className={`text-[10px] font-mono font-semibold px-2 py-1 rounded-lg border ${OPINION_STYLE[ao.opinion] ?? OPINION_STYLE.WAIT}`}
                     >
                       {ao.asset} · {ao.opinion} ({ao.conviction})
                     </span>
@@ -746,7 +752,7 @@ export default function AgentCommandCenter({
 
               {/* En İyi Yeni Aday */}
               <div className="mb-4">
-                <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
                   En İyi Yeni Aday
                 </p>
                 {opinion.best_candidate.asset !== "NONE" ? (
@@ -767,7 +773,7 @@ export default function AgentCommandCenter({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {opinion.next_3_triggers.length > 0 && (
                   <div>
-                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
                       Neyi Bekliyorum?
                     </p>
                     <ul className="flex flex-col gap-1">
@@ -779,7 +785,7 @@ export default function AgentCommandCenter({
                 )}
                 {opinion.what_would_change_my_mind.length > 0 && (
                   <div>
-                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-1.5">
                       Fikrimi Ne Bozar?
                     </p>
                     <ul className="flex flex-col gap-1">
@@ -798,7 +804,7 @@ export default function AgentCommandCenter({
              ════════════════════════════════════════════════════════════ */}
           {banner && (banner.news_story || banner.price_story || banner.event_calendar_note || banner.market_pricing_note || banner.next_trigger) && (
             <section className="rounded-2xl border border-eyay-border bg-eyay-surface/40 p-5">
-              <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest mb-3">
+              <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest mb-3">
                 Piyasa bağlamı
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -806,7 +812,7 @@ export default function AgentCommandCenter({
                 {/* Haber hikayesi */}
                 {banner.news_story && (
                   <div className="rounded-xl border border-orange-800/40 bg-orange-950/10 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-orange-300 uppercase tracking-widest">📰 Haber hikayesi</p>
+                    <p className="text-[10px] font-mono text-orange-300 uppercase tracking-widest">📰 Haber hikayesi</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.news_story}</p>
                   </div>
                 )}
@@ -814,7 +820,7 @@ export default function AgentCommandCenter({
                 {/* Fiyat tepkisi */}
                 {banner.price_story && (
                   <div className="rounded-xl border border-eyay-border/60 bg-eyay-raised/40 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-eyay-blue uppercase tracking-widest">📈 Fiyat tepkisi</p>
+                    <p className="text-[10px] font-mono text-eyay-blue uppercase tracking-widest">📈 Fiyat tepkisi</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.price_story}</p>
                   </div>
                 )}
@@ -822,7 +828,7 @@ export default function AgentCommandCenter({
                 {/* Olay takvimi */}
                 {banner.event_calendar_note && (
                   <div className="rounded-xl border border-amber-800/40 bg-amber-950/10 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-amber-300 uppercase tracking-widest">📅 Olay takvimi</p>
+                    <p className="text-[10px] font-mono text-amber-300 uppercase tracking-widest">📅 Olay takvimi</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.event_calendar_note}</p>
                   </div>
                 )}
@@ -830,7 +836,7 @@ export default function AgentCommandCenter({
                 {/* Piyasa neyi fiyatlıyor */}
                 {banner.market_pricing_note && (
                   <div className="rounded-xl border border-eyay-border/60 bg-eyay-raised/40 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-widest">📊 Piyasa neyi fiyatlıyor?</p>
+                    <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">📊 Piyasa neyi fiyatlıyor?</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.market_pricing_note}</p>
                   </div>
                 )}
@@ -838,7 +844,7 @@ export default function AgentCommandCenter({
                 {/* Beklenen tetikleyici */}
                 {banner.next_trigger && (
                   <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/10 p-3 space-y-1">
-                    <p className="text-[9px] font-mono text-emerald-400 uppercase tracking-widest">🎯 Beklenen tetikleyici</p>
+                    <p className="text-[10px] font-mono text-emerald-400 uppercase tracking-widest">🎯 Beklenen tetikleyici</p>
                     <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.next_trigger}</p>
                   </div>
                 )}
@@ -848,7 +854,7 @@ export default function AgentCommandCenter({
               {/* Jeopolitik hikaye ayrı satır (varsa) */}
               {banner.event_story && !banner.event_story.startsWith("Jeopolitik başlık yok") && (
                 <div className="mt-3 rounded-xl border border-red-800/40 bg-red-950/10 p-3 space-y-1">
-                  <p className="text-[9px] font-mono text-red-300 uppercase tracking-widest">🌐 Jeopolitik / savaş gündemi</p>
+                  <p className="text-[10px] font-mono text-red-300 uppercase tracking-widest">🌐 Jeopolitik / savaş gündemi</p>
                   <p className="text-[11px] text-eyay-dim leading-relaxed">{banner.event_story}</p>
                 </div>
               )}
@@ -870,13 +876,13 @@ export default function AgentCommandCenter({
                 <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest font-bold">
                   Aktif Kararlarım
                 </p>
-                <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+                <span className="text-[10px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
                   {activeDecisions.length} pozisyon
                 </span>
               </div>
               {trading && (
                 <div className="text-right">
-                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider">Toplam Unreal.</p>
+                  <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider">Toplam Unreal.</p>
                   <p className={`text-sm font-mono font-bold ${trading.unrealized_pnl_usd >= 0 ? "text-emerald-300" : "text-red-300"}`}>
                     {fmtUsd(trading.unrealized_pnl_usd)}
                   </p>
@@ -893,7 +899,7 @@ export default function AgentCommandCenter({
                 {watchNext.length > 0 && (
                   <div className="flex flex-wrap justify-center gap-2 mt-2">
                     {watchNext.map((w, i) => (
-                      <span key={i} className="text-[9px] font-mono border border-eyay-border rounded px-2 py-0.5 text-eyay-dim">
+                      <span key={i} className="text-[10px] font-mono border border-eyay-border rounded px-2 py-0.5 text-eyay-dim">
                         {w}
                       </span>
                     ))}
@@ -946,7 +952,7 @@ export default function AgentCommandCenter({
                 <p className="text-[10px] font-mono text-amber-300 uppercase tracking-widest font-bold">
                   Yaklaşan Tetikleyiciler
                 </p>
-                <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+                <span className="text-[10px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
                   {triggers.length} aktif
                 </span>
               </div>
@@ -960,7 +966,7 @@ export default function AgentCommandCenter({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             {t.asset_code && (
-                              <span className="text-[9px] font-mono text-eyay-text border border-white/10 bg-black/30 rounded px-1.5 py-0.5">
+                              <span className="text-[10px] font-mono text-eyay-text border border-white/10 bg-black/30 rounded px-1.5 py-0.5">
                                 {t.asset_code}
                               </span>
                             )}
@@ -988,7 +994,7 @@ export default function AgentCommandCenter({
                 <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest font-bold">
                   Diğer Gözlemler
                 </p>
-                <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+                <span className="text-[10px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
                   {observations.length}
                 </span>
               </div>
@@ -1001,9 +1007,9 @@ export default function AgentCommandCenter({
                         <span className="text-base shrink-0">{o.icon}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`text-[9px] font-mono font-black ${s.text}`}>{s.label}</span>
+                            <span className={`text-[10px] font-mono font-black ${s.text}`}>{s.label}</span>
                             {o.asset_code && (
-                              <span className="text-[9px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
+                              <span className="text-[10px] font-mono text-eyay-faint border border-eyay-border rounded px-1.5">
                                 {o.asset_code}
                               </span>
                             )}
@@ -1048,7 +1054,7 @@ export default function AgentCommandCenter({
               </div>
               {trading.trades.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-eyay-border/40">
-                  <p className="text-[9px] font-mono text-eyay-faint uppercase tracking-wider mb-2">
+                  <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-wider mb-2">
                     SON KAPANANLAR
                   </p>
                   <div className="space-y-1.5">
@@ -1091,7 +1097,7 @@ export default function AgentCommandCenter({
                 <p className="text-[11px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
                   Karar Detayları
                 </p>
-                <span className="text-[9px] font-mono text-eyay-faint truncate">
+                <span className="text-[10px] font-mono text-eyay-faint truncate">
                   · Aksiyon Planı · İyileşme Koşulları · Risk Tetikleyicileri
                 </span>
               </div>
@@ -1130,7 +1136,7 @@ export default function AgentCommandCenter({
                 <p className="text-[11px] font-mono font-bold text-eyay-dim uppercase tracking-[0.2em]">
                   Sistem Kontrolleri
                 </p>
-                <span className="text-[9px] font-mono text-eyay-faint truncate">
+                <span className="text-[10px] font-mono text-eyay-faint truncate">
                   · Makro+Risk · Öğrenme · Sistem Sağlığı
                 </span>
               </div>
@@ -1192,7 +1198,7 @@ export default function AgentCommandCenter({
 function Stat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="text-center p-3 rounded-lg bg-eyay-raised border border-eyay-border/50">
-      <p className="text-[8px] font-mono text-eyay-faint uppercase tracking-widest">{label}</p>
+      <p className="text-[10px] font-mono text-eyay-faint uppercase tracking-widest">{label}</p>
       <p className={`text-lg font-mono font-black mt-1 ${color}`}>{value}</p>
     </div>
   );
