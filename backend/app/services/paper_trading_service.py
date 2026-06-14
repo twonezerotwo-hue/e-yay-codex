@@ -653,6 +653,9 @@ def _build_outcome_fields(trade: Any) -> dict[str, Any]:
     mod  = base.get("module_scores") or {}
     adv  = osig.get("advanced_technical") or {}
     agg  = osig.get("aggression_context") or {}
+    # Signal chain (gözlemci/etiketleyici) bağlamı — açılışta sig'e damgalandı.
+    # Yoksa boş dict → tüm chain alanları None/0 olarak akar (additive, schema kırmaz).
+    chain = osig.get("signal_chain") or {}
     return {
         "asset":            getattr(trade, "pair", ""),
         "side":             getattr(trade, "side", ""),
@@ -670,6 +673,14 @@ def _build_outcome_fields(trade: Any) -> dict[str, Any]:
         "exit_reason":      getattr(trade, "reason", "") or "",
         "opened_at":        getattr(trade, "entry_at", None),
         "closed_at":        getattr(trade, "exit_at", None),
+        # ── Signal chain etiketleri (additive) — single/double/triple öğrenmesi ──
+        "signal_chain_type":    chain.get("signal_chain_type"),
+        "confirmed_timeframes": chain.get("confirmed_timeframes") or [],
+        "rejected_before_open": chain.get("rejected_before_open") or [],
+        "duplicate_count":      chain.get("duplicate_count"),
+        "conflict_count":       chain.get("conflict_count"),
+        "auto_open_reason":     chain.get("auto_open_reason"),
+        "countdown_seconds":    chain.get("countdown_seconds"),
     }
 
 
@@ -2015,6 +2026,29 @@ def tick_consensus(
                 except Exception:
                     logger.exception("auto_tune_override: failed (ignored)")
 
+            # ── Signal chain (gözlemci/etiketleyici) ─────────────────────────
+            # Saf gözlem: chain seviyesini (single/double/triple/duplicate/
+            # conflict) ETİKETLER ve bildirim üretir; pozisyon AÇMAZ. Açılış
+            # kararı yine yukarıdaki deterministik pending/manual_ready akışına
+            # aittir. target silent-block ile None olsa bile ham yön gözlemlenir
+            # (aynı-TF duplicate'i yakalamak için). Best-effort — tick'i ASLA bozmaz.
+            try:
+                _chain_side = target if target in ("LONG", "SHORT") else (
+                    raw_target if raw_target in ("LONG", "SHORT") else None
+                )
+                if _chain_side in ("LONG", "SHORT"):
+                    from app.services import signal_chain_tracker as _sct  # noqa: PLC0415
+                    _tf_dirs = confluence.get("tf_directions") if isinstance(confluence, dict) else None
+                    _sct.observe(
+                        pair, _chain_side, current_primary_tf, _tf_dirs or {},
+                        experiment_labels=sig.get("experiment_labels") or [],
+                        now=now_dt,
+                    )
+                    # open_signal'a damgala → kapanışta learning memory'ye akar.
+                    sig["signal_chain"] = _sct.context_for(pair)
+            except Exception:
+                logger.debug("signal_chain_tracker.observe failed (yok sayıldı)", exc_info=True)
+
             cur = st.positions.get(pair)
             pending = st.pending_orders.get(pair)
 
@@ -2650,7 +2684,20 @@ def get_snapshot(
         # Additive — best-effort enrichment hataları (sessiz yutma yerine görünür).
         # Boş liste = tüm enrichment başarılı. Endpoint her durumda 200 kalır.
         "audit_warnings": audit_warnings,
+        # Additive — multi-TF signal chain (gözlemci/etiketleyici) görünümü.
+        # Salt-okunur; karar/threshold değiştirmez. Hata → boş liste.
+        "signal_chain": _signal_chain_view(now_dt),
     }
+
+
+def _signal_chain_view(now_dt: datetime) -> list[dict[str, Any]]:
+    """Aktif signal chain'lerin salt-okunur görünümü; hata olsa bile state bozulmasın."""
+    try:
+        from app.services import signal_chain_tracker  # noqa: PLC0415
+        return signal_chain_tracker.snapshot(now_dt)
+    except Exception:
+        logger.debug("signal_chain_view failed (yok sayıldı)", exc_info=True)
+        return []
 
 
 def _paper_experiment_view() -> dict[str, Any]:

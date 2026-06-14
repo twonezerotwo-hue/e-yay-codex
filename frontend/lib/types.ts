@@ -281,3 +281,45 @@ export interface ApiResponse {
 export interface AIReportResponseFull extends AIReportResponse {
   capital_rotation?: CapitalRotation | null;
 }
+
+// ── Paper signal chain (gözlemci/etiketleyici katman) ────────────────────────
+// backend signal_chain_tracker → get_snapshot()["signal_chain"] görünümü.
+// Salt-okunur; karar üretmez. PAPER_SAFE.
+export type SignalChainLevel =
+  | "single_signal"
+  | "same_timeframe_duplicate"
+  | "double_timeframe_signal"
+  | "triple_timeframe_confirmation"
+  | "timeframe_conflict";
+
+export interface SignalChainNotification {
+  level: SignalChainLevel;
+  asset: string;
+  side: "LONG" | "SHORT";
+  primary_tf: string;
+  timeframes: string[];
+  countdown: number;
+  tone: "amber" | "cyan" | "emerald" | "slate" | "red";
+  reason: string;
+  text: string;
+  at: string;
+}
+
+export interface SignalChainView {
+  asset: string;
+  side: "LONG" | "SHORT";
+  status: string;
+  confirmed_timeframes: string[];
+  rejected_timeframes: string[];
+  duplicate_timeframes: string[];
+  conflict_timeframes: string[];
+  first_seen_at: string;
+  last_seen_at: string;
+  countdown_seconds: number;
+  signal_level: SignalChainLevel;
+  auto_open_reason: string;
+  user_action: string;
+  experiment_labels: string[];
+  learning_labels: string[];
+  last_notification: SignalChainNotification;
+}

@@ -72,3 +72,8 @@ logs/
 
 # pyc cache in root
 *.pyc
+
+# Signal chain runtime state — observational tracker rewrites this every tick
+# (like paper_trading_state.json). Code recreates it as {"chains": {}} when
+# absent, so it must not be tracked to avoid churn in diffs.
+backend/data/signal_chain_state.json

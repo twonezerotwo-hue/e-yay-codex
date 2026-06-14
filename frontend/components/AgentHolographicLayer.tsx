@@ -28,6 +28,7 @@ import MacroPanel from "@/components/MacroPanel";
 import { useAgentVoice } from "@/lib/useAgentVoice";
 import type {
   AsymmetrySignal, ConfirmationItem, Decision, FlipCondition, MacroLayer, NewsHeadline, RiskAppetiteLayer,
+  SignalChainLevel, SignalChainView,
 } from "@/lib/types";
 
 // ── Types (AgentCommandCenter'daki ile aynı, prop drilling için kopya) ───────
@@ -117,6 +118,7 @@ export interface TradingState {
   open_positions: Position[]; trade_count: number;
   traded_pairs: string[];
   state_anomaly?: { active: boolean; reasons: string[] };
+  signal_chain?: SignalChainView[];
 }
 
 // ── Mode → tone ──────────────────────────────────────────────────────────────
@@ -614,6 +616,11 @@ export default function AgentHolographicLayer({
             {/* ── Agent Orchestration — "Agent şu an neyi kontrol ediyor?" ── */}
             {banner?.agent_orchestration && (
               <OrchestrationPanel orch={banner.agent_orchestration} />
+            )}
+
+            {/* ── Paper Agent Signal Chain — multi-TF gözlem (salt-okunur) ── */}
+            {(trading?.signal_chain?.length ?? 0) > 0 && (
+              <PaperSignalChainCard chains={trading!.signal_chain!} />
             )}
 
             {/* ── Üst grid: thoughts | core | opinion ── */}
@@ -1208,6 +1215,102 @@ function OrbitCard({
          style={{ color: tone }}>
         {value ?? (n ?? 0)}
       </p>
+    </div>
+  );
+}
+
+// ── Paper Agent Signal Chain kartı (Komut Merkezi içi compact bölüm) ──────────
+// Aktif multi-TF chain'leri + data-driven agent cümleleri gösterir. Salt-okunur.
+
+const CHAIN_CARD_LABEL: Record<SignalChainLevel, string> = {
+  single_signal: "Tek TF",
+  double_timeframe_signal: "Çift TF",
+  triple_timeframe_confirmation: "Üçlü Teyit",
+  same_timeframe_duplicate: "Yinelenen",
+  timeframe_conflict: "Çelişki",
+};
+const CHAIN_CARD_COLOR: Record<SignalChainLevel, string> = {
+  single_signal: "#fbbf24",
+  double_timeframe_signal: "#22d3ee",
+  triple_timeframe_confirmation: "#34d399",
+  same_timeframe_duplicate: "#94a3b8",
+  timeframe_conflict: "#f87171",
+};
+
+function chainSentence(c: SignalChainView): string {
+  const tfList = (c.last_notification?.timeframes ?? []).join(" + ");
+  const tf = c.last_notification?.primary_tf || tfList;
+  switch (c.signal_level) {
+    case "single_signal":
+      return `${c.asset} ${c.side} için ${tf} sinyalini izliyorum.`;
+    case "double_timeframe_signal":
+      return `${c.asset} ${c.side}: ${tfList} aynı yönde geldi; double timeframe teyidi oluştu.`;
+    case "triple_timeframe_confirmation":
+      return `${c.asset} ${c.side}: ${tfList} üçlü teyit verdi; paper trade mevcut akışta otomatik denendi.`;
+    case "same_timeframe_duplicate":
+      return `${c.asset} ${c.side}: ${tf} tekrarlandı; yinelenen sinyal — yeni işlem açmıyorum.`;
+    case "timeframe_conflict":
+      return `${c.asset}: ${c.side} ama ${(c.conflict_timeframes ?? []).join(", ")} ters yönde geldi; chain conflict nedeniyle bekliyorum.`;
+    default:
+      return `${c.asset} ${c.side} sinyali izleniyor.`;
+  }
+}
+
+function PaperSignalChainCard({ chains }: { chains: SignalChainView[] }) {
+  return (
+    <div className="rounded-xl border border-cyan-500/20 bg-black/30 p-3" data-testid="paper-signal-chain-card">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[10px] font-mono text-cyan-400/70 uppercase tracking-[0.22em]">
+          ⛓ Paper Agent Signal Chain
+        </p>
+        <span className="text-[10px] font-mono text-eyay-faint">{chains.length} aktif zincir</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {chains.map(c => {
+          const color = CHAIN_CARD_COLOR[c.signal_level] ?? "#94a3b8";
+          const learning = [...(c.learning_labels ?? []), ...(c.experiment_labels ?? [])];
+          return (
+            <div key={`${c.asset}-${c.side}`} className="rounded-lg border bg-black/40 px-2.5 py-2"
+                 style={{ borderColor: `${color}44` }}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-mono font-bold text-eyay-text">{c.asset} {c.side}</span>
+                <span className="text-[9px] font-mono font-black uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                      style={{ color, borderColor: `${color}66` }}>
+                  {CHAIN_CARD_LABEL[c.signal_level] ?? c.signal_level}
+                </span>
+                {c.countdown_seconds > 0 && (
+                  <span className="ml-auto text-[11px] font-mono font-black tabular-nums" style={{ color }}>
+                    {c.countdown_seconds}s
+                  </span>
+                )}
+              </div>
+              {(c.confirmed_timeframes?.length ?? 0) > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {c.confirmed_timeframes.map(tf => (
+                    <span key={tf} className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border"
+                          style={{ color, borderColor: `${color}55` }}>
+                      {tf.toUpperCase()}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] font-mono text-eyay-dim leading-snug mt-1.5">{chainSentence(c)}</p>
+              {c.auto_open_reason && (
+                <p className="text-[9px] font-mono text-emerald-300/80 mt-1">auto-open: {c.auto_open_reason}</p>
+              )}
+              {(c.conflict_timeframes?.length ?? 0) > 0 && (
+                <p className="text-[9px] font-mono text-red-300/80 mt-0.5">çelişki TF: {c.conflict_timeframes.join(", ")}</p>
+              )}
+              {(c.rejected_timeframes?.length ?? 0) > 0 && (
+                <p className="text-[9px] font-mono text-amber-300/70 mt-0.5">reddedilen: {c.rejected_timeframes.join(", ")}</p>
+              )}
+              {learning.length > 0 && (
+                <p className="text-[9px] font-mono text-sky-300/70 mt-0.5">öğrenme: {learning.join(", ")}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
