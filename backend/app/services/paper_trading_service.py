@@ -2503,6 +2503,8 @@ def get_snapshot(
     # Açık pozisyonların unrealized PnL'i + her birinin fingerprint geçmişi
     open_positions = []
     unrealized_total = 0.0
+    audit_warnings: list[dict[str, Any]] = []
+    from app.core.audit_warnings import make_audit_warning  # noqa: PLC0415
     from app.services.learning_engine import win_rate_for_fingerprint
     # FAZ 3: position_management_service lazy import — circular avoidance
     try:
@@ -2537,7 +2539,11 @@ def get_snapshot(
                 opening_view = build_opening_explanation(
                     p.open_signal, pair=p.pair, side=p.side,
                 )
-            except Exception:
+            except Exception as exc:  # noqa: BLE001
+                audit_warnings.append(make_audit_warning(
+                    "paper_snapshot.opening_explanation", "enrichment_failed",
+                    f"{p.pair} {p.side}: {exc}",
+                ))
                 opening_view = {}
 
         # FAZ 18 — agent opinion read-only view (state'e yazılmaz)
@@ -2548,7 +2554,11 @@ def get_snapshot(
                     build_position_opinion_view as _pos_op,
                 )
                 opinion_view = _pos_op(p.pair, p.side)
-            except Exception:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001
+                audit_warnings.append(make_audit_warning(
+                    "paper_snapshot.agent_trade_opinion", "enrichment_failed",
+                    f"{p.pair} {p.side}: {exc}",
+                ))
                 opinion_view = {"available": False}
 
         open_positions.append({
@@ -2637,6 +2647,9 @@ def get_snapshot(
         # Additive — paper deney (sandbox) konfig görünümü. Mevcut alanları
         # değiştirmez; default'lar experiment kapalı → davranış aynı.
         "paper_experiment": _paper_experiment_view(),
+        # Additive — best-effort enrichment hataları (sessiz yutma yerine görünür).
+        # Boş liste = tüm enrichment başarılı. Endpoint her durumda 200 kalır.
+        "audit_warnings": audit_warnings,
     }
 
 

@@ -577,11 +577,12 @@ def build_trade_opinion_context_for_signal(
     aligned    = long_bias or short_bias
 
     if aligned and conviction == "high":
-        multiplier = 1.10
-        reason = f"{op_label} high conviction → +10% soft size"
+        # AI ASLA size artırmaz — yüksek conviction yalnızca mevcut boyutu korur.
+        multiplier = 1.0
+        reason = f"{op_label} high conviction → size korunur (AI boost yok)"
     elif aligned and conviction == "medium":
-        multiplier = 1.05
-        reason = f"{op_label} medium conviction → +5% soft size"
+        multiplier = 1.0
+        reason = f"{op_label} medium conviction → size korunur (AI boost yok)"
     elif op_label == "AVOID":
         multiplier = 0.0
         route = "manual_ready"
@@ -603,6 +604,11 @@ def build_trade_opinion_context_for_signal(
         route = "manual_ready"
         multiplier = min(multiplier, 0.0)
         reason = f"Açık pozisyon için {pos_label} — yeni add yok"
+
+    # GÜVENLİK (PAPER_SAFE): AI opinion bir soft modifier'dır ve ASLA size
+    # artıramaz — sadece azaltabilir / manual-review'a alabilir / açıklayabilir.
+    # Nihai çarpanı 1.0'a clamp'le; gelecekteki boost regresyonlarını da yakalar.
+    multiplier = min(float(multiplier), 1.0)
 
     return {
         "available":            True,
