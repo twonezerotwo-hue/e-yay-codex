@@ -69,19 +69,22 @@ def _opinion(*, asset="BTCUSD", opinion="LONG_BIAS", conviction="high",
 
 # ── Soft size modifier ───────────────────────────────────────────────────────
 
-def test_high_conviction_long_increases_size():
+def test_high_conviction_long_does_not_increase_size():
+    # PAPER_SAFE: AI yüksek conviction'da bile size ARTIRMAZ (boost kaldırıldı).
     op = _opinion(opinion="LONG_BIAS", conviction="high")
     ctx = build_trade_opinion_context_for_signal("BTCUSD", "LONG", opinion=op)
     assert ctx["available"] is True
-    assert abs(ctx["size_multiplier"] - 1.10) < 1e-6
+    assert ctx["size_multiplier"] == 1.0
+    assert ctx["size_multiplier"] <= 1.0
     assert ctx["route_recommendation"] == "proceed"
     assert "high conviction" in ctx["reason"]
 
 
-def test_medium_conviction_long_modest_increase():
+def test_medium_conviction_long_does_not_increase_size():
+    # PAPER_SAFE: medium conviction de size artırmaz.
     op = _opinion(opinion="LONG_BIAS", conviction="medium")
     ctx = build_trade_opinion_context_for_signal("BTCUSD", "LONG", opinion=op)
-    assert abs(ctx["size_multiplier"] - 1.05) < 1e-6
+    assert ctx["size_multiplier"] == 1.0
 
 
 def test_low_conviction_reduces_size():
